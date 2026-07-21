@@ -15,17 +15,17 @@ enum Cell {
 
 signal generation_finished(start_world: Vector3)
 
-@export var grid_width: int = 45
-@export var grid_height: int = 45
-@export var corridor_steps: int = 420
-@export var branch_chance: float = 0.12
-@export var room_count: int = 6
-@export var room_min_size: int = 3
-@export var room_max_size: int = 5
-@export var cell_size: float = 3.2
-@export var wall_height: float = 3.4
+@export var grid_width: int = 41
+@export var grid_height: int = 41
+## Maze corridors only (width 1) + few small chambers — competitor "corridor map" feel.
+@export var room_count: int = 4
+@export var room_min_size: int = 2
+@export var room_max_size: int = 3
+@export var cell_size: float = 3.0
+@export var wall_height: float = 3.2
 @export var encounter_rooms: int = 4
-@export var torch_spacing: int = 4
+@export var torch_spacing: int = 6
+@export var extra_loops: int = 10
 
 var grid: Array = []
 var rooms: Array[Rect2i] = []
@@ -63,8 +63,9 @@ func generate(seed_value: int = 0) -> void:
 	floor_cells.clear()
 
 	_init_grid()
-	_carve_corridor_network()
-	_place_rooms_on_corridors()
+	_carve_maze_corridors()
+	_add_corridor_loops()
+	_place_small_chambers()
 	_mark_doors()
 	_place_start_and_exit()
 	_place_chest_in_dead_end()
@@ -107,23 +108,24 @@ func get_cell_type(x: int, y: int) -> int:
 
 
 func _build_materials() -> void:
-	# Art-first: painted textures on planes (UV0), bright cave palette
+	# Hand-painted stone tiles — slight brightness boost, no harsh noise
 	_floor_mat = StandardMaterial3D.new()
 	_floor_mat.albedo_texture = TextureFactory.cave_floor(256)
-	_floor_mat.albedo_color = Color(1.25, 1.3, 1.35)
-	_floor_mat.roughness = 0.88
+	_floor_mat.albedo_color = Color(1.1, 1.15, 1.2)
+	_floor_mat.roughness = 0.9
 	_floor_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 	_wall_mat = StandardMaterial3D.new()
 	_wall_mat.albedo_texture = TextureFactory.cave_wall(256)
-	_wall_mat.albedo_color = Color(1.35, 1.4, 1.35)
-	_wall_mat.roughness = 0.8
+	_wall_mat.albedo_color = Color(1.15, 1.2, 1.15)
+	_wall_mat.roughness = 0.82
 	_wall_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 	_ceiling_mat = StandardMaterial3D.new()
-	_ceiling_mat.albedo_texture = TextureFactory.cave_ceiling(128)
-	_ceiling_mat.albedo_color = Color(1.2, 1.25, 1.25)
+	_ceiling_mat.albedo_texture = TextureFactory.cave_ceiling(256)
+	_ceiling_mat.albedo_color = Color(1.05, 1.1, 1.1)
 	_ceiling_mat.roughness = 0.95
+	_ceiling_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 	_crystal_sprite_mat = StandardMaterial3D.new()
 	_crystal_sprite_mat.albedo_texture = TextureFactory.crystal_sprite(64)
@@ -181,105 +183,101 @@ func _carve_floor(x: int, y: int) -> void:
 		_set_cell(x, y, Cell.FLOOR)
 
 
-## Corridor-first: branching drunkard walk → maze-like tunnels
-func _carve_corridor_network() -> void:
-	var cx := grid_width / 2
-	var cy := grid_height / 2
-	var heads: Array[Vector2i] = [Vector2i(cx, cy)]
-	_carve_floor(cx, cy)
+## Perfect-ish maze on odd cells → only width-1 corridors (T-junctions, dead ends).
+func _carve_maze_corridors() -> void:
+	# Work on odd coordinates so walls stay between paths
+	var start := Vector2i(1 + (grid_width / 2) % 2, 1 + (grid_height / 2) % 2)
+	if start.x < 1:
+		start.x = 1
+	if start.y < 1:
+		start.y = 1
+	if start.x % 2 == 0:
+		start.x -= 1
+	if start.y % 2 == 0:
+		start.y -= 1
+	start.x = clampi(start.x, 1, grid_width - 2)
+	start.y = clampi(start.y, 1, grid_height - 2)
+	if start.x % 2 == 0:
+		start.x = 1
+	if start.y % 2 == 0:
+		start.y = 1
+
+	var stack: Array[Vector2i] = [start]
+	_carve_floor(start.x, start.y)
 	var dirs: Array[Vector2i] = [
-		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)
+		Vector2i(0, -2), Vector2i(2, 0), Vector2i(0, 2), Vector2i(-2, 0)
 	]
-	var carved := 1
-	var guard := 0
-	while carved < corridor_steps and guard < corridor_steps * 8:
-		guard += 1
-		if heads.is_empty():
-			# restart from random floor
-			var fx := randi_range(2, grid_width - 3)
-			var fy := randi_range(2, grid_height - 3)
-			if _is_walkable(_get_cell(fx, fy)):
-				heads.append(Vector2i(fx, fy))
-			else:
-				_carve_floor(fx, fy)
-				heads.append(Vector2i(fx, fy))
-				carved += 1
+
+	while not stack.is_empty():
+		var cur: Vector2i = stack[stack.size() - 1]
+		var options: Array[Vector2i] = []
+		for d in dirs:
+			var n: Vector2i = cur + d
+			if n.x < 1 or n.y < 1 or n.x >= grid_width - 1 or n.y >= grid_height - 1:
+				continue
+			if _get_cell(n.x, n.y) == Cell.WALL:
+				options.append(d)
+		if options.is_empty():
+			stack.pop_back()
 			continue
-
-		var hi := randi() % heads.size()
-		var pos: Vector2i = heads[hi]
-		var dir: Vector2i = dirs[randi() % 4]
-		# prefer continuing straight sometimes
-		if randf() < 0.55 and heads.size() > 0:
-			pass
-		var steps := randi_range(2, 6)
-		for _s in range(steps):
-			pos += dir
-			if pos.x < 2 or pos.y < 2 or pos.x >= grid_width - 2 or pos.y >= grid_height - 2:
-				break
-			if not _is_walkable(_get_cell(pos.x, pos.y)):
-				carved += 1
-			_carve_floor(pos.x, pos.y)
-			# occasionally widen to 2 for "cave pocket"
-			if randf() < 0.08:
-				var side := Vector2i(-dir.y, dir.x)
-				_carve_floor(pos.x + side.x, pos.y + side.y)
-
-		heads[hi] = pos
-		if randf() < branch_chance:
-			heads.append(pos)
-		if heads.size() > 10:
-			heads.remove_at(randi() % heads.size())
-		# turn
-		if randf() < 0.4:
-			dir = dirs[randi() % 4]
+		var d: Vector2i = options[randi() % options.size()]
+		var between: Vector2i = cur + d / 2
+		var nxt: Vector2i = cur + d
+		_carve_floor(between.x, between.y)
+		_carve_floor(nxt.x, nxt.y)
+		stack.append(nxt)
 
 
-func _place_rooms_on_corridors() -> void:
+## Punch a few extra walls so map has loops (not pure dead-end only).
+func _add_corridor_loops() -> void:
+	var candidates: Array[Vector2i] = []
+	for y in range(2, grid_height - 2):
+		for x in range(2, grid_width - 2):
+			if _get_cell(x, y) != Cell.WALL:
+				continue
+			# wall between two floors (horizontal or vertical corridor bridge)
+			var h := _is_walkable(_get_cell(x - 1, y)) and _is_walkable(_get_cell(x + 1, y))
+			var v := _is_walkable(_get_cell(x, y - 1)) and _is_walkable(_get_cell(x, y + 1))
+			if h or v:
+				candidates.append(Vector2i(x, y))
+	candidates.shuffle()
+	var n := mini(extra_loops, candidates.size())
+	for i in range(n):
+		_carve_floor(candidates[i].x, candidates[i].y)
+
+
+## Small 2×2 / 3×3 chambers on corridor nodes (not big open rooms).
+func _place_small_chambers() -> void:
+	_collect_floor_cells()
+	var nodes: Array[Vector2i] = []
+	for c in floor_cells:
+		if _floor_neighbors(c.x, c.y) >= 3:
+			nodes.append(c)
+	nodes.shuffle()
 	var attempts := 0
-	while rooms.size() < room_count and attempts < 80:
+	var i := 0
+	while rooms.size() < room_count and attempts < 60 and i < nodes.size():
 		attempts += 1
+		var c: Vector2i = nodes[i]
+		i += 1
 		var w := randi_range(room_min_size, room_max_size)
 		var h := randi_range(room_min_size, room_max_size)
-		var x := randi_range(2, grid_width - w - 3)
-		var y := randi_range(2, grid_height - h - 3)
+		var x := c.x - w / 2
+		var y := c.y - h / 2
+		x = clampi(x, 1, grid_width - w - 2)
+		y = clampi(y, 1, grid_height - h - 2)
 		var rect := Rect2i(x, y, w, h)
-		# must touch existing floor (corridor)
-		var touches := false
-		var overlaps_room := false
+		var overlaps := false
 		for r in rooms:
-			if Rect2i(x - 1, y - 1, w + 2, h + 2).intersects(r):
-				overlaps_room = true
+			if Rect2i(x - 2, y - 2, w + 4, h + 4).intersects(r):
+				overlaps = true
 				break
-		if overlaps_room:
-			continue
-		for yy in range(y, y + h):
-			for xx in range(x, x + w):
-				if _is_walkable(_get_cell(xx, yy)):
-					touches = true
-					break
-			if touches:
-				break
-		if not touches and rooms.size() > 0:
+		if overlaps:
 			continue
 		rooms.append(rect)
 		for yy in range(y, y + h):
 			for xx in range(x, x + w):
 				_carve_floor(xx, yy)
-		# ensure link to corridor center
-		var center := Vector2i(x + w / 2, y + h / 2)
-		_carve_toward_nearest_floor(center)
-
-
-func _carve_toward_nearest_floor(from: Vector2i) -> void:
-	# already on floor likely; carve a short spur if isolated
-	for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-		var p := from
-		for _i in range(8):
-			p += d
-			if _is_walkable(_get_cell(p.x, p.y)):
-				return
-			_carve_floor(p.x, p.y)
 
 
 func _in_any_room(x: int, y: int) -> bool:
@@ -655,25 +653,29 @@ func _spawn_decorations() -> void:
 		var y := cell.y
 		if _get_cell(x, y) == Cell.START:
 			continue
-		var h := (x * 31 + y * 17) % 14
+		var h := (x * 31 + y * 17) % 22
 		var world := cell_to_world(cell)
 		var wd := _first_wall_dir(x, y)
 		if wd == Vector2i.ZERO:
 			continue
+		# Only decorate at dead-ends / corners (corridor feel, less clutter)
+		var neigh := _floor_neighbors(x, y)
+		if neigh > 2 and h > 2:
+			continue
 		var base := world + Vector3(wd.x * (cell_size * 0.38), 0.0, wd.y * (cell_size * 0.38))
-		if h == 0 or h == 1:
+		if h == 0:
 			_spawn_billboard(base + Vector3(0, 0.55, 0), Vector2(0.9, 0.7), _rock_sprite_mat)
 			n += 1
-		elif h == 2 or h == 3:
+		elif h == 1:
 			_spawn_billboard(base + Vector3(0, 0.7, 0), Vector2(0.7, 1.1), _crystal_sprite_mat)
 			var light := OmniLight3D.new()
 			light.light_color = Color(0.5, 0.8, 1.0)
-			light.light_energy = 1.6
-			light.omni_range = 6.0
+			light.light_energy = 1.4
+			light.omni_range = 5.5
 			light.position = base + Vector3(0, 0.8, 0)
 			props_root.add_child(light)
 			n += 1
-		elif h == 4:
+		elif h == 2 and neigh == 1:
 			_spawn_brazier(base + Vector3(0, 0.0, 0))
 			n += 1
 	print("[Dungeon] sprite decor=%d" % n)

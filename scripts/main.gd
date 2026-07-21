@@ -15,6 +15,8 @@ const MAX_HP := 88
 
 
 func _ready() -> void:
+	if player.has_method("setup_dungeon"):
+		player.setup_dungeon(dungeon)
 	if dungeon.has_signal("generation_finished"):
 		dungeon.generation_finished.connect(_on_dungeon_ready)
 	if GameState:
@@ -28,10 +30,11 @@ func _ready() -> void:
 	hp_bar.max_value = MAX_HP
 	hp_bar.value = MAX_HP
 	_update_hud()
+	hud_hint.text = "W/S step · A/D turn 90° · R new dungeon · Esc menu  |  camera locked forward"
 
 	if dungeon.get("start_cell") != null:
 		var start: Vector2i = dungeon.start_cell
-		_place_player(dungeon.cell_to_world(start) + Vector3(0, 0.5, 0))
+		_place_player(dungeon.cell_to_world(start))
 		if minimap and minimap.has_method("clear_fog"):
 			minimap.clear_fog()
 
@@ -45,12 +48,15 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _on_dungeon_ready(start_world: Vector3) -> void:
-	_place_player(start_world + Vector3(0, 0.5, 0))
+	if player.has_method("setup_dungeon"):
+		player.setup_dungeon(dungeon)
+	_place_player(start_world)
 	if minimap and minimap.has_method("setup"):
 		minimap.setup(dungeon, player)
 	if minimap and minimap.has_method("clear_fog"):
 		minimap.clear_fog()
 	_update_hud()
+	hud_hint.text = "W/S step · A/D turn 90° · R new dungeon · Esc menu"
 
 
 func _place_player(pos: Vector3) -> void:

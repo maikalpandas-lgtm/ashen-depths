@@ -36,9 +36,8 @@ var floor_cells: Array[Vector2i] = []
 var _floor_mat: StandardMaterial3D
 var _wall_mat: StandardMaterial3D
 var _ceiling_mat: StandardMaterial3D
-var _rock_mat: StandardMaterial3D
-var _crystal_mat: StandardMaterial3D
-var _crystal_warm_mat: StandardMaterial3D
+var _crystal_sprite_mat: StandardMaterial3D
+var _rock_sprite_mat: StandardMaterial3D
 
 @onready var geometry_root: Node3D = $Geometry
 @onready var props_root: Node3D = $Props
@@ -71,7 +70,7 @@ func generate(seed_value: int = 0) -> void:
 	_place_chest_in_dead_end()
 	_place_encounters()
 	_collect_floor_cells()
-	_build_cave_meshes()
+	_build_art_corridor()
 	_spawn_torches()
 	_spawn_decorations()
 	_spawn_props_and_entities()
@@ -108,48 +107,41 @@ func get_cell_type(x: int, y: int) -> int:
 
 
 func _build_materials() -> void:
+	# Art-first: painted textures on planes (UV0), bright cave palette
 	_floor_mat = StandardMaterial3D.new()
-	_floor_mat.albedo_texture = TextureFactory.cave_floor(128)
-	_floor_mat.albedo_color = Color(1.15, 1.15, 1.2)
-	_floor_mat.roughness = 0.85
-	_floor_mat.uv1_triplanar = true
-	_floor_mat.uv1_scale = Vector3(0.4, 0.4, 0.4)
+	_floor_mat.albedo_texture = TextureFactory.cave_floor(256)
+	_floor_mat.albedo_color = Color(1.25, 1.3, 1.35)
+	_floor_mat.roughness = 0.88
+	_floor_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 	_wall_mat = StandardMaterial3D.new()
-	_wall_mat.albedo_texture = TextureFactory.cave_wall(128)
-	_wall_mat.albedo_color = Color(1.2, 1.25, 1.2)
-	_wall_mat.roughness = 0.82
-	_wall_mat.uv1_triplanar = true
-	_wall_mat.uv1_scale = Vector3(0.35, 0.35, 0.35)
+	_wall_mat.albedo_texture = TextureFactory.cave_wall(256)
+	_wall_mat.albedo_color = Color(1.35, 1.4, 1.35)
+	_wall_mat.roughness = 0.8
+	_wall_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 	_ceiling_mat = StandardMaterial3D.new()
-	_ceiling_mat.albedo_texture = TextureFactory.cave_ceiling(64)
-	_ceiling_mat.albedo_color = Color(1.1, 1.15, 1.15)
+	_ceiling_mat.albedo_texture = TextureFactory.cave_ceiling(128)
+	_ceiling_mat.albedo_color = Color(1.2, 1.25, 1.25)
 	_ceiling_mat.roughness = 0.95
-	_ceiling_mat.uv1_triplanar = true
-	_ceiling_mat.uv1_scale = Vector3(0.3, 0.3, 0.3)
 
-	_rock_mat = StandardMaterial3D.new()
-	_rock_mat.albedo_texture = TextureFactory.cave_wall(64)
-	_rock_mat.albedo_color = Color(1.1, 1.2, 1.15)
-	_rock_mat.roughness = 0.9
-	_rock_mat.uv1_triplanar = true
-	_rock_mat.uv1_scale = Vector3(0.6, 0.6, 0.6)
+	_crystal_sprite_mat = StandardMaterial3D.new()
+	_crystal_sprite_mat.albedo_texture = TextureFactory.crystal_sprite(64)
+	_crystal_sprite_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_crystal_sprite_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_crystal_sprite_mat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+	_crystal_sprite_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+	_crystal_sprite_mat.emission_enabled = true
+	_crystal_sprite_mat.emission = Color(0.4, 0.75, 1.0)
+	_crystal_sprite_mat.emission_energy_multiplier = 1.5
+	_crystal_sprite_mat.emission_texture = TextureFactory.crystal_sprite(64)
 
-	_crystal_mat = StandardMaterial3D.new()
-	_crystal_mat.albedo_color = Color(0.55, 0.85, 1.0)
-	_crystal_mat.emission_enabled = true
-	_crystal_mat.emission = Color(0.35, 0.7, 1.0)
-	_crystal_mat.emission_energy_multiplier = 2.2
-	_crystal_mat.roughness = 0.25
-	_crystal_mat.metallic = 0.15
-
-	_crystal_warm_mat = StandardMaterial3D.new()
-	_crystal_warm_mat.albedo_color = Color(0.95, 0.55, 1.0)
-	_crystal_warm_mat.emission_enabled = true
-	_crystal_warm_mat.emission = Color(0.7, 0.3, 0.95)
-	_crystal_warm_mat.emission_energy_multiplier = 1.8
-	_crystal_warm_mat.roughness = 0.3
+	_rock_sprite_mat = StandardMaterial3D.new()
+	_rock_sprite_mat.albedo_texture = TextureFactory.rock_pile_sprite(64)
+	_rock_sprite_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_rock_sprite_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	_rock_sprite_mat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+	_rock_sprite_mat.albedo_color = Color(1.15, 1.2, 1.15)
 
 
 func _clear_children(node: Node) -> void:
@@ -422,87 +414,128 @@ func _temp_collect() -> Array[Vector2i]:
 	return floor_cells
 
 
-func _build_cave_meshes() -> void:
+## Art-first: floor/wall/ceiling as textured planes (painted look), thin colliders only.
+func _build_art_corridor() -> void:
 	for y in range(grid_height):
 		for x in range(grid_width):
-			var cell: int = _get_cell(x, y)
-			if not _is_walkable(cell):
+			if not _is_walkable(_get_cell(x, y)):
 				continue
 			var world := cell_to_world(Vector2i(x, y))
-			# floor slab
-			_add_box(geometry_root, world + Vector3(0, -0.12, 0), Vector3(cell_size * 1.02, 0.28, cell_size * 1.02), _floor_mat)
-			# slight floor rocks
-			if (x * 5 + y * 3) % 7 == 0:
-				_add_box(
-					geometry_root,
-					world + Vector3(randf_range(-0.6, 0.6), 0.05, randf_range(-0.6, 0.6)),
-					Vector3(randf_range(0.25, 0.55), randf_range(0.08, 0.18), randf_range(0.25, 0.55)),
-					_rock_mat,
-					false
-				)
-
-			# vaulted-ish ceiling (main + edge drops)
-			_add_box(geometry_root, world + Vector3(0, wall_height + 0.15, 0), Vector3(cell_size * 1.05, 0.35, cell_size * 1.05), _ceiling_mat)
-			# ceiling dip / arch feel toward walls
-			for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-				if not _is_walkable(_get_cell(x + d.x, y + d.y)):
-					var edge := Vector3(d.x, 0, d.y) * (cell_size * 0.28)
-					_add_box(
-						geometry_root,
-						world + edge + Vector3(0, wall_height - 0.15, 0),
-						Vector3(
-							cell_size * 0.55 if d.x == 0 else 0.55,
-							0.55,
-							cell_size * 0.55 if d.y == 0 else 0.55
-						),
-						_ceiling_mat,
-						false
-					)
-
-			_build_wall_with_bumps(x, y, 1, 0, world)
-			_build_wall_with_bumps(x, y, -1, 0, world)
-			_build_wall_with_bumps(x, y, 0, 1, world)
-			_build_wall_with_bumps(x, y, 0, -1, world)
-
-			# stalactites
-			if (x + y * 2) % 5 == 0:
-				var st := MeshInstance3D.new()
-				var cyl := CylinderMesh.new()
-				cyl.top_radius = 0.02
-				cyl.bottom_radius = 0.12
-				cyl.height = randf_range(0.35, 0.85)
-				st.mesh = cyl
-				st.material_override = _rock_mat
-				st.position = world + Vector3(randf_range(-0.5, 0.5), wall_height - cyl.height * 0.5, randf_range(-0.5, 0.5))
-				geometry_root.add_child(st)
+			# Floor plane (faces up)
+			_add_plane(
+				geometry_root,
+				world + Vector3(0, 0.0, 0),
+				Vector2(cell_size * 1.01, cell_size * 1.01),
+				_floor_mat,
+				Vector3(-90, 0, 0),
+				true,
+				Vector3(cell_size, 0.2, cell_size)
+			)
+			# Ceiling plane (faces down into corridor)
+			_add_plane(
+				geometry_root,
+				world + Vector3(0, wall_height, 0),
+				Vector2(cell_size * 1.01, cell_size * 1.01),
+				_ceiling_mat,
+				Vector3(90, 0, 0),
+				false
+			)
+			# Walls — one plane per solid neighbor, facing inward
+			_maybe_wall_plane(x, y, 1, 0, world)
+			_maybe_wall_plane(x, y, -1, 0, world)
+			_maybe_wall_plane(x, y, 0, 1, world)
+			_maybe_wall_plane(x, y, 0, -1, world)
 
 
-func _build_wall_with_bumps(x: int, y: int, dx: int, dy: int, world: Vector3) -> void:
+func _maybe_wall_plane(x: int, y: int, dx: int, dy: int, world: Vector3) -> void:
 	if _is_walkable(_get_cell(x + dx, y + dy)):
 		return
-	var thickness := 0.55
-	var size: Vector3
-	var offset := Vector3(dx, 0, dy) * (cell_size * 0.5 - thickness * 0.35)
-	if dx != 0:
-		size = Vector3(thickness, wall_height, cell_size * 1.02)
-	else:
-		size = Vector3(cell_size * 1.02, wall_height, thickness)
-	var wall_pos := world + offset + Vector3(0, wall_height * 0.5, 0)
-	_add_box(geometry_root, wall_pos, size, _wall_mat)
+	var edge := cell_size * 0.5 - 0.04
+	var pos := world + Vector3(float(dx) * edge, wall_height * 0.5, float(dy) * edge)
+	# Into corridor = opposite of wall normal offset
+	var into := Vector3(-float(dx), 0.0, -float(dy))
+	_add_wall_plane(pos, into, cell_size * 1.02, wall_height, _wall_mat)
 
-	# organic bulges into corridor
-	var bulge_count := randi_range(2, 4)
-	for i in range(bulge_count):
-		var along := (float(i) + 0.5) / float(bulge_count) - 0.5
-		var lateral := Vector3(-dy, 0, dx) * along * cell_size * 0.7
-		var h := randf_range(0.4, wall_height - 0.5)
-		var into := Vector3(-dx, 0, -dy) * randf_range(0.15, 0.45)
-		var bsize := Vector3(
-			randf_range(0.35, 0.75),
-			randf_range(0.35, 0.9),
-			randf_range(0.35, 0.75)
-		)
-		_add_box(geometry_root, wall_pos + lateral + into + Vector3(0, h - wall_height * 0.5, 0), bsize, _rock_mat, false)
+
+func _add_wall_plane(pos: Vector3, face_into: Vector3, width: float, height: float, mat: Material) -> void:
+	## Build a vertical quad whose +Z local faces `face_into` (into the corridor).
+	var mi := MeshInstance3D.new()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var hw := width * 0.5
+	var hh := height * 0.5
+	# Local verts facing +Z
+	var verts := [
+		Vector3(-hw, -hh, 0), Vector3(hw, -hh, 0), Vector3(hw, hh, 0),
+		Vector3(-hw, -hh, 0), Vector3(hw, hh, 0), Vector3(-hw, hh, 0),
+	]
+	var uvs := [
+		Vector2(0, 1), Vector2(1, 1), Vector2(1, 0),
+		Vector2(0, 1), Vector2(1, 0), Vector2(0, 0),
+	]
+	for i in range(6):
+		st.set_normal(Vector3(0, 0, 1))
+		st.set_uv(uvs[i])
+		st.add_vertex(verts[i])
+	mi.mesh = st.commit()
+	mi.material_override = mat
+	mi.position = pos
+	# Orient local +Z toward face_into
+	if face_into.length_squared() > 0.001:
+		mi.look_at(pos + face_into, Vector3.UP)
+	geometry_root.add_child(mi)
+
+	var body := StaticBody3D.new()
+	var col := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	# Thin collider along wall
+	if absf(face_into.x) > 0.5:
+		shape.size = Vector3(0.28, height, width)
+	else:
+		shape.size = Vector3(width, height, 0.28)
+	col.shape = shape
+	body.position = pos
+	body.collision_layer = 1
+	body.add_child(col)
+	geometry_root.add_child(body)
+
+
+func _add_plane(
+	parent: Node3D,
+	pos: Vector3,
+	size: Vector2,
+	mat: Material,
+	rot_deg: Vector3,
+	collision: bool = false,
+	col_size: Vector3 = Vector3.ZERO
+) -> void:
+	var mi := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = size
+	plane.subdivide_width = 1
+	plane.subdivide_depth = 1
+	mi.mesh = plane
+	mi.material_override = mat
+	mi.position = pos
+	mi.rotation_degrees = rot_deg
+	parent.add_child(mi)
+	if not collision:
+		return
+	var body := StaticBody3D.new()
+	var col := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	if col_size == Vector3.ZERO:
+		shape.size = Vector3(size.x, 0.2, size.y)
+	else:
+		shape.size = col_size
+	col.shape = shape
+	body.position = pos
+	# Floor collider slightly below feet
+	if col_size.y < 0.5:
+		body.position.y = -0.05
+	body.collision_layer = 1
+	body.add_child(col)
+	parent.add_child(body)
 
 
 func _add_box(parent: Node3D, pos: Vector3, size: Vector3, mat: Material, collision: bool = true) -> void:
@@ -596,39 +629,35 @@ func _add_torch(pos: Vector3, wall_dir: Vector2i) -> void:
 
 
 func _spawn_decorations() -> void:
+	## Billboard sprites near walls — painted props, not 3D rock piles.
 	var n := 0
 	for cell in floor_cells:
 		var x := cell.x
 		var y := cell.y
 		if _get_cell(x, y) == Cell.START:
 			continue
-		var h := (x * 31 + y * 17) % 11
+		var h := (x * 31 + y * 17) % 14
 		var world := cell_to_world(cell)
-		# rock pile near walls
+		var wd := _first_wall_dir(x, y)
+		if wd == Vector2i.ZERO:
+			continue
+		var base := world + Vector3(wd.x * (cell_size * 0.38), 0.0, wd.y * (cell_size * 0.38))
 		if h == 0 or h == 1:
-			var wd := _first_wall_dir(x, y)
-			if wd != Vector2i.ZERO:
-				var base := world + Vector3(wd.x * 0.9, 0.15, wd.y * 0.9)
-				for i in range(randi_range(2, 4)):
-					_add_box(
-						props_root,
-						base + Vector3(randf_range(-0.25, 0.25), randf_range(0.0, 0.2), randf_range(-0.25, 0.25)),
-						Vector3(randf_range(0.25, 0.5), randf_range(0.2, 0.45), randf_range(0.25, 0.5)),
-						_rock_mat,
-						false
-					)
-				n += 1
-		# crystal cluster
-		if h == 2 or h == 3:
-			var wd2 := _first_wall_dir(x, y)
-			var base2 := world + Vector3(wd2.x * 0.85, 0.2, wd2.y * 0.85) if wd2 != Vector2i.ZERO else world + Vector3(0.8, 0.2, 0)
-			_spawn_crystal_cluster(base2, h == 3)
+			_spawn_billboard(base + Vector3(0, 0.55, 0), Vector2(0.9, 0.7), _rock_sprite_mat)
 			n += 1
-		# blue brazier rare
-		if h == 4 and _floor_neighbors(x, y) >= 3:
-			_spawn_brazier(world + Vector3(0.7, 0.0, -0.5))
+		elif h == 2 or h == 3:
+			_spawn_billboard(base + Vector3(0, 0.7, 0), Vector2(0.7, 1.1), _crystal_sprite_mat)
+			var light := OmniLight3D.new()
+			light.light_color = Color(0.5, 0.8, 1.0)
+			light.light_energy = 1.6
+			light.omni_range = 6.0
+			light.position = base + Vector3(0, 0.8, 0)
+			props_root.add_child(light)
 			n += 1
-	print("[Dungeon] decorations~%d clusters" % n)
+		elif h == 4:
+			_spawn_brazier(base + Vector3(0, 0.0, 0))
+			n += 1
+	print("[Dungeon] sprite decor=%d" % n)
 
 
 func _first_wall_dir(x: int, y: int) -> Vector2i:
@@ -638,55 +667,48 @@ func _first_wall_dir(x: int, y: int) -> Vector2i:
 	return Vector2i.ZERO
 
 
-func _spawn_crystal_cluster(base: Vector3, warm: bool) -> void:
-	var mat := _crystal_warm_mat if warm else _crystal_mat
-	for i in range(randi_range(2, 5)):
-		var mi := MeshInstance3D.new()
-		var prism := CylinderMesh.new()
-		prism.top_radius = 0.02
-		prism.bottom_radius = randf_range(0.08, 0.16)
-		prism.height = randf_range(0.4, 1.1)
-		mi.mesh = prism
-		mi.material_override = mat
-		mi.position = base + Vector3(randf_range(-0.2, 0.2), prism.height * 0.5, randf_range(-0.2, 0.2))
-		mi.rotation_degrees = Vector3(randf_range(-12, 12), randf_range(0, 360), randf_range(-12, 12))
-		props_root.add_child(mi)
-	var light := OmniLight3D.new()
-	light.light_color = Color(0.5, 0.8, 1.0) if not warm else Color(0.85, 0.45, 1.0)
-	light.light_energy = 1.3
-	light.omni_range = 5.5
-	light.position = base + Vector3(0, 0.6, 0)
-	props_root.add_child(light)
+func _spawn_billboard(pos: Vector3, size: Vector2, mat: Material) -> void:
+	var mi := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = size
+	mi.mesh = plane
+	mi.material_override = mat
+	mi.position = pos
+	# upright; billboard material handles yaw
+	mi.rotation_degrees = Vector3(-90, 0, 0)
+	props_root.add_child(mi)
 
 
 func _spawn_brazier(pos: Vector3) -> void:
 	var bowl := MeshInstance3D.new()
 	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.28
-	cyl.bottom_radius = 0.2
-	cyl.height = 0.35
+	cyl.top_radius = 0.22
+	cyl.bottom_radius = 0.16
+	cyl.height = 0.28
 	bowl.mesh = cyl
-	bowl.material_override = _rock_mat
-	bowl.position = pos + Vector3(0, 0.2, 0)
+	var bm := StandardMaterial3D.new()
+	bm.albedo_color = Color(0.3, 0.35, 0.38)
+	bowl.material_override = bm
+	bowl.position = pos + Vector3(0, 0.15, 0)
 	props_root.add_child(bowl)
 	var flame := MeshInstance3D.new()
 	var sm := SphereMesh.new()
-	sm.radius = 0.18
-	sm.height = 0.35
+	sm.radius = 0.16
+	sm.height = 0.3
 	flame.mesh = sm
 	var fm := StandardMaterial3D.new()
-	fm.albedo_color = Color(0.4, 0.75, 1.0)
+	fm.albedo_color = Color(0.4, 0.8, 1.0)
 	fm.emission_enabled = true
-	fm.emission = Color(0.3, 0.7, 1.0)
-	fm.emission_energy_multiplier = 3.5
+	fm.emission = Color(0.35, 0.75, 1.0)
+	fm.emission_energy_multiplier = 4.0
 	flame.material_override = fm
-	flame.position = pos + Vector3(0, 0.5, 0)
+	flame.position = pos + Vector3(0, 0.42, 0)
 	props_root.add_child(flame)
 	var light := OmniLight3D.new()
-	light.light_color = Color(0.45, 0.75, 1.0)
-	light.light_energy = 2.0
-	light.omni_range = 7.0
-	light.position = pos + Vector3(0, 0.55, 0)
+	light.light_color = Color(0.5, 0.8, 1.0)
+	light.light_energy = 2.2
+	light.omni_range = 7.5
+	light.position = pos + Vector3(0, 0.5, 0)
 	props_root.add_child(light)
 
 
@@ -820,7 +842,9 @@ func _spawn_exit_marker(world: Vector3) -> void:
 		var box := BoxMesh.new()
 		box.size = Vector3(0.25, 0.18, 0.25)
 		rock.mesh = box
-		rock.material_override = _rock_mat
+		var rm := StandardMaterial3D.new()
+		rm.albedo_color = Color(0.28, 0.4, 0.42)
+		rock.material_override = rm
 		var a := TAU * float(i) / 5.0
 		rock.position = world + Vector3(cos(a) * 0.45, 0.1, sin(a) * 0.45)
 		props_root.add_child(rock)

@@ -116,16 +116,7 @@ static func _cartoon_rock(
 				if x0 + 1 < size and _hash(x, y) > 0.4:
 					img.set_pixel(x0 + 1, y, img.get_pixel(x0 + 1, y).darkened(0.04))
 
-	# Contact-shadow strip baked into bottom of tile (used on walls as skirting via UV)
-	for y in range(size):
-		var fy := float(y) / float(size)
-		# Darken bottom ~12% of texture (wall UV v=0 at floor)
-		if fy > 0.88:
-			var w := (fy - 0.88) / 0.12
-			for x in range(size):
-				var c := img.get_pixel(x, y)
-				img.set_pixel(x, y, c.darkened(0.15 + w * 0.35))
-
+	# No baked skirting bands — contact shadow is mesh-side only at floor–wall joint.
 	return _tex_with_mips(img)
 
 

@@ -452,17 +452,39 @@ func _build_art_corridor() -> void:
 			_maybe_wall_plane(x, y, -1, 0, world)
 			_maybe_wall_plane(x, y, 0, 1, world)
 			_maybe_wall_plane(x, y, 0, -1, world)
+			_fill_cell_corners(x, y, world)
 
 
 func _maybe_wall_plane(x: int, y: int, dx: int, dy: int, world: Vector3) -> void:
 	if _is_walkable(_get_cell(x + dx, y + dy)):
 		return
-	# Flush to cell edge; width > cell so neighbors overlap (no vertical slits)
-	var edge := cell_size * 0.5 - 0.02
+	# Almost flush; slight inset; OVERLAP neighbors so no black slits
+	var edge := cell_size * 0.5 - 0.01
 	var pos := world + Vector3(float(dx) * edge, wall_height * 0.5, float(dy) * edge)
 	var into := Vector3(-float(dx), 0.0, -float(dy))
-	# 8% wider + a bit taller than cell so seams close with floor/ceiling
-	_add_wall_plane(pos, into, cell_size * 1.1, wall_height + 0.12, _wall_mat)
+	_add_wall_plane(pos, into, cell_size * 1.14, wall_height + 0.16, _wall_mat)
+
+
+func _fill_cell_corners(x: int, y: int, world: Vector3) -> void:
+	## Square pillars where two wall sides meet — cleans L/T corners.
+	var pairs: Array = [
+		[Vector2i(1, 0), Vector2i(0, -1), Vector3(1, 0, -1)],
+		[Vector2i(1, 0), Vector2i(0, 1), Vector3(1, 0, 1)],
+		[Vector2i(-1, 0), Vector2i(0, -1), Vector3(-1, 0, -1)],
+		[Vector2i(-1, 0), Vector2i(0, 1), Vector3(-1, 0, 1)],
+	]
+	var half := cell_size * 0.5 - 0.02
+	var pillar := 0.22
+	for p in pairs:
+		var d0: Vector2i = p[0]
+		var d1: Vector2i = p[1]
+		var off: Vector3 = p[2]
+		var wall0 := not _is_walkable(_get_cell(x + d0.x, y + d0.y))
+		var wall1 := not _is_walkable(_get_cell(x + d1.x, y + d1.y))
+		if not (wall0 and wall1):
+			continue
+		var pos := world + Vector3(off.x * half, wall_height * 0.5, off.z * half)
+		_add_textured_box(pos, Vector3(pillar, wall_height + 0.16, pillar), _wall_mat)
 
 
 func _add_wall_plane(pos: Vector3, face_into: Vector3, width: float, height: float, mat: Material) -> void:
@@ -557,6 +579,18 @@ func _add_solid_box(pos: Vector3, size: Vector3) -> void:
 	body.collision_mask = 0
 	body.add_child(col)
 	geometry_root.add_child(body)
+
+
+func _add_textured_box(pos: Vector3, size: Vector3, mat: Material) -> void:
+	var mi := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = size
+	mi.mesh = box
+	mi.material_override = mat
+	mi.position = pos
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	geometry_root.add_child(mi)
+	_add_solid_box(pos, size)
 
 
 func _add_plane(
@@ -676,39 +710,26 @@ func _add_torch(pos: Vector3, wall_dir: Vector2i) -> void:
 
 
 func _spawn_decorations() -> void:
-	## Billboard sprites near walls — painted props, not 3D rock piles.
+	## No free-floating white planes (billboards looked like “empty 3D junk”).
+	## Only sparse wall braziers at dead-ends.
 	var n := 0
 	for cell in floor_cells:
 		var x := cell.x
 		var y := cell.y
-		if _get_cell(x, y) == Cell.START:
+		if _get_cell(x, y) == Cell.START or _get_cell(x, y) == Cell.EXIT:
 			continue
-		var h := (x * 31 + y * 17) % 22
-		var world := cell_to_world(cell)
+		if _floor_neighbors(x, y) != 1:
+			continue
+		if (x * 13 + y * 7) % 5 != 0:
+			continue
 		var wd := _first_wall_dir(x, y)
 		if wd == Vector2i.ZERO:
 			continue
-		# Only decorate at dead-ends / corners (corridor feel, less clutter)
-		var neigh := _floor_neighbors(x, y)
-		if neigh > 2 and h > 2:
-			continue
-		var base := world + Vector3(wd.x * (cell_size * 0.38), 0.0, wd.y * (cell_size * 0.38))
-		if h == 0:
-			_spawn_billboard(base + Vector3(0, 0.55, 0), Vector2(0.9, 0.7), _rock_sprite_mat)
-			n += 1
-		elif h == 1:
-			_spawn_billboard(base + Vector3(0, 0.7, 0), Vector2(0.7, 1.1), _crystal_sprite_mat)
-			var light := OmniLight3D.new()
-			light.light_color = Color(0.5, 0.8, 1.0)
-			light.light_energy = 1.4
-			light.omni_range = 5.5
-			light.position = base + Vector3(0, 0.8, 0)
-			props_root.add_child(light)
-			n += 1
-		elif h == 2 and neigh == 1:
-			_spawn_brazier(base + Vector3(0, 0.0, 0))
-			n += 1
-	print("[Dungeon] sprite decor=%d" % n)
+		var world := cell_to_world(cell)
+		var base := world + Vector3(wd.x * (cell_size * 0.32), 0.0, wd.y * (cell_size * 0.32))
+		_spawn_brazier(base)
+		n += 1
+	print("[Dungeon] braziers=%d" % n)
 
 
 func _first_wall_dir(x: int, y: int) -> Vector2i:
@@ -718,48 +739,36 @@ func _first_wall_dir(x: int, y: int) -> Vector2i:
 	return Vector2i.ZERO
 
 
-func _spawn_billboard(pos: Vector3, size: Vector2, mat: Material) -> void:
-	var mi := MeshInstance3D.new()
-	var plane := PlaneMesh.new()
-	plane.size = size
-	mi.mesh = plane
-	mi.material_override = mat
-	mi.position = pos
-	# upright; billboard material handles yaw
-	mi.rotation_degrees = Vector3(-90, 0, 0)
-	props_root.add_child(mi)
-
-
 func _spawn_brazier(pos: Vector3) -> void:
 	var bowl := MeshInstance3D.new()
 	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.22
-	cyl.bottom_radius = 0.16
-	cyl.height = 0.28
+	cyl.top_radius = 0.18
+	cyl.bottom_radius = 0.14
+	cyl.height = 0.22
 	bowl.mesh = cyl
 	var bm := StandardMaterial3D.new()
-	bm.albedo_color = Color(0.3, 0.35, 0.38)
+	bm.albedo_color = Color(0.25, 0.3, 0.34)
 	bowl.material_override = bm
-	bowl.position = pos + Vector3(0, 0.15, 0)
+	bowl.position = pos + Vector3(0, 0.12, 0)
 	props_root.add_child(bowl)
 	var flame := MeshInstance3D.new()
 	var sm := SphereMesh.new()
-	sm.radius = 0.16
-	sm.height = 0.3
+	sm.radius = 0.12
+	sm.height = 0.22
 	flame.mesh = sm
 	var fm := StandardMaterial3D.new()
-	fm.albedo_color = Color(0.4, 0.8, 1.0)
+	fm.albedo_color = Color(0.45, 0.8, 1.0)
 	fm.emission_enabled = true
-	fm.emission = Color(0.35, 0.75, 1.0)
-	fm.emission_energy_multiplier = 4.0
+	fm.emission = Color(0.4, 0.75, 1.0)
+	fm.emission_energy_multiplier = 2.5
 	flame.material_override = fm
-	flame.position = pos + Vector3(0, 0.42, 0)
+	flame.position = pos + Vector3(0, 0.35, 0)
 	props_root.add_child(flame)
 	var light := OmniLight3D.new()
-	light.light_color = Color(0.5, 0.8, 1.0)
-	light.light_energy = 2.2
-	light.omni_range = 7.5
-	light.position = pos + Vector3(0, 0.5, 0)
+	light.light_color = Color(0.55, 0.8, 1.0)
+	light.light_energy = 1.4
+	light.omni_range = 5.0
+	light.position = pos + Vector3(0, 0.4, 0)
 	props_root.add_child(light)
 
 
@@ -887,58 +896,35 @@ func _spawn_encounter(world: Vector3, pack_name: String) -> void:
 
 
 func _spawn_exit_marker(world: Vector3) -> void:
-	# campfire-like exit
-	for i in range(5):
-		var rock := MeshInstance3D.new()
-		var box := BoxMesh.new()
-		box.size = Vector3(0.25, 0.18, 0.25)
-		rock.mesh = box
-		var rm := StandardMaterial3D.new()
-		rm.albedo_color = Color(0.28, 0.4, 0.42)
-		rock.material_override = rm
-		var a := TAU * float(i) / 5.0
-		rock.position = world + Vector3(cos(a) * 0.45, 0.1, sin(a) * 0.45)
-		props_root.add_child(rock)
+	## Compact campfire — no random junk meshes.
 	var flame := MeshInstance3D.new()
 	var sm := SphereMesh.new()
-	sm.radius = 0.25
-	sm.height = 0.5
+	sm.radius = 0.2
+	sm.height = 0.4
 	flame.mesh = sm
 	var fm := StandardMaterial3D.new()
-	fm.albedo_color = Color(1.0, 0.45, 0.1)
+	fm.albedo_color = Color(1.0, 0.5, 0.15)
 	fm.emission_enabled = true
-	fm.emission = Color(1.0, 0.5, 0.15)
-	fm.emission_energy_multiplier = 3.5
+	fm.emission = Color(1.0, 0.55, 0.2)
+	fm.emission_energy_multiplier = 2.8
 	flame.material_override = fm
-	flame.position = world + Vector3(0, 0.45, 0)
+	flame.position = world + Vector3(0, 0.35, 0)
 	props_root.add_child(flame)
 	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.55, 0.25)
-	light.light_energy = 2.5
-	light.omni_range = 9.0
-	light.position = world + Vector3(0, 0.6, 0)
+	light.light_color = Color(1.0, 0.6, 0.3)
+	light.light_energy = 1.8
+	light.omni_range = 6.0
+	light.position = world + Vector3(0, 0.5, 0)
 	props_root.add_child(light)
 	var label := Label3D.new()
 	label.text = "EXIT"
-	label.position = world + Vector3(0, 1.4, 0)
-	label.font_size = 32
-	label.modulate = Color(1.0, 0.7, 0.35)
+	label.position = world + Vector3(0, 1.2, 0)
+	label.font_size = 28
+	label.modulate = Color(1.0, 0.75, 0.4)
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	props_root.add_child(label)
 
 
-func _spawn_start_marker(world: Vector3) -> void:
-	var mi := MeshInstance3D.new()
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.55
-	cyl.bottom_radius = 0.55
-	cyl.height = 0.08
-	mi.mesh = cyl
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.35, 0.7, 0.55)
-	mat.emission_enabled = true
-	mat.emission = Color(0.3, 0.8, 0.5)
-	mat.emission_energy_multiplier = 1.2
-	mi.material_override = mat
-	mi.position = world + Vector3(0, 0.05, 0)
-	props_root.add_child(mi)
+func _spawn_start_marker(_world: Vector3) -> void:
+	## No glowing disc on the floor (looked like a white/cyan 3D artifact).
+	pass

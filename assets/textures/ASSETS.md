@@ -9,6 +9,42 @@ Masters (исходники + готовые PNG): `assets/textures/masters/`.
 
 ---
 
+## Как обрезать (рабочий рецепт — **без артефактов**)
+
+Проверено на viewmodel/torch: чистый край, без белой/розовой каймы.
+
+### 1) Gen (только если попросили)
+В промпт: **`pure solid neon magenta background #FF00FF`** (или pure white), один объект, thick black outline в самом арте.
+
+### 2) Cut — `tools/sprite_cutter.py` (предпочтительно)
+```bash
+python3 tools/sprite_cutter.py path/to/raw.jpg assets/textures/out.png \
+  --color FF00FF --tolerance 55 --pad 4
+```
+Что делает (и почему чисто):
+1. **Flood-fill только с краёв** — вырезает key-цвет, **не** дырявит такой же цвет внутри силуэта  
+2. **Despill** — убирает пурпурный/розовый fringe по контуру (JPEG/AI)  
+3. **Binary alpha** (0 или 255) — нет полупрозрачной «молочной» каймы  
+4. **Crop** по bbox + pad  
+
+Для **white** фона: `--color FFFFFF --tolerance 40` (не жрать сталь/блики — при необходимости protect metal вручную).
+
+### 3) Чего **не** делать (ломает край)
+- **Не** раздувать outline (`MaxFilter` / «толстая чёрная обводка поверх») — жирный ореол  
+- **Не** резать scissor > ~0.15 на стали (нож становится прозрачным)  
+- **Не** ffmpeg `colorkey` на оранжевом огне / сером клинке, если key не чистый `#FF00FF` — съедает объект  
+- ffmpeg ок **только** как pre-pass + потом тот же edge-flood cleanup (`--ffmpeg`)
+
+### 4) В Godot
+- `Sprite3D`: `transparent`, mild `alpha_scissor` ≤ 0.15 **или** disabled для ножа  
+- `LINEAR_WITH_MIPMAPS` ок после hard alpha; не NEAREST если не нужен pixel look  
+
+### 5) После cut
+- Скопировать в `masters/` + строка в этой таблице  
+- Игра грузит `assets/textures/<name>.png`  
+
+---
+
 ## Viewmodel (рука игрока)
 
 | ID | Файл в игре | Master PNG | Source (raw) | Назначение |

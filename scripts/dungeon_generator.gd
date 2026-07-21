@@ -25,7 +25,7 @@ signal generation_finished(start_world: Vector3)
 @export var cell_size: float = 3.0
 @export var wall_height: float = 3.2
 @export var encounter_rooms: int = 4
-@export var torch_spacing: int = 6
+@export var torch_spacing: int = 4
 @export var extra_loops: int = 10
 
 var grid: Array = []
@@ -865,9 +865,9 @@ func _spawn_torches() -> void:
 				continue
 			var d: Vector2i = wall_dirs[placed % wall_dirs.size()]
 			var world := cell_to_world(Vector2i(x, y))
-			# Near wall but into corridor (~12cm) so sprite/mount don't clip into wall
-			var wall_dist := cell_size * 0.5 - 0.14
-			var pos := world + Vector3(d.x * wall_dist, 1.45, d.y * wall_dist)
+			# Into corridor enough to stay visible (not buried in wall mesh)
+			var wall_dist := cell_size * 0.5 - 0.28
+			var pos := world + Vector3(d.x * wall_dist, 1.55, d.y * wall_dist)
 			_add_torch(pos, d)
 			placed += 1
 	print("[Dungeon] torches=%d" % placed)

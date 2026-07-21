@@ -69,14 +69,13 @@ func _process(delta: float) -> void:
 	var flicker := 0.5 * s1 + 0.28 * s2 + 0.15 * s3 + 0.07 * s4  # ~[-1,1]
 
 	if _sprite and stretch_amount > 0.001:
+		# Mostly vertical stretch (flame "breathes"); keep root position fixed
 		var sy := 1.0 + flicker * stretch_amount
-		var sx := 1.0 - flicker * stretch_amount * 0.5
-		var jx := s2 * stretch_amount * 0.25
-		_sprite.scale = Vector3(base_scale.x * (sx + jx), base_scale.y * sy, base_scale.z)
-		_sprite.rotation_degrees.z = s2 * wobble_deg + s4 * wobble_deg * 0.35
-		# Tiny position dance so flame "licks"
-		_sprite.position = _base_pos + Vector3(s2 * 0.008, absf(s1) * 0.01, 0.0)
-		# No modulate pulse — only soft shape motion (no screen brightness flicker)
+		var sx := 1.0 - flicker * stretch_amount * 0.35
+		_sprite.scale = Vector3(base_scale.x * sx, base_scale.y * sy, base_scale.z)
+		_sprite.rotation_degrees.z = s2 * wobble_deg * 0.5
+		_sprite.position = _base_pos
+
 
 	# Keep OmniLight steady unless explicitly enabled (screen flicker hurts eyes)
 	if flicker_lights:

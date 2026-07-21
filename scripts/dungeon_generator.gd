@@ -109,9 +109,9 @@ func get_cell_type(x: int, y: int) -> int:
 
 func _build_materials() -> void:
 	# Mipmapped tiles + anisotropic-ish filtering via LINEAR_WITH_MIPMAPS
-	_floor_mat = _make_surface_mat(TextureFactory.cave_floor(256), Color(0.95, 1.0, 1.05), 0.92)
-	_wall_mat = _make_surface_mat(TextureFactory.cave_wall(256), Color(1.0, 1.05, 1.05), 0.85)
-	_ceiling_mat = _make_surface_mat(TextureFactory.cave_ceiling(256), Color(0.85, 0.9, 0.92), 0.95)
+	_floor_mat = _make_surface_mat(TextureFactory.cave_floor(256), Color(1.05, 1.12, 1.18), 0.9)
+	_wall_mat = _make_surface_mat(TextureFactory.cave_wall(256), Color(1.12, 1.2, 1.18), 0.82)
+	_ceiling_mat = _make_surface_mat(TextureFactory.cave_ceiling(256), Color(0.95, 1.05, 1.08), 0.94)
 
 
 func _make_surface_mat(tex: Texture2D, albedo: Color, roughness: float) -> StandardMaterial3D:
@@ -121,8 +121,10 @@ func _make_surface_mat(tex: Texture2D, albedo: Color, roughness: float) -> Stand
 	m.roughness = roughness
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	m.texture_repeat = true
-	m.uv1_scale = Vector3(2.0, 2.0, 2.0)  # finer tile → less stretch up close
+	m.uv1_scale = Vector3(2.0, 2.0, 2.0)
 	m.cull_mode = BaseMaterial3D.CULL_BACK
+	# Read well under dim ambient (competitor-style fill light)
+	m.ao_enabled = false
 	return m
 
 	_crystal_sprite_mat = StandardMaterial3D.new()
@@ -664,10 +666,11 @@ func _add_torch(pos: Vector3, wall_dir: Vector2i) -> void:
 	holder.add_child(flame)
 
 	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.65, 0.32)
-	light.light_energy = 2.6
-	light.omni_range = 5.5
-	light.omni_attenuation = 1.7
+	# Warm accent on top of cool ambient fill
+	light.light_color = Color(1.0, 0.72, 0.4)
+	light.light_energy = 2.2
+	light.omni_range = 6.5
+	light.omni_attenuation = 1.35
 	light.position = Vector3(0, 0.25, -0.3)
 	holder.add_child(light)
 

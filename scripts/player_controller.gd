@@ -34,7 +34,7 @@ func _ready() -> void:
 	if camera:
 		camera.fov = 70.0
 		camera.near = 0.08
-		camera.far = 22.0  # depth fog ends ~11m; cut far clutter
+		camera.far = 28.0
 	_spawn_view_torch()
 
 
@@ -74,10 +74,11 @@ func _spawn_view_torch() -> void:
 	holder.add_child(flame)
 
 	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.65, 0.32)
-	light.light_energy = 2.4
-	light.omni_range = 5.0
-	light.omni_attenuation = 1.8
+	# Local warm boost; map stays readable from cool ambient alone
+	light.light_color = Color(1.0, 0.75, 0.42)
+	light.light_energy = 1.9
+	light.omni_range = 5.5
+	light.omni_attenuation = 1.4
 	light.position = Vector3(0, 0.16, 0)
 	holder.add_child(light)
 

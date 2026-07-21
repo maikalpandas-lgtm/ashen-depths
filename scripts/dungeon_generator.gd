@@ -108,10 +108,11 @@ func get_cell_type(x: int, y: int) -> int:
 
 
 func _build_materials() -> void:
-	# Mipmapped tiles + anisotropic-ish filtering via LINEAR_WITH_MIPMAPS
-	_floor_mat = _make_surface_mat(TextureFactory.cave_floor(256), Color(1.05, 1.12, 1.18), 0.9)
-	_wall_mat = _make_surface_mat(TextureFactory.cave_wall(256), Color(1.12, 1.2, 1.18), 0.82)
-	_ceiling_mat = _make_surface_mat(TextureFactory.cave_ceiling(256), Color(0.95, 1.05, 1.08), 0.94)
+	_floor_mat = _make_surface_mat(TextureFactory.cave_floor(256), Color(1.08, 1.15, 1.2), 0.9)
+	_wall_mat = _make_surface_mat(TextureFactory.cave_wall(256), Color(1.15, 1.22, 1.18), 0.8)
+	_ceiling_mat = _make_surface_mat(TextureFactory.cave_ceiling(256), Color(1.0, 1.1, 1.1), 0.92)
+	_crystal_sprite_mat = null
+	_rock_sprite_mat = null
 
 
 func _make_surface_mat(tex: Texture2D, albedo: Color, roughness: float) -> StandardMaterial3D:
@@ -121,29 +122,9 @@ func _make_surface_mat(tex: Texture2D, albedo: Color, roughness: float) -> Stand
 	m.roughness = roughness
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	m.texture_repeat = true
-	m.uv1_scale = Vector3(2.0, 2.0, 2.0)
+	m.uv1_scale = Vector3(1.4, 1.4, 1.4)
 	m.cull_mode = BaseMaterial3D.CULL_BACK
-	# Read well under dim ambient (competitor-style fill light)
-	m.ao_enabled = false
 	return m
-
-	_crystal_sprite_mat = StandardMaterial3D.new()
-	_crystal_sprite_mat.albedo_texture = TextureFactory.crystal_sprite(64)
-	_crystal_sprite_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_crystal_sprite_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_crystal_sprite_mat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
-	_crystal_sprite_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
-	_crystal_sprite_mat.emission_enabled = true
-	_crystal_sprite_mat.emission = Color(0.4, 0.75, 1.0)
-	_crystal_sprite_mat.emission_energy_multiplier = 1.5
-	_crystal_sprite_mat.emission_texture = TextureFactory.crystal_sprite(64)
-
-	_rock_sprite_mat = StandardMaterial3D.new()
-	_rock_sprite_mat.albedo_texture = TextureFactory.rock_pile_sprite(64)
-	_rock_sprite_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_rock_sprite_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	_rock_sprite_mat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
-	_rock_sprite_mat.albedo_color = Color(1.15, 1.2, 1.15)
 
 
 func _clear_children(node: Node) -> void:
@@ -412,137 +393,208 @@ func _temp_collect() -> Array[Vector2i]:
 	return floor_cells
 
 
-## Art-first: floor/wall/ceiling as textured planes (painted look) + solid colliders.
-## PlaneMesh is XZ facing +Y — floor needs NO rotate; ceiling flips 180° on X.
+## Cave tunnel: arched walls, uneven rock, vaulted ceiling (not a flat box).
 func _build_art_corridor() -> void:
-	## Floor/ceiling = exact cell span (+tiny epsilon). Walls meet at face edges — no pillars.
-	var floor_span := cell_size + 0.02
 	for y in range(grid_height):
 		for x in range(grid_width):
 			if not _is_walkable(_get_cell(x, y)):
 				continue
 			var world := cell_to_world(Vector2i(x, y))
-			_add_plane(
-				geometry_root,
-				world + Vector3(0, 0.0, 0),
-				Vector2(floor_span, floor_span),
-				_floor_mat,
-				Vector3(0, 0, 0),
-				false
-			)
-			_add_solid_box(
-				world + Vector3(0, -0.25, 0),
-				Vector3(cell_size, 0.5, cell_size)
-			)
-			_add_plane(
-				geometry_root,
-				world + Vector3(0, wall_height, 0),
-				Vector2(floor_span, floor_span),
-				_ceiling_mat,
-				Vector3(180, 0, 0),
-				false
-			)
-			_add_solid_box(
-				world + Vector3(0, wall_height + 0.2, 0),
-				Vector3(cell_size, 0.4, cell_size)
-			)
-			_maybe_wall_plane(x, y, 1, 0, world)
-			_maybe_wall_plane(x, y, -1, 0, world)
-			_maybe_wall_plane(x, y, 0, 1, world)
-			_maybe_wall_plane(x, y, 0, -1, world)
+			var seed_h := x * 73856093 ^ y * 19349663
+
+			# Uneven rocky floor
+			_add_cave_floor(world, seed_h)
+			_add_solid_box(world + Vector3(0, -0.3, 0), Vector3(cell_size, 0.55, cell_size))
+
+			# Vaulted ceiling piece + stalactites
+			_add_cave_ceiling(world, seed_h)
+			_add_solid_box(world + Vector3(0, wall_height + 0.35, 0), Vector3(cell_size, 0.5, cell_size))
+
+			_maybe_cave_wall(x, y, 1, 0, world, seed_h)
+			_maybe_cave_wall(x, y, -1, 0, world, seed_h + 11)
+			_maybe_cave_wall(x, y, 0, 1, world, seed_h + 23)
+			_maybe_cave_wall(x, y, 0, -1, world, seed_h + 37)
 
 
-func _maybe_wall_plane(x: int, y: int, dx: int, dy: int, world: Vector3) -> void:
-	if _is_walkable(_get_cell(x + dx, y + dy)):
-		return
-	# Exact cell face: width = cell_size so L-corners meet at an edge (no pillars, no overhang).
-	var edge := cell_size * 0.5
-	var pos := world + Vector3(float(dx) * edge, wall_height * 0.5, float(dy) * edge)
-	var into := Vector3(-float(dx), 0.0, -float(dy))
-	# Epsilon only — closes raster gaps without sticking into the corridor
-	_add_wall_plane(pos, into, cell_size + 0.02, wall_height, _wall_mat)
-
-
-func _add_wall_plane(pos: Vector3, face_into: Vector3, width: float, height: float, mat: Material) -> void:
-	## Single-sided wall on the cell face; neighbors share edges cleanly.
+func _add_cave_floor(world: Vector3, seed_h: int) -> void:
+	## Slightly warped floor mesh + low rock plates.
 	var mi := MeshInstance3D.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var hw := width * 0.5
-	var hh := height * 0.5
-	var tile_u := 2.0
-	var tile_v := 2.0
-	_quad_uv_rect(
-		st,
-		Vector3(-hw, -hh, 0), Vector3(hw, -hh, 0), Vector3(hw, hh, 0), Vector3(-hw, hh, 0),
-		Vector3(0, 0, 1),
-		tile_u, tile_v
-	)
+	var segs := 3
+	var half := cell_size * 0.5
+	for j in range(segs):
+		for i in range(segs):
+			var u0 := float(i) / float(segs)
+			var v0 := float(j) / float(segs)
+			var u1 := float(i + 1) / float(segs)
+			var v1 := float(j + 1) / float(segs)
+			var p00 := _floor_pt(world, u0, v0, half, seed_h)
+			var p10 := _floor_pt(world, u1, v0, half, seed_h)
+			var p11 := _floor_pt(world, u1, v1, half, seed_h)
+			var p01 := _floor_pt(world, u0, v1, half, seed_h)
+			_tri(st, p00, p10, p11, Vector3.UP, u0, v0, u1, v0, u1, v1)
+			_tri(st, p00, p11, p01, Vector3.UP, u0, v0, u1, v1, u0, v1)
+	st.generate_normals()
 	mi.mesh = st.commit()
-	mi.material_override = mat
+	mi.material_override = _floor_mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-
-	var yaw := 0.0
-	if absf(face_into.x) > 0.5:
-		yaw = -PI * 0.5 if face_into.x > 0.0 else PI * 0.5
-	else:
-		yaw = 0.0 if face_into.z < 0.0 else PI
-	# Nudge 1cm into the wall (away from corridor) so face is not inside the walk volume
-	var pos_nudge := pos - face_into * 0.01
-	mi.transform = Transform3D(Basis.from_euler(Vector3(0, yaw, 0)), pos_nudge)
 	geometry_root.add_child(mi)
 
-	# Thin collider behind the face (outside walk space)
-	var col_size := Vector3(width, height, 0.2) if absf(face_into.z) > 0.5 else Vector3(0.2, height, width)
-	_add_solid_box(pos - face_into * 0.12, col_size)
+	# A few low floor rocks (same material — no white junk)
+	var n_rocks: int = 1 + absi(seed_h) % 2
+	for r in range(n_rocks):
+		var ox := (float((seed_h >> (r * 3)) % 100) / 100.0 - 0.5) * cell_size * 0.55
+		var oz := (float((seed_h >> (r * 5 + 2)) % 100) / 100.0 - 0.5) * cell_size * 0.55
+		var s: float = 0.25 + float((seed_h >> (r + 4)) % 10) / 40.0
+		_add_textured_box(
+			world + Vector3(ox, s * 0.25, oz),
+			Vector3(s, s * 0.35, s * 0.9),
+			_floor_mat,
+			false
+		)
 
 
-func _quad_uv_rect(
+func _floor_pt(world: Vector3, u: float, v: float, half: float, seed_h: int) -> Vector3:
+	var x := (u - 0.5) * 2.0 * half
+	var z := (v - 0.5) * 2.0 * half
+	var h := 0.02 * sin(u * 9.0 + float(seed_h % 7)) * cos(v * 8.0)
+	return world + Vector3(x, h, z)
+
+
+func _add_cave_ceiling(world: Vector3, seed_h: int) -> void:
+	## Vault: higher in center, lower near walls — tunnel roof.
+	var mi := MeshInstance3D.new()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var segs := 4
+	var half := cell_size * 0.5
+	for j in range(segs):
+		for i in range(segs):
+			var u0 := float(i) / float(segs)
+			var v0 := float(j) / float(segs)
+			var u1 := float(i + 1) / float(segs)
+			var v1 := float(j + 1) / float(segs)
+			var p00 := _ceil_pt(world, u0, v0, half, seed_h)
+			var p10 := _ceil_pt(world, u1, v0, half, seed_h)
+			var p11 := _ceil_pt(world, u1, v1, half, seed_h)
+			var p01 := _ceil_pt(world, u0, v1, half, seed_h)
+			# Flip winding so normal faces down into tunnel
+			_tri(st, p00, p11, p10, Vector3.DOWN, u0, v0, u1, v1, u1, v0)
+			_tri(st, p00, p01, p11, Vector3.DOWN, u0, v0, u0, v1, u1, v1)
+	st.generate_normals()
+	mi.mesh = st.commit()
+	mi.material_override = _ceiling_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	geometry_root.add_child(mi)
+
+	# Stalactites
+	if (seed_h % 3) == 0:
+		var sx := (float(seed_h % 50) / 50.0 - 0.5) * cell_size * 0.4
+		var sz := (float((seed_h / 7) % 50) / 50.0 - 0.5) * cell_size * 0.4
+		var h: float = 0.35 + float(absi(seed_h) % 20) / 40.0
+		var st_mi := MeshInstance3D.new()
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = 0.02
+		cyl.bottom_radius = 0.1
+		cyl.height = h
+		st_mi.mesh = cyl
+		st_mi.material_override = _ceiling_mat
+		st_mi.position = world + Vector3(sx, wall_height - h * 0.45, sz)
+		st_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		geometry_root.add_child(st_mi)
+
+
+func _ceil_pt(world: Vector3, u: float, v: float, half: float, seed_h: int) -> Vector3:
+	var x := (u - 0.5) * 2.0 * half
+	var z := (v - 0.5) * 2.0 * half
+	# Arch: edges lower, center higher (vault)
+	var edge := maxf(absf(u - 0.5), absf(v - 0.5)) * 2.0
+	var arch := edge * edge * 0.55
+	var noise := 0.08 * sin((u + v) * 12.0 + float(seed_h % 5))
+	return world + Vector3(x, wall_height - arch + noise, z)
+
+
+func _maybe_cave_wall(x: int, y: int, dx: int, dy: int, world: Vector3, seed_h: int) -> void:
+	if _is_walkable(_get_cell(x + dx, y + dy)):
+		return
+	var into := Vector3(-float(dx), 0.0, -float(dy))
+	var edge := cell_size * 0.5
+	var base := world + Vector3(float(dx) * edge, 0.0, float(dy) * edge)
+	_add_cave_wall_mesh(base, into, seed_h)
+	# Solid collider slightly outside walk space
+	var col_size := Vector3(cell_size, wall_height, 0.35) if absf(into.z) > 0.5 else Vector3(0.35, wall_height, cell_size)
+	_add_solid_box(base - into * 0.15 + Vector3(0, wall_height * 0.5, 0), col_size)
+	# Rock bulges into tunnel (same wall mat)
+	_add_wall_rocks(base, into, seed_h)
+
+
+func _add_cave_wall_mesh(base: Vector3, face_into: Vector3, seed_h: int) -> void:
+	## Wall strip: arches inward near the top (tunnel profile) + noise bumps.
+	var mi := MeshInstance3D.new()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var segs_w := 4
+	var segs_h := 5
+	var width := cell_size + 0.02
+	var right := Vector3(-face_into.z, 0.0, face_into.x)  # along the wall
+
+	for j in range(segs_h):
+		for i in range(segs_w):
+			var u0 := float(i) / float(segs_w)
+			var v0 := float(j) / float(segs_h)
+			var u1 := float(i + 1) / float(segs_w)
+			var v1 := float(j + 1) / float(segs_h)
+			var p00 := _wall_pt(base, face_into, right, u0, v0, width, seed_h)
+			var p10 := _wall_pt(base, face_into, right, u1, v0, width, seed_h)
+			var p11 := _wall_pt(base, face_into, right, u1, v1, width, seed_h)
+			var p01 := _wall_pt(base, face_into, right, u0, v1, width, seed_h)
+			_tri(st, p00, p10, p11, face_into, u0, v0, u1, v0, u1, v1)
+			_tri(st, p00, p11, p01, face_into, u0, v0, u1, v1, u0, v1)
+	st.generate_normals()
+	mi.mesh = st.commit()
+	mi.material_override = _wall_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	geometry_root.add_child(mi)
+
+
+func _wall_pt(base: Vector3, face_into: Vector3, right: Vector3, u: float, v: float, width: float, seed_h: int) -> Vector3:
+	## v=0 floor, v=1 ceiling. Depth into corridor grows with height (arch).
+	var along := (u - 0.5) * width
+	var h := v * wall_height
+	var arch := v * v * 0.42  # lean into corridor near top
+	var bump := 0.06 * sin(u * TAU * 2.0 + float(seed_h % 9)) * sin(v * PI * 2.0)
+	var depth := arch + bump  # along face_into (into walk space)
+	# Keep bulk of wall outside: start slightly outside, arch comes in
+	return base + right * along + Vector3.UP * h + face_into * (depth - 0.02)
+
+
+func _add_wall_rocks(base: Vector3, face_into: Vector3, seed_h: int) -> void:
+	var count: int = 2 + absi(seed_h) % 3
+	var right := Vector3(-face_into.z, 0.0, face_into.x)
+	for i in range(count):
+		var t := (float(i) + 0.5) / float(count) - 0.5
+		var h: float = 0.35 + float((seed_h + i * 17) % 100) / 100.0 * (wall_height - 0.9)
+		var s: float = 0.2 + float((seed_h + i) % 8) / 25.0
+		var pos := base + right * (t * cell_size * 0.7) + Vector3.UP * h + face_into * (0.08 + s * 0.25)
+		_add_textured_box(pos, Vector3(s * 1.1, s * 0.9, s * 0.85), _wall_mat, false)
+
+
+func _tri(
 	st: SurfaceTool,
-	a: Vector3, b: Vector3, c: Vector3, d: Vector3,
+	a: Vector3, b: Vector3, c: Vector3,
 	n: Vector3,
-	u_tile: float,
-	v_tile: float
+	ua: float, va: float, ub: float, vb: float, uc: float, vc: float
 ) -> void:
 	st.set_normal(n)
-	st.set_uv(Vector2(0, v_tile))
+	st.set_uv(Vector2(ua * 2.0, va * 2.0))
 	st.add_vertex(a)
 	st.set_normal(n)
-	st.set_uv(Vector2(u_tile, v_tile))
+	st.set_uv(Vector2(ub * 2.0, vb * 2.0))
 	st.add_vertex(b)
 	st.set_normal(n)
-	st.set_uv(Vector2(u_tile, 0))
+	st.set_uv(Vector2(uc * 2.0, vc * 2.0))
 	st.add_vertex(c)
-	st.set_normal(n)
-	st.set_uv(Vector2(0, v_tile))
-	st.add_vertex(a)
-	st.set_normal(n)
-	st.set_uv(Vector2(u_tile, 0))
-	st.add_vertex(c)
-	st.set_normal(n)
-	st.set_uv(Vector2(0, 0))
-	st.add_vertex(d)
-
-
-func _quad_uv(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, n: Vector3, tile: float) -> void:
-	st.set_normal(n)
-	st.set_uv(Vector2(0, tile))
-	st.add_vertex(a)
-	st.set_normal(n)
-	st.set_uv(Vector2(tile, tile))
-	st.add_vertex(b)
-	st.set_normal(n)
-	st.set_uv(Vector2(tile, 0))
-	st.add_vertex(c)
-	st.set_normal(n)
-	st.set_uv(Vector2(0, tile))
-	st.add_vertex(a)
-	st.set_normal(n)
-	st.set_uv(Vector2(tile, 0))
-	st.add_vertex(c)
-	st.set_normal(n)
-	st.set_uv(Vector2(0, 0))
-	st.add_vertex(d)
 
 
 func _add_solid_box(pos: Vector3, size: Vector3) -> void:
@@ -558,7 +610,7 @@ func _add_solid_box(pos: Vector3, size: Vector3) -> void:
 	geometry_root.add_child(body)
 
 
-func _add_textured_box(pos: Vector3, size: Vector3, mat: Material) -> void:
+func _add_textured_box(pos: Vector3, size: Vector3, mat: Material, collision: bool = true) -> void:
 	var mi := MeshInstance3D.new()
 	var box := BoxMesh.new()
 	box.size = size
@@ -567,7 +619,8 @@ func _add_textured_box(pos: Vector3, size: Vector3, mat: Material) -> void:
 	mi.position = pos
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	geometry_root.add_child(mi)
-	_add_solid_box(pos, size)
+	if collision:
+		_add_solid_box(pos, size)
 
 
 func _add_plane(

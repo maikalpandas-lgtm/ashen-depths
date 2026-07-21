@@ -1,12 +1,13 @@
 extends RefCounted
-## Viewmodel + wall torches: AI sprites, fixed orientation, animated flame tip, static lights.
+## Viewmodel + wall torches. Asset catalog: assets/textures/ASSETS.md
+## Do NOT regenerate sprites unless the user asks — edit code / reuse masters.
 
 
-const TORCH_TEX_PATH := "res://assets/textures/torch.png"
-const HAND_TORCH_PATH := "res://assets/textures/hand_torch.png"
-const HAND_KNIFE_PATH := "res://assets/textures/hand_knife.png"
-const FLAME_TEX_PATH := "res://assets/textures/flame_only.png"
-const GLOW_TEX_PATH := "res://assets/textures/torch_glow.png"
+const TORCH_TEX_PATH := "res://assets/textures/torch.png"  # prop_wall_torch
+const HAND_TORCH_PATH := "res://assets/textures/hand_torch.png"  # vm_hand_torch
+const HAND_KNIFE_PATH := "res://assets/textures/hand_knife.png"  # vm_hand_knife
+const FLAME_TEX_PATH := "res://assets/textures/flame_only.png"  # fx_flame
+const GLOW_TEX_PATH := "res://assets/textures/torch_glow.png"  # fx_torch_glow
 
 const FlameFlicker = preload("res://scripts/flame_flicker.gd")
 

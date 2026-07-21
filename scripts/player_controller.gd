@@ -32,7 +32,9 @@ func _ready() -> void:
 	if head:
 		head.rotation.x = deg_to_rad(-2.0)
 	if camera:
-		camera.fov = 72.0
+		camera.fov = 70.0
+		camera.near = 0.08
+		camera.far = 36.0  # fog eats the rest — less far aliasing
 	_spawn_view_torch()
 
 
@@ -72,9 +74,10 @@ func _spawn_view_torch() -> void:
 	holder.add_child(flame)
 
 	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.7, 0.4)
-	light.light_energy = 1.6
-	light.omni_range = 7.0
+	light.light_color = Color(1.0, 0.68, 0.35)
+	light.light_energy = 2.8
+	light.omni_range = 6.5
+	light.omni_attenuation = 1.5
 	light.position = Vector3(0, 0.16, 0)
 	holder.add_child(light)
 

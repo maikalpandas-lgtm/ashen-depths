@@ -3,55 +3,48 @@ extends RefCounted
 
 
 static func cave_wall(size: int = 256) -> ImageTexture:
-	## Vertical rock face — big teal stones, ink cracks, soft highlights.
+	## Softer stones — less ink contrast (avoids moire / aliasing up close).
 	return _stone_tile(
 		size,
-		Color(0.12, 0.28, 0.32),   # grout
-		Color(0.22, 0.48, 0.50),   # base stone
-		Color(0.38, 0.68, 0.62),   # mid
-		Color(0.55, 0.82, 0.72),   # highlight
-		0.11,  # cell scale → fewer, bigger rocks
-		true   # vertical stretch (wall grain)
+		Color(0.16, 0.32, 0.36),
+		Color(0.26, 0.48, 0.50),
+		Color(0.36, 0.60, 0.58),
+		Color(0.48, 0.72, 0.68),
+		0.14,
+		true
 	)
 
 
 static func cave_floor(size: int = 256) -> ImageTexture:
-	## Floor — cooler, flatter cobble plates.
 	return _stone_tile(
 		size,
-		Color(0.08, 0.14, 0.18),
-		Color(0.16, 0.30, 0.36),
-		Color(0.24, 0.42, 0.46),
-		Color(0.34, 0.55, 0.58),
-		0.13,
+		Color(0.10, 0.18, 0.22),
+		Color(0.18, 0.32, 0.38),
+		Color(0.26, 0.42, 0.46),
+		Color(0.34, 0.52, 0.54),
+		0.15,
 		false
 	)
 
 
 static func cave_ceiling(size: int = 256) -> ImageTexture:
-	## Ceiling — darker, mottled, slight drip stains.
 	var img := _stone_tile_image(
 		size,
-		Color(0.06, 0.12, 0.14),
-		Color(0.14, 0.30, 0.34),
-		Color(0.22, 0.42, 0.42),
-		Color(0.30, 0.52, 0.48),
-		0.10,
+		Color(0.08, 0.14, 0.16),
+		Color(0.16, 0.30, 0.34),
+		Color(0.24, 0.40, 0.40),
+		Color(0.30, 0.48, 0.46),
+		0.13,
 		false
 	)
-	# drip streaks
 	for x in range(size):
-		if _hash(x, 7) < 0.82:
+		if _hash(x, 7) < 0.88:
 			continue
-		var x0 := x
-		var len := 8 + int(_hash(x, 9) * 40.0)
+		var len := 6 + int(_hash(x, 9) * 28.0)
 		for y in range(mini(len, size)):
-			var c := img.get_pixel(x0, y)
-			img.set_pixel(x0, y, c.darkened(0.12 + float(y) / float(size) * 0.1))
-			if x0 + 1 < size:
-				var c2 := img.get_pixel(x0 + 1, y)
-				img.set_pixel(x0 + 1, y, c2.darkened(0.06))
-	return ImageTexture.create_from_image(img)
+			var c := img.get_pixel(x, y)
+			img.set_pixel(x, y, c.darkened(0.08))
+	return _tex_with_mips(img)
 
 
 static func _stone_tile(
@@ -63,9 +56,16 @@ static func _stone_tile(
 	cell_scale: float,
 	vertical: bool
 ) -> ImageTexture:
-	return ImageTexture.create_from_image(
-		_stone_tile_image(size, grout, base, mid, hi, cell_scale, vertical)
-	)
+	return _tex_with_mips(_stone_tile_image(size, grout, base, mid, hi, cell_scale, vertical))
+
+
+static func _tex_with_mips(img: Image) -> ImageTexture:
+	## Mipmaps kill close-up aliasing / “3D sparkle” on walls.
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+	img.generate_mipmaps()
+	var tex := ImageTexture.create_from_image(img)
+	return tex
 
 
 static func _stone_tile_image(
@@ -107,54 +107,23 @@ static func _stone_tile_image(
 				elif d < second_d:
 					second_d = d
 
-			# Edge factor: near boundary between stones → grout
+			# Soft edge blend (hard grout = moire when close)
 			var edge := second_d - best_d
-			var edge_w := 3.2 + _hash(best_id, 2) * 2.0
-			var is_grout := edge < edge_w
+			var edge_w := 4.5 + _hash(best_id, 2) * 2.5
+			var blend := clampf(1.0 - edge / edge_w, 0.0, 1.0)
+			blend = blend * blend  # smoother falloff
 
-			if is_grout:
-				var g := grout.darkened(_hash(x / 3, y / 3) * 0.15)
-				img.set_pixel(x, y, g)
-				continue
-
-			# Stone body color variation per cell
 			var t := _hash(best_id, 0)
 			var t2 := _hash(best_id, 1)
-			var c := base.lerp(mid, t).lerp(hi, t2 * 0.35)
-			# Soft inner shading from cell center
-			var shade := clampf(best_d / (float(size) * cell_scale * 3.5), 0.0, 1.0)
-			c = c.darkened(shade * 0.18)
-			# Speckle (paint grain, subtle)
-			if _hash(x, y) > 0.92:
-				c = c.lightened(0.06)
-			elif _hash(x + 1, y + 3) > 0.94:
-				c = c.darkened(0.07)
-			# Rim light on upper side of stone (hand-paint feel)
-			if not is_grout and y > 0:
-				var up := img.get_pixel(x, y)  # not yet; use noise
-				if _hash(best_id, y / 8) > 0.55 and shade < 0.35:
-					c = c.lerp(hi, 0.12)
-			# Dark outline just inside edge
-			if edge < edge_w + 1.8:
-				c = c.lerp(grout, 0.35)
+			var c := base.lerp(mid, t).lerp(hi, t2 * 0.28)
+			var shade := clampf(best_d / (float(size) * cell_scale * 4.0), 0.0, 1.0)
+			c = c.darkened(shade * 0.12)
+			if _hash(x, y) > 0.96:
+				c = c.lightened(0.04)
+			# Soft grout, not razor ink lines
+			c = c.lerp(grout, blend * 0.75)
 			img.set_pixel(x, y, c)
-
-	# Second pass: strengthen ink outlines where grout meets stone
-	var out := img.duplicate()
-	for y in range(1, size - 1):
-		for x in range(1, size - 1):
-			var c := img.get_pixel(x, y)
-			var lum := c.get_luminance()
-			var n_dark := 0
-			for oy in range(-1, 2):
-				for ox in range(-1, 2):
-					if img.get_pixel(x + ox, y + oy).get_luminance() < 0.2:
-						n_dark += 1
-			if n_dark >= 2 and lum > 0.25:
-				out.set_pixel(x, y, c.darkened(0.2))
-			else:
-				out.set_pixel(x, y, c)
-	return out
+	return img
 
 
 static func crystal_sprite(size: int = 64) -> ImageTexture:
@@ -176,7 +145,7 @@ static func crystal_sprite(size: int = 64) -> ImageTexture:
 				if d > 0.88:
 					c = Color(0.15, 0.25, 0.3, 0.9)
 				img.set_pixel(x, y, c)
-	return ImageTexture.create_from_image(img)
+	return _tex_with_mips(img)
 
 
 static func rock_pile_sprite(size: int = 64) -> ImageTexture:

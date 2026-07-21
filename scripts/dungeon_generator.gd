@@ -108,24 +108,22 @@ func get_cell_type(x: int, y: int) -> int:
 
 
 func _build_materials() -> void:
-	# Hand-painted stone tiles — slight brightness boost, no harsh noise
-	_floor_mat = StandardMaterial3D.new()
-	_floor_mat.albedo_texture = TextureFactory.cave_floor(256)
-	_floor_mat.albedo_color = Color(1.1, 1.15, 1.2)
-	_floor_mat.roughness = 0.9
-	_floor_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	# Mipmapped tiles + anisotropic-ish filtering via LINEAR_WITH_MIPMAPS
+	_floor_mat = _make_surface_mat(TextureFactory.cave_floor(256), Color(0.95, 1.0, 1.05), 0.92)
+	_wall_mat = _make_surface_mat(TextureFactory.cave_wall(256), Color(1.0, 1.05, 1.05), 0.85)
+	_ceiling_mat = _make_surface_mat(TextureFactory.cave_ceiling(256), Color(0.85, 0.9, 0.92), 0.95)
 
-	_wall_mat = StandardMaterial3D.new()
-	_wall_mat.albedo_texture = TextureFactory.cave_wall(256)
-	_wall_mat.albedo_color = Color(1.15, 1.2, 1.15)
-	_wall_mat.roughness = 0.82
-	_wall_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
-	_ceiling_mat = StandardMaterial3D.new()
-	_ceiling_mat.albedo_texture = TextureFactory.cave_ceiling(256)
-	_ceiling_mat.albedo_color = Color(1.05, 1.1, 1.1)
-	_ceiling_mat.roughness = 0.95
-	_ceiling_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+func _make_surface_mat(tex: Texture2D, albedo: Color, roughness: float) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = tex
+	m.albedo_color = albedo
+	m.roughness = roughness
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	m.texture_repeat = true
+	m.uv1_scale = Vector3(2.0, 2.0, 2.0)  # finer tile → less stretch up close
+	m.cull_mode = BaseMaterial3D.CULL_BACK
+	return m
 
 	_crystal_sprite_mat = StandardMaterial3D.new()
 	_crystal_sprite_mat.albedo_texture = TextureFactory.crystal_sprite(64)
@@ -458,27 +456,25 @@ func _build_art_corridor() -> void:
 func _maybe_wall_plane(x: int, y: int, dx: int, dy: int, world: Vector3) -> void:
 	if _is_walkable(_get_cell(x + dx, y + dy)):
 		return
-	var edge := cell_size * 0.5 - 0.04
+	# Inset slightly from cell edge → less face-plant into texture, less z-fight with neighbor
+	var edge := cell_size * 0.5 - 0.12
 	var pos := world + Vector3(float(dx) * edge, wall_height * 0.5, float(dy) * edge)
-	# Into corridor = opposite of wall normal offset
 	var into := Vector3(-float(dx), 0.0, -float(dy))
-	_add_wall_plane(pos, into, cell_size * 1.02, wall_height, _wall_mat)
+	_add_wall_plane(pos, into, cell_size * 0.98, wall_height * 0.98, _wall_mat)
 
 
 func _add_wall_plane(pos: Vector3, face_into: Vector3, width: float, height: float, mat: Material) -> void:
-	## Vertical double-sided quad + solid wall box.
+	## Single-sided wall (into corridor only) — no double-plane z-fight.
 	var mi := MeshInstance3D.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var hw := width * 0.5
 	var hh := height * 0.5
-	_quad(st, Vector3(-hw, -hh, 0), Vector3(hw, -hh, 0), Vector3(hw, hh, 0), Vector3(-hw, hh, 0), Vector3(0, 0, 1))
-	_quad(st, Vector3(hw, -hh, 0), Vector3(-hw, -hh, 0), Vector3(-hw, hh, 0), Vector3(hw, hh, 0), Vector3(0, 0, -1))
+	# UV tiles 2×2 for mip stability
+	_quad_uv(st, Vector3(-hw, -hh, 0), Vector3(hw, -hh, 0), Vector3(hw, hh, 0), Vector3(-hw, hh, 0), Vector3(0, 0, 1), 2.0)
 	mi.mesh = st.commit()
-	var wall_mat := mat.duplicate() as StandardMaterial3D
-	if wall_mat:
-		wall_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mi.material_override = wall_mat if wall_mat else mat
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 	var yaw := 0.0
 	if absf(face_into.x) > 0.5:
@@ -488,25 +484,25 @@ func _add_wall_plane(pos: Vector3, face_into: Vector3, width: float, height: flo
 	mi.transform = Transform3D(Basis.from_euler(Vector3(0, yaw, 0)), pos)
 	geometry_root.add_child(mi)
 
-	var col_size := Vector3(width, height, 0.45) if absf(face_into.z) > 0.5 else Vector3(0.45, height, width)
-	_add_solid_box(pos, col_size)
+	var col_size := Vector3(width, height, 0.4) if absf(face_into.z) > 0.5 else Vector3(0.4, height, width)
+	_add_solid_box(pos + face_into * -0.05, col_size)
 
 
-func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, n: Vector3) -> void:
+func _quad_uv(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, n: Vector3, tile: float) -> void:
 	st.set_normal(n)
-	st.set_uv(Vector2(0, 1))
+	st.set_uv(Vector2(0, tile))
 	st.add_vertex(a)
 	st.set_normal(n)
-	st.set_uv(Vector2(1, 1))
+	st.set_uv(Vector2(tile, tile))
 	st.add_vertex(b)
 	st.set_normal(n)
-	st.set_uv(Vector2(1, 0))
+	st.set_uv(Vector2(tile, 0))
 	st.add_vertex(c)
 	st.set_normal(n)
-	st.set_uv(Vector2(0, 1))
+	st.set_uv(Vector2(0, tile))
 	st.add_vertex(a)
 	st.set_normal(n)
-	st.set_uv(Vector2(1, 0))
+	st.set_uv(Vector2(tile, 0))
 	st.add_vertex(c)
 	st.set_normal(n)
 	st.set_uv(Vector2(0, 0))
@@ -538,15 +534,11 @@ func _add_plane(
 	var mi := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
 	plane.size = size
-	plane.subdivide_width = 1
-	plane.subdivide_depth = 1
+	plane.subdivide_width = 0
+	plane.subdivide_depth = 0
 	mi.mesh = plane
-	var m := mat.duplicate() as StandardMaterial3D
-	if m:
-		m.cull_mode = BaseMaterial3D.CULL_DISABLED
-		mi.material_override = m
-	else:
-		mi.material_override = mat
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.position = pos
 	mi.rotation_degrees = rot_deg
 	parent.add_child(mi)
@@ -637,10 +629,10 @@ func _add_torch(pos: Vector3, wall_dir: Vector2i) -> void:
 	holder.add_child(flame)
 
 	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.72, 0.4)
-	light.light_energy = 2.4
-	light.omni_range = 10.0
-	light.omni_attenuation = 0.9
+	light.light_color = Color(1.0, 0.7, 0.38)
+	light.light_energy = 3.2
+	light.omni_range = 7.5
+	light.omni_attenuation = 1.4
 	light.position = Vector3(0, 0.25, -0.3)
 	holder.add_child(light)
 

@@ -1,6 +1,7 @@
 # Ashen Depths — Roadmap
 
-Короткий чеклист. Детали лора, боя и **3 слоёв карт** → [DESIGN.md](./DESIGN.md) (§7).
+Короткий чеклист.  
+Детали: [DESIGN.md](./DESIGN.md) — §7 карты · **§8 backpack/shop/merchant**.
 
 ## Фаза 0 — Репо и скелет ✅
 - [x] Репо `ashen-depths` (GitHub)
@@ -10,13 +11,12 @@
 - [x] `docs/DESIGN.md`
 
 ## Фаза 1 — Лабиринт MVP ✅
-- [x] Rooms + corridors generator
-- [x] Dead ends
-- [x] Doors
-- [x] Chest (1 type)
-- [x] Torches + fog
-- [x] Encounter pack spawn in rooms
-- [ ] Minimap (optional polish)
+- [x] Corridor-first generator
+- [x] Dead ends, doors, chest, encounters
+- [x] Torches, cave props, fog, HUD
+- [x] Minimap (parchment tiles)
+- [ ] Grid-move + fixed-forward camera (реф-feel)
+- [ ] Art-first painted textures
 
 ## Фаза 2 — Партия + колоды
 - [ ] 3 hero stubs (HP, portrait)
@@ -31,10 +31,14 @@
 - [ ] **Layer 2:** level-up → upgrade **or** rare
 - [ ] Mini-boss + floor boss (simple rewards)
 
-## Фаза 4 — Босс-слой + хаб + контент
+## Фаза 4 — Босс-слой + Backpack + Shop + хаб
 - [ ] **Layer 3:** relic pick + shard + optional curse altar
-- [ ] Camp: **remove / upgrade** for gold
-- [ ] More heroes, biomes, loot, craft
+- [ ] **4b:** backpack grid **5×4**, items **1×1 / 2×1**, adjacency
+- [ ] Post-combat **item loot** (take / sell)
+- [ ] **4c:** floor shop (buy / sell / reroll)
+- [ ] **4d:** map **merchant** (0–1 / floor) + minimap icon
+- [ ] Camp / shop: card **remove / upgrade** for gold
+- [ ] Item catalog, more heroes, biomes
 - [ ] Trailer floor
 
 ## Фаза 5 — Полиш + demo
@@ -44,9 +48,19 @@
 
 ### Прогрессия (шпаргалка)
 
-| Когда | Что выбираешь |
-|-------|----------------|
-| После пачки | 1 карта из 2–3 **или** skip (gold/minor) |
-| Level-up | Upgrade своей **или** rare/uncommon |
-| Босс | Relic 1-of-N + shard auto + optional cursed card |
-| Хаб | Remove / upgrade за gold |
+| Когда | Карты | Рюкзак / экономика |
+|-------|--------|---------------------|
+| После пачки | 1 of 2–3 **или** skip gold | item take **или** sell |
+| Level-up | upgrade **или** rare card | — |
+| Босс | relic pick + shard + curse? | rare/epic item pick |
+| На этаже | — | **0–1 merchant** |
+| После этажа | remove/upgrade (shop tab) | **full shop** |
+| Хаб | remove/upgrade | edit backpack |
+
+### Роли систем
+
+| Система | Отвечает за |
+|---------|-------------|
+| Карты | Активный бой |
+| Рюкзак | Пассивы / синергии предметов |
+| Shop + merchant | Лут-ротация, gold sink |

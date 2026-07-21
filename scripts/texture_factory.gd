@@ -1,81 +1,93 @@
 extends RefCounted
-## Procedural textures so the dungeon is not flat grey boxes.
-## Use: preload("res://scripts/texture_factory.gd").stone_wall()
+## Procedural cave textures — teal/stone like competitor reference.
 
 
-static func stone_wall(size: int = 128) -> ImageTexture:
+static func cave_wall(size: int = 128) -> ImageTexture:
 	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	var mortar := Color(0.18, 0.16, 0.22)
-	var brick_a := Color(0.42, 0.38, 0.48)
-	var brick_b := Color(0.34, 0.30, 0.40)
-	var brick_h := 16
-	var brick_w := 32
+	var deep := Color(0.18, 0.32, 0.38)
+	var mid := Color(0.28, 0.48, 0.52)
+	var lite := Color(0.40, 0.62, 0.58)
+	var dark := Color(0.10, 0.18, 0.22)
 	for y in range(size):
-		var row: int = y / brick_h
-		var y_in: int = y % brick_h
-		var offset: int = (row % 2) * (brick_w / 2)
 		for x in range(size):
-			var x_shifted: int = (x + offset) % size
-			var x_in: int = x_shifted % brick_w
-			# mortar lines
-			if y_in == 0 or y_in == brick_h - 1 or x_in == 0 or x_in == brick_w - 1:
-				img.set_pixel(x, y, mortar)
-			else:
-				var n := _hash_noise(x_shifted / brick_w, row)
-				var c := brick_a.lerp(brick_b, n)
-				# subtle speckles
-				if _hash_noise(x, y) > 0.92:
-					c = c.darkened(0.15)
-				img.set_pixel(x, y, c)
+			var n := _fbm(x, y, 0.07)
+			var n2 := _fbm(x + 40, y + 20, 0.15)
+			var c := deep.lerp(mid, n).lerp(lite, n2 * 0.35)
+			# organic cracks
+			if n2 > 0.78:
+				c = dark
+			# wet sheen speckles
+			if _hash(x * 3, y * 7) > 0.94:
+				c = c.lightened(0.12)
+			img.set_pixel(x, y, c)
 	return ImageTexture.create_from_image(img)
 
 
-static func stone_floor(size: int = 128) -> ImageTexture:
+static func cave_floor(size: int = 128) -> ImageTexture:
 	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	var a := Color(0.20, 0.18, 0.24)
-	var b := Color(0.28, 0.25, 0.32)
-	var crack := Color(0.12, 0.10, 0.14)
-	var tile := 32
+	var a := Color(0.14, 0.22, 0.30)
+	var b := Color(0.22, 0.34, 0.40)
+	var crack := Color(0.08, 0.12, 0.16)
 	for y in range(size):
 		for x in range(size):
-			var tx: int = x % tile
-			var ty: int = y % tile
-			var n := _hash_noise(x / 4, y / 4)
+			var n := _fbm(x, y, 0.09)
 			var c := a.lerp(b, n)
-			if tx == 0 or ty == 0:
+			# irregular stone plates
+			var cell := int(x / 18) + int(y / 18) * 17
+			if _hash(cell, cell * 3) > 0.55 and (x % 18 < 2 or y % 18 < 2):
 				c = crack
-			elif tx < 2 or ty < 2:
-				c = c.darkened(0.08)
-			# wear
-			if _hash_noise(x * 3, y * 5) > 0.88:
-				c = c.lightened(0.06)
+			if _hash(x, y) > 0.9:
+				c = c.lightened(0.08)
 			img.set_pixel(x, y, c)
 	return ImageTexture.create_from_image(img)
 
 
-static func wood_door(size: int = 64) -> ImageTexture:
+static func cave_ceiling(size: int = 64) -> ImageTexture:
 	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
 	for y in range(size):
 		for x in range(size):
-			var n := _hash_noise(x / 2, y)
-			var c := Color(0.38, 0.22, 0.12).lerp(Color(0.52, 0.32, 0.16), n)
-			if x % 16 == 0:
-				c = c.darkened(0.25)
+			var n := _fbm(x, y, 0.12)
+			var c := Color(0.12, 0.22, 0.28).lerp(Color(0.22, 0.38, 0.40), n)
 			img.set_pixel(x, y, c)
 	return ImageTexture.create_from_image(img)
 
 
-static func ceiling_dark(size: int = 64) -> ImageTexture:
+static func crystal(size: int = 32) -> ImageTexture:
 	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
 	for y in range(size):
 		for x in range(size):
-			var n := _hash_noise(x, y)
-			img.set_pixel(x, y, Color(0.10, 0.08, 0.12).lerp(Color(0.16, 0.13, 0.18), n * 0.5))
+			var n := _hash(x, y)
+			img.set_pixel(x, y, Color(0.45, 0.75, 0.95).lerp(Color(0.7, 0.9, 1.0), n))
 	return ImageTexture.create_from_image(img)
 
 
-static func _hash_noise(x: int, y: int) -> float:
+static func _hash(x: int, y: int) -> float:
 	var n := x * 374761393 + y * 668265263
 	n = (n ^ (n >> 13)) * 1274126177
 	n = n ^ (n >> 16)
 	return float(n & 0xFFFF) / 65535.0
+
+
+static func _fbm(x: int, y: int, freq: float) -> float:
+	var xf := float(x) * freq
+	var yf := float(y) * freq
+	var v := 0.0
+	var amp := 0.5
+	for _i in range(3):
+		var ix := int(xf)
+		var iy := int(yf)
+		var fx := xf - float(ix)
+		var fy := yf - float(iy)
+		var a := _hash(ix, iy)
+		var b := _hash(ix + 1, iy)
+		var c := _hash(ix, iy + 1)
+		var d := _hash(ix + 1, iy + 1)
+		var u := fx * fx * (3.0 - 2.0 * fx)
+		var w := fy * fy * (3.0 - 2.0 * fy)
+		var i1 := lerpf(a, b, u)
+		var i2 := lerpf(c, d, u)
+		v += lerpf(i1, i2, w) * amp
+		xf *= 2.0
+		yf *= 2.0
+		amp *= 0.5
+	return clampf(v, 0.0, 1.0)

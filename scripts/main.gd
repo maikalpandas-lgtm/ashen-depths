@@ -78,6 +78,6 @@ func _update_hud() -> void:
 		floor_i = GameState.floor_index
 		gold = GameState.gold
 	hud_title.text = "Ashen Depths"
-	hud_floor.text = "Floor %d  ·  seed %s" % [floor_i, str(seed_val)]
+	hud_floor.text = "Root Labyrinth  ·  F%d" % floor_i
 	hud_gold.text = "🪙  %d" % gold
 	hud_hp.text = "❤  %d/%d" % [int(hp_bar.value), MAX_HP]

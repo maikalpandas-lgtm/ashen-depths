@@ -441,20 +441,6 @@ func _add_cave_floor(world: Vector3, seed_h: int) -> void:
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	geometry_root.add_child(mi)
 
-	# A few low floor rocks (same material — no white junk)
-	var n_rocks: int = 1 + absi(seed_h) % 2
-	for r in range(n_rocks):
-		var ox := (float((seed_h >> (r * 3)) % 100) / 100.0 - 0.5) * cell_size * 0.55
-		var oz := (float((seed_h >> (r * 5 + 2)) % 100) / 100.0 - 0.5) * cell_size * 0.55
-		var s: float = 0.25 + float((seed_h >> (r + 4)) % 10) / 40.0
-		_add_textured_box(
-			world + Vector3(ox, s * 0.25, oz),
-			Vector3(s, s * 0.35, s * 0.9),
-			_floor_mat,
-			false
-		)
-
-
 func _floor_pt(world: Vector3, u: float, v: float, half: float, seed_h: int) -> Vector3:
 	var x := (u - 0.5) * 2.0 * half
 	var z := (v - 0.5) * 2.0 * half
@@ -488,22 +474,6 @@ func _add_cave_ceiling(world: Vector3, seed_h: int) -> void:
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	geometry_root.add_child(mi)
 
-	# Stalactites
-	if (seed_h % 3) == 0:
-		var sx := (float(seed_h % 50) / 50.0 - 0.5) * cell_size * 0.4
-		var sz := (float((seed_h / 7) % 50) / 50.0 - 0.5) * cell_size * 0.4
-		var h: float = 0.35 + float(absi(seed_h) % 20) / 40.0
-		var st_mi := MeshInstance3D.new()
-		var cyl := CylinderMesh.new()
-		cyl.top_radius = 0.02
-		cyl.bottom_radius = 0.1
-		cyl.height = h
-		st_mi.mesh = cyl
-		st_mi.material_override = _ceiling_mat
-		st_mi.position = world + Vector3(sx, wall_height - h * 0.45, sz)
-		st_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		geometry_root.add_child(st_mi)
-
 
 func _ceil_pt(world: Vector3, u: float, v: float, half: float, seed_h: int) -> Vector3:
 	var x := (u - 0.5) * 2.0 * half
@@ -525,8 +495,6 @@ func _maybe_cave_wall(x: int, y: int, dx: int, dy: int, world: Vector3, seed_h: 
 	# Solid collider slightly outside walk space
 	var col_size := Vector3(cell_size, wall_height, 0.35) if absf(into.z) > 0.5 else Vector3(0.35, wall_height, cell_size)
 	_add_solid_box(base - into * 0.15 + Vector3(0, wall_height * 0.5, 0), col_size)
-	# Rock bulges into tunnel (same wall mat)
-	_add_wall_rocks(base, into, seed_h)
 
 
 func _add_cave_wall_mesh(base: Vector3, face_into: Vector3, seed_h: int) -> void:
@@ -567,17 +535,6 @@ func _wall_pt(base: Vector3, face_into: Vector3, right: Vector3, u: float, v: fl
 	var depth := arch + bump  # along face_into (into walk space)
 	# Keep bulk of wall outside: start slightly outside, arch comes in
 	return base + right * along + Vector3.UP * h + face_into * (depth - 0.02)
-
-
-func _add_wall_rocks(base: Vector3, face_into: Vector3, seed_h: int) -> void:
-	var count: int = 2 + absi(seed_h) % 3
-	var right := Vector3(-face_into.z, 0.0, face_into.x)
-	for i in range(count):
-		var t := (float(i) + 0.5) / float(count) - 0.5
-		var h: float = 0.35 + float((seed_h + i * 17) % 100) / 100.0 * (wall_height - 0.9)
-		var s: float = 0.2 + float((seed_h + i) % 8) / 25.0
-		var pos := base + right * (t * cell_size * 0.7) + Vector3.UP * h + face_into * (0.08 + s * 0.25)
-		_add_textured_box(pos, Vector3(s * 1.1, s * 0.9, s * 0.85), _wall_mat, false)
 
 
 func _tri(

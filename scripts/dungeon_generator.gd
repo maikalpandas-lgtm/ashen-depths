@@ -2,6 +2,7 @@ extends Node3D
 ## Corridor-first cave labyrinth with props (Phase 1+ visuals).
 
 const TextureFactory = preload("res://scripts/texture_factory.gd")
+const TorchSprites = preload("res://scripts/torch_sprites.gd")
 
 enum Cell {
 	WALL,
@@ -117,9 +118,12 @@ func _build_materials() -> void:
 
 func _make_surface_mat(tex: Texture2D, albedo: Color, roughness: float) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL  # receive torch / OmniLight
 	m.albedo_texture = tex
 	m.albedo_color = albedo
 	m.roughness = roughness
+	m.metallic = 0.0
+	m.specular = 0.25
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	m.texture_repeat = true
 	m.uv1_scale = Vector3(1.0, 1.0, 1.0)
@@ -129,13 +133,18 @@ func _make_surface_mat(tex: Texture2D, albedo: Color, roughness: float) -> Stand
 
 
 func _make_skirting_mat() -> StandardMaterial3D:
-	## Soft dark veil for floor–wall joint only (competitor-style contact shadow).
+	## Soft dark veil for floor–wall joint (competitor contact shadow).
+	## Alpha + unshaded so it reads even with strong ambient/glow.
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.albedo_color = Color(0.04, 0.08, 0.1, 1.0)
+	m.albedo_color = Color(0.01, 0.03, 0.05, 1.0)
 	m.vertex_color_use_as_albedo = true
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_MIX
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_ALWAYS
+	m.no_depth_test = false
+	m.render_priority = 1
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
 	return m
 
@@ -406,47 +415,60 @@ func _temp_collect() -> Array[Vector2i]:
 	return floor_cells
 
 
-## Sealed tunnel: no sky holes; joint dark only at floor–wall corner.
+## Sealed tunnel: single merged floor/ceiling (no cell seams) + wall panels.
 func _build_art_corridor() -> void:
 	var skirt_mat := _make_skirting_mat()
+	_build_merged_floor()
+	_build_merged_ceiling()
 	for y in range(grid_height):
 		for x in range(grid_width):
 			if not _is_walkable(_get_cell(x, y)):
 				continue
 			var world := cell_to_world(Vector2i(x, y))
-			var seed_h := x * 73856093 ^ y * 19349663
-
-			_add_cave_floor(world, seed_h)
-			_add_solid_box(world + Vector3(0, -0.3, 0), Vector3(cell_size * 1.08, 0.55, cell_size * 1.08))
-
-			_add_cave_ceiling(world, seed_h)
-			_add_solid_box(world + Vector3(0, wall_height + 0.45, 0), Vector3(cell_size * 1.1, 0.6, cell_size * 1.1))
-
-			_maybe_cave_wall(x, y, 1, 0, world, seed_h, skirt_mat)
-			_maybe_cave_wall(x, y, -1, 0, world, seed_h + 11, skirt_mat)
-			_maybe_cave_wall(x, y, 0, 1, world, seed_h + 23, skirt_mat)
-			_maybe_cave_wall(x, y, 0, -1, world, seed_h + 37, skirt_mat)
+			_add_solid_box(world + Vector3(0, -0.3, 0), Vector3(cell_size * 1.05, 0.55, cell_size * 1.05))
+			_add_solid_box(world + Vector3(0, wall_height + 0.5, 0), Vector3(cell_size * 1.05, 0.55, cell_size * 1.05))
+			_maybe_cave_wall(x, y, 1, 0, world, skirt_mat)
+			_maybe_cave_wall(x, y, -1, 0, world, skirt_mat)
+			_maybe_cave_wall(x, y, 0, 1, world, skirt_mat)
+			_maybe_cave_wall(x, y, 0, -1, world, skirt_mat)
 
 
-func _add_cave_floor(world: Vector3, seed_h: int) -> void:
-	## Flat-ish floor, no AO stripes — joint shadow is separate skirting mesh.
+## One continuous cave floor — uneven rock, wall rise, world UV (no tile seams).
+func _build_merged_floor() -> void:
 	var mi := MeshInstance3D.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var segs := 2
-	var half := cell_size * 0.5 + 0.08  # heavy overlap vs walls/neighbors
-	for j in range(segs):
-		for i in range(segs):
-			var u0 := float(i) / float(segs)
-			var v0 := float(j) / float(segs)
-			var u1 := float(i + 1) / float(segs)
-			var v1 := float(j + 1) / float(segs)
-			var p00 := _floor_pt(world, u0, v0, half, seed_h)
-			var p10 := _floor_pt(world, u1, v0, half, seed_h)
-			var p11 := _floor_pt(world, u1, v1, half, seed_h)
-			var p01 := _floor_pt(world, u0, v1, half, seed_h)
-			_tri_ao(st, p00, p10, p11, Vector3.UP, u0, v0, u1, v0, u1, v1, 1.0, 1.0, 1.0)
-			_tri_ao(st, p00, p11, p01, Vector3.UP, u0, v0, u1, v1, u0, v1, 1.0, 1.0, 1.0)
+	var segs := 4  # enough for cave undulation
+	var half := cell_size * 0.5
+	var uv_s := 1.0 / cell_size
+	for cell in floor_cells:
+		var world := cell_to_world(cell)
+		var x := cell.x
+		var y := cell.y
+		var wall_px := not _is_walkable(_get_cell(x + 1, y))
+		var wall_nx := not _is_walkable(_get_cell(x - 1, y))
+		var wall_pz := not _is_walkable(_get_cell(x, y + 1))
+		var wall_nz := not _is_walkable(_get_cell(x, y - 1))
+		for j in range(segs):
+			for i in range(segs):
+				var u0 := float(i) / float(segs)
+				var v0 := float(j) / float(segs)
+				var u1 := float(i + 1) / float(segs)
+				var v1 := float(j + 1) / float(segs)
+				var p00 := _floor_pt(world, u0, v0, half, wall_px, wall_nx, wall_pz, wall_nz)
+				var p10 := _floor_pt(world, u1, v0, half, wall_px, wall_nx, wall_pz, wall_nz)
+				var p11 := _floor_pt(world, u1, v1, half, wall_px, wall_nx, wall_pz, wall_nz)
+				var p01 := _floor_pt(world, u0, v1, half, wall_px, wall_nx, wall_pz, wall_nz)
+				var a00 := _floor_ao(u0, v0, wall_px, wall_nx, wall_pz, wall_nz)
+				var a10 := _floor_ao(u1, v0, wall_px, wall_nx, wall_pz, wall_nz)
+				var a11 := _floor_ao(u1, v1, wall_px, wall_nx, wall_pz, wall_nz)
+				var a01 := _floor_ao(u0, v1, wall_px, wall_nx, wall_pz, wall_nz)
+				_tri_ao(st, p00, p10, p11, Vector3.UP,
+					p00.x * uv_s, p00.z * uv_s, p10.x * uv_s, p10.z * uv_s, p11.x * uv_s, p11.z * uv_s,
+					a00, a10, a11)
+				_tri_ao(st, p00, p11, p01, Vector3.UP,
+					p00.x * uv_s, p00.z * uv_s, p11.x * uv_s, p11.z * uv_s, p01.x * uv_s, p01.z * uv_s,
+					a00, a11, a01)
 	st.generate_normals()
 	mi.mesh = st.commit()
 	mi.material_override = _floor_mat
@@ -454,33 +476,96 @@ func _add_cave_floor(world: Vector3, seed_h: int) -> void:
 	geometry_root.add_child(mi)
 
 
-func _floor_pt(world: Vector3, u: float, v: float, half: float, seed_h: int) -> Vector3:
+func _floor_pt(
+	world: Vector3, u: float, v: float, half: float,
+	wall_px: bool, wall_nx: bool, wall_pz: bool, wall_nz: bool
+) -> Vector3:
 	var x := (u - 0.5) * 2.0 * half
 	var z := (v - 0.5) * 2.0 * half
-	# Minimal height noise — avoids gaps under walls
-	var h := 0.008 * sin(u * 5.0 + float(seed_h % 5)) * cos(v * 5.0)
-	return world + Vector3(x, h, z)
+	var wx := world.x + x
+	var wz := world.z + z
+	# Cave floor: rocky undulation (world-stable → seamless between cells)
+	var h := _cave_noise(wx, wz, 0) * 0.07 + _cave_noise(wx * 2.1, wz * 2.0, 5) * 0.03
+	# Rise toward walls (trough in corridor center)
+	var rise := 0.0
+	if wall_px:
+		rise = maxf(rise, pow(u, 1.5) * 0.12)
+	if wall_nx:
+		rise = maxf(rise, pow(1.0 - u, 1.5) * 0.12)
+	if wall_pz:
+		rise = maxf(rise, pow(v, 1.5) * 0.12)
+	if wall_nz:
+		rise = maxf(rise, pow(1.0 - v, 1.5) * 0.12)
+	return world + Vector3(x, h + rise, z)
 
 
-func _add_cave_ceiling(world: Vector3, seed_h: int) -> void:
-	## Soft vault, large overlap, no dark strip AO.
+func _floor_ao(u: float, v: float, wall_px: bool, wall_nx: bool, wall_pz: bool, wall_nz: bool) -> float:
+	var ao := 1.0
+	var fall := 0.55
+	if wall_px:
+		ao = minf(ao, _edge_ao(1.0 - u, fall))
+	if wall_nx:
+		ao = minf(ao, _edge_ao(u, fall))
+	if wall_pz:
+		ao = minf(ao, _edge_ao(1.0 - v, fall))
+	if wall_nz:
+		ao = minf(ao, _edge_ao(v, fall))
+	return ao
+
+
+func _edge_ao(dist_from_wall: float, falloff: float) -> float:
+	var t := clampf(dist_from_wall / falloff, 0.0, 1.0)
+	t = 1.0 - (1.0 - t) * (1.0 - t)
+	t = t * t * (3.0 - 2.0 * t)
+	return lerpf(0.14, 1.0, t)
+
+
+## Multi-octave rock noise in ~[-1, 1], world-stable (seed only biases phase).
+func _cave_noise(x: float, z: float, seed_h: int) -> float:
+	var s := float(seed_h) * 0.17
+	var n := sin(x * 1.15 + s) * cos(z * 0.97 + s * 0.6)
+	n += sin(x * 2.4 + z * 1.6 + s * 1.3) * 0.45
+	n += sin(x * 4.8 - z * 3.7 + s * 2.1) * 0.22
+	n += cos(x * 0.55 - z * 0.7 + s) * 0.35
+	return clampf(n * 0.55, -1.0, 1.0)
+
+
+## Organic cave ceiling: rock undulation + hanging dips (world noise, no cell-grid seams).
+func _build_merged_ceiling() -> void:
 	var mi := MeshInstance3D.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var segs := 4
-	var half := cell_size * 0.5 + 0.12
-	for j in range(segs):
-		for i in range(segs):
-			var u0 := float(i) / float(segs)
-			var v0 := float(j) / float(segs)
-			var u1 := float(i + 1) / float(segs)
-			var v1 := float(j + 1) / float(segs)
-			var p00 := _ceil_pt(world, u0, v0, half, seed_h)
-			var p10 := _ceil_pt(world, u1, v0, half, seed_h)
-			var p11 := _ceil_pt(world, u1, v1, half, seed_h)
-			var p01 := _ceil_pt(world, u0, v1, half, seed_h)
-			_tri_ao(st, p00, p11, p10, Vector3.DOWN, u0, v0, u1, v1, u1, v0, 1.0, 1.0, 1.0)
-			_tri_ao(st, p00, p01, p11, Vector3.DOWN, u0, v0, u0, v1, u1, v1, 1.0, 1.0, 1.0)
+	var segs := 5
+	var half := cell_size * 0.5 + 0.1
+	var uv_s := 1.0 / cell_size
+	for cell in floor_cells:
+		var world := cell_to_world(cell)
+		var cx := cell.x
+		var cy := cell.y
+		var wall_px := not _is_walkable(_get_cell(cx + 1, cy))
+		var wall_nx := not _is_walkable(_get_cell(cx - 1, cy))
+		var wall_pz := not _is_walkable(_get_cell(cx, cy + 1))
+		var wall_nz := not _is_walkable(_get_cell(cx, cy - 1))
+		for j in range(segs):
+			for i in range(segs):
+				var u0 := float(i) / float(segs)
+				var v0 := float(j) / float(segs)
+				var u1 := float(i + 1) / float(segs)
+				var v1 := float(j + 1) / float(segs)
+				var p00 := _ceil_pt(world, u0, v0, half, wall_px, wall_nx, wall_pz, wall_nz)
+				var p10 := _ceil_pt(world, u1, v0, half, wall_px, wall_nx, wall_pz, wall_nz)
+				var p11 := _ceil_pt(world, u1, v1, half, wall_px, wall_nx, wall_pz, wall_nz)
+				var p01 := _ceil_pt(world, u0, v1, half, wall_px, wall_nx, wall_pz, wall_nz)
+				var e00 := _ceil_ao(u0, v0, wall_px, wall_nx, wall_pz, wall_nz)
+				var e10 := _ceil_ao(u1, v0, wall_px, wall_nx, wall_pz, wall_nz)
+				var e11 := _ceil_ao(u1, v1, wall_px, wall_nx, wall_pz, wall_nz)
+				var e01 := _ceil_ao(u0, v1, wall_px, wall_nx, wall_pz, wall_nz)
+				_tri_ao(st, p00, p11, p10, Vector3.DOWN,
+					p00.x * uv_s, p00.z * uv_s, p11.x * uv_s, p11.z * uv_s, p10.x * uv_s, p10.z * uv_s,
+					e00, e11, e10)
+				_tri_ao(st, p00, p01, p11, Vector3.DOWN,
+					p00.x * uv_s, p00.z * uv_s, p01.x * uv_s, p01.z * uv_s, p11.x * uv_s, p11.z * uv_s,
+					e00, e01, e11)
 	st.generate_normals()
 	mi.mesh = st.commit()
 	mi.material_override = _ceiling_mat
@@ -488,58 +573,96 @@ func _add_cave_ceiling(world: Vector3, seed_h: int) -> void:
 	geometry_root.add_child(mi)
 
 
-func _ceil_pt(world: Vector3, u: float, v: float, half: float, seed_h: int) -> Vector3:
+func _ceil_pt(
+	world: Vector3, u: float, v: float, half: float,
+	wall_px: bool, wall_nx: bool, wall_pz: bool, wall_nz: bool
+) -> Vector3:
 	var x := (u - 0.5) * 2.0 * half
 	var z := (v - 0.5) * 2.0 * half
-	# Very mild vault — keeps roof sealed over wall tops
-	var edge := maxf(absf(u - 0.5), absf(v - 0.5)) * 2.0
-	var arch := edge * edge * 0.18
-	return world + Vector3(x, wall_height + 0.06 - arch, z)
+	var wx := world.x + x
+	var wz := world.z + z
+	# Strong cave rock + hanging stalactite dips (world-stable)
+	var n := _cave_noise(wx, wz, 11)
+	var n2 := _cave_noise(wx * 1.6 + 2.0, wz * 1.5, 19)
+	var n3 := _cave_noise(wx * 3.0, wz * 2.8, 31)
+	var hang := maxf(0.0, n) * 0.22 + maxf(0.0, n2) * 0.12 + maxf(0.0, n3) * 0.06
+	# Vault lower near walls (tube roof) without per-cell grid seams
+	var wall_t := 0.0
+	if wall_px:
+		wall_t = maxf(wall_t, u)
+	if wall_nx:
+		wall_t = maxf(wall_t, 1.0 - u)
+	if wall_pz:
+		wall_t = maxf(wall_t, v)
+	if wall_nz:
+		wall_t = maxf(wall_t, 1.0 - v)
+	var vault := wall_t * wall_t * 0.35
+	var y := wall_height + 0.28 - vault - hang + n2 * 0.04
+	return world + Vector3(x, y, z)
 
 
-func _maybe_cave_wall(x: int, y: int, dx: int, dy: int, world: Vector3, seed_h: int, skirt_mat: Material) -> void:
+func _ceil_ao(u: float, v: float, wall_px: bool, wall_nx: bool, wall_pz: bool, wall_nz: bool) -> float:
+	var ao := 1.0
+	if wall_px:
+		ao = minf(ao, lerpf(0.75, 1.0, 1.0 - u))
+	if wall_nx:
+		ao = minf(ao, lerpf(0.75, 1.0, u))
+	if wall_pz:
+		ao = minf(ao, lerpf(0.75, 1.0, 1.0 - v))
+	if wall_nz:
+		ao = minf(ao, lerpf(0.75, 1.0, v))
+	return ao
+
+
+func _maybe_cave_wall(x: int, y: int, dx: int, dy: int, world: Vector3, skirt_mat: Material) -> void:
 	if _is_walkable(_get_cell(x + dx, y + dy)):
 		return
 	var into := Vector3(-float(dx), 0.0, -float(dy))
 	var edge := cell_size * 0.5
 	var base := world + Vector3(float(dx) * edge, 0.0, float(dy) * edge)
-	_add_cave_wall_mesh(base, into, seed_h)
+	_add_cave_wall_mesh(base, into)
 	_add_floor_wall_skirting(base, into, skirt_mat)
 	var col_size := Vector3(cell_size * 1.12, wall_height + 0.35, 0.5) if absf(into.z) > 0.5 else Vector3(0.5, wall_height + 0.35, cell_size * 1.12)
-	_add_solid_box(base - into * 0.1 + Vector3(0, wall_height * 0.5, 0), col_size)
+	_add_solid_box(base - into * 0.08 + Vector3(0, wall_height * 0.5, 0), col_size)
 
 
 func _add_floor_wall_skirting(base: Vector3, face_into: Vector3, mat: Material) -> void:
-	## Soft dark veil only in the floor–wall corner (not mid-floor stripes).
-	var right := Vector3(-face_into.z, 0.0, face_into.x)
-	var width := cell_size + 0.1
-	var depth := 0.38  # how far onto the floor
-	var height := 0.22  # how far up the wall
+	## Soft dark veil — 2-step falloff so the band reads bigger.
+	var width := cell_size  # exact cell — no corner overshoot on skirt
+	var depth := 0.95  # wide onto floor
+	var height := 0.55  # up the wall
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	# Local: right = X, up = Y, into corridor = Z
-	# Floor strip: along wall, fading toward room center (alpha via vertex color)
 	var hw := width * 0.5
-	# Floor quad (horizontal) — opaque near wall, transparent away
-	var f0 := Vector3(-hw, 0.02, 0.0)
-	var f1 := Vector3(hw, 0.02, 0.0)
-	var f2 := Vector3(hw, 0.02, depth)
-	var f3 := Vector3(-hw, 0.02, depth)
-	_tri_alpha(st, f0, f1, f2, Vector3.UP, 0.75, 0.75, 0.0)
-	_tri_alpha(st, f0, f2, f3, Vector3.UP, 0.75, 0.0, 0.0)
-	# Wall base strip (vertical) — dark near floor, fades up
-	var w0 := Vector3(-hw, 0.0, 0.02)
-	var w1 := Vector3(hw, 0.0, 0.02)
-	var w2 := Vector3(hw, height, 0.02)
-	var w3 := Vector3(-hw, height, 0.02)
-	_tri_alpha(st, w0, w1, w2, Vector3(0, 0, 1), 0.7, 0.7, 0.0)
-	_tri_alpha(st, w0, w2, w3, Vector3(0, 0, 1), 0.7, 0.0, 0.0)
+	var mid_d := depth * 0.4
+	var mid_h := height * 0.4
+	# Floor: wall → mid (strong) → outer (fade out)
+	var f0 := Vector3(-hw, 0.012, 0.0)
+	var f1 := Vector3(hw, 0.012, 0.0)
+	var f2 := Vector3(hw, 0.012, mid_d)
+	var f3 := Vector3(-hw, 0.012, mid_d)
+	var f4 := Vector3(hw, 0.012, depth)
+	var f5 := Vector3(-hw, 0.012, depth)
+	_tri_alpha(st, f0, f1, f2, Vector3.UP, 0.92, 0.92, 0.55)
+	_tri_alpha(st, f0, f2, f3, Vector3.UP, 0.92, 0.55, 0.55)
+	_tri_alpha(st, f3, f2, f4, Vector3.UP, 0.55, 0.55, 0.0)
+	_tri_alpha(st, f3, f4, f5, Vector3.UP, 0.55, 0.0, 0.0)
+	# Wall base: floor → mid → fade
+	var w0 := Vector3(-hw, 0.0, 0.01)
+	var w1 := Vector3(hw, 0.0, 0.01)
+	var w2 := Vector3(hw, mid_h, 0.01)
+	var w3 := Vector3(-hw, mid_h, 0.01)
+	var w4 := Vector3(hw, height, 0.01)
+	var w5 := Vector3(-hw, height, 0.01)
+	_tri_alpha(st, w0, w1, w2, Vector3(0, 0, 1), 0.9, 0.9, 0.5)
+	_tri_alpha(st, w0, w2, w3, Vector3(0, 0, 1), 0.9, 0.5, 0.5)
+	_tri_alpha(st, w3, w2, w4, Vector3(0, 0, 1), 0.5, 0.5, 0.0)
+	_tri_alpha(st, w3, w4, w5, Vector3(0, 0, 1), 0.5, 0.0, 0.0)
 
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
 	mi.material_override = mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# Orient: local +Z faces into corridor
 	var yaw := 0.0
 	if absf(face_into.x) > 0.5:
 		yaw = -PI * 0.5 if face_into.x > 0.0 else PI * 0.5
@@ -561,15 +684,16 @@ func _tri_alpha(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, n: Vector3,
 	st.add_vertex(c)
 
 
-func _add_cave_wall_mesh(base: Vector3, face_into: Vector3, seed_h: int) -> void:
-	## Sealed wall: mild arch, no side/ceiling AO stripes.
+func _add_cave_wall_mesh(base: Vector3, face_into: Vector3) -> void:
+	## Organic cave wall: tube bulge + rock noise. World UV / noise = no seams.
 	var mi := MeshInstance3D.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var segs_w := 4
-	var segs_h := 5
-	var width := cell_size + 0.2  # seal vertical seams
+	var segs_w := 6
+	var segs_h := 7
+	var width := cell_size + 0.08
 	var right := Vector3(-face_into.z, 0.0, face_into.x)
+	var uv_s := 1.0 / cell_size
 
 	for j in range(segs_h):
 		for i in range(segs_w):
@@ -577,12 +701,20 @@ func _add_cave_wall_mesh(base: Vector3, face_into: Vector3, seed_h: int) -> void
 			var v0 := float(j) / float(segs_h)
 			var u1 := float(i + 1) / float(segs_w)
 			var v1 := float(j + 1) / float(segs_h)
-			var p00 := _wall_pt(base, face_into, right, u0, v0, width, seed_h)
-			var p10 := _wall_pt(base, face_into, right, u1, v0, width, seed_h)
-			var p11 := _wall_pt(base, face_into, right, u1, v1, width, seed_h)
-			var p01 := _wall_pt(base, face_into, right, u0, v1, width, seed_h)
-			_tri_ao(st, p00, p10, p11, face_into, u0, v0, u1, v0, u1, v1, 1.0, 1.0, 1.0)
-			_tri_ao(st, p00, p11, p01, face_into, u0, v0, u1, v1, u0, v1, 1.0, 1.0, 1.0)
+			var p00 := _wall_pt(base, face_into, right, u0, v0, width)
+			var p10 := _wall_pt(base, face_into, right, u1, v0, width)
+			var p11 := _wall_pt(base, face_into, right, u1, v1, width)
+			var p01 := _wall_pt(base, face_into, right, u0, v1, width)
+			var a00 := _wall_ao(u0, v0)
+			var a10 := _wall_ao(u1, v0)
+			var a11 := _wall_ao(u1, v1)
+			var a01 := _wall_ao(u0, v1)
+			var ua0 := (base + right * ((u0 - 0.5) * width)).dot(right) * uv_s
+			var ua1 := (base + right * ((u1 - 0.5) * width)).dot(right) * uv_s
+			var va0 := v0 * (wall_height / cell_size)
+			var va1 := v1 * (wall_height / cell_size)
+			_tri_ao(st, p00, p10, p11, face_into, ua0, va0, ua1, va0, ua1, va1, a00, a10, a11)
+			_tri_ao(st, p00, p11, p01, face_into, ua0, va0, ua1, va1, ua0, va1, a00, a11, a01)
 	st.generate_normals()
 	mi.mesh = st.commit()
 	mi.material_override = _wall_mat
@@ -590,14 +722,37 @@ func _add_cave_wall_mesh(base: Vector3, face_into: Vector3, seed_h: int) -> void
 	geometry_root.add_child(mi)
 
 
-func _wall_pt(base: Vector3, face_into: Vector3, right: Vector3, u: float, v: float, width: float, seed_h: int) -> Vector3:
+func _wall_pt(
+	base: Vector3, face_into: Vector3, right: Vector3,
+	u: float, v: float, width: float
+) -> Vector3:
 	var along := (u - 0.5) * width
-	# Seal: sink below floor, rise past ceiling join
-	var h := -0.08 + v * (wall_height + 0.22)
-	# Milder arch — fewer holes at roof
-	var arch := v * v * 0.22
-	var bump := 0.02 * sin(u * TAU * 1.5 + float(seed_h % 7)) * sin(v * PI)
-	return base + right * along + Vector3.UP * h + face_into * (arch + bump)
+	var h := -0.18 + v * (wall_height + 0.42)
+	var pos := base + right * along + Vector3.UP * h
+	# Soft tube: bulge into corridor mid-height + lean to roof
+	var edge_w := sin(clampf(u, 0.0, 1.0) * PI)
+	edge_w = edge_w * edge_w
+	var amp := lerpf(0.18, 1.0, edge_w)  # soft at corners (no fins), full mid
+	var tube := sin(v * PI) * 0.26 + pow(v, 1.65) * 0.18
+	# World-stable rock (same on neighbor panels along a wall)
+	var n1 := _cave_noise(pos.x * 0.9 + pos.z * 0.9, h * 1.3, 3)
+	var n2 := _cave_noise(along * 1.4 + pos.x * 0.2, h * 2.1, 8)
+	var n3 := _cave_noise(along * 3.2, h * 3.8, 17)
+	var rock := n1 * 0.12 + n2 * 0.08 + n3 * 0.05
+	var ledge := maxf(0.0, n2) * sin(v * PI) * 0.1
+	var push := (tube + rock + ledge) * amp
+	return pos + face_into * (push - 0.015)
+
+
+## Wall base + roof darkening (no vertical edge dark bands that look like seams).
+func _wall_ao(u: float, v: float) -> float:
+	var floor_t := clampf(v / 0.4, 0.0, 1.0)
+	floor_t = floor_t * floor_t * (3.0 - 2.0 * floor_t)
+	var ao := lerpf(0.16, 1.0, floor_t)
+	var roof_t := clampf((1.0 - v) / 0.2, 0.0, 1.0)
+	roof_t = roof_t * roof_t
+	ao *= lerpf(0.82, 1.0, 1.0 - roof_t)
+	return ao
 
 
 func _tri_ao(
@@ -710,57 +865,17 @@ func _spawn_torches() -> void:
 				continue
 			var d: Vector2i = wall_dirs[placed % wall_dirs.size()]
 			var world := cell_to_world(Vector2i(x, y))
-			var wall_dist := cell_size * 0.5 - 0.35
-			var pos := world + Vector3(d.x * wall_dist, 1.5, d.y * wall_dist)
+			# Near wall but into corridor (~12cm) so sprite/mount don't clip into wall
+			var wall_dist := cell_size * 0.5 - 0.14
+			var pos := world + Vector3(d.x * wall_dist, 1.45, d.y * wall_dist)
 			_add_torch(pos, d)
 			placed += 1
 	print("[Dungeon] torches=%d" % placed)
 
 
 func _add_torch(pos: Vector3, wall_dir: Vector2i) -> void:
-	var holder := Node3D.new()
-	holder.position = pos
-	if wall_dir.x != 0:
-		holder.rotation.y = PI * 0.5 if wall_dir.x > 0 else -PI * 0.5
-	else:
-		holder.rotation.y = 0.0 if wall_dir.y > 0 else PI
-	props_root.add_child(holder)
-
-	var stick := MeshInstance3D.new()
-	var stick_mesh := CylinderMesh.new()
-	stick_mesh.top_radius = 0.04
-	stick_mesh.bottom_radius = 0.05
-	stick_mesh.height = 0.5
-	stick.mesh = stick_mesh
-	var stick_mat := StandardMaterial3D.new()
-	stick_mat.albedo_color = Color(0.35, 0.2, 0.1)
-	stick.material_override = stick_mat
-	stick.rotation.x = deg_to_rad(20)
-	stick.position = Vector3(0, -0.05, -0.1)
-	holder.add_child(stick)
-
-	var flame := MeshInstance3D.new()
-	var flame_mesh := SphereMesh.new()
-	flame_mesh.radius = 0.14
-	flame_mesh.height = 0.28
-	flame.mesh = flame_mesh
-	var flame_mat := StandardMaterial3D.new()
-	flame_mat.albedo_color = Color(1.0, 0.55, 0.15)
-	flame_mat.emission_enabled = true
-	flame_mat.emission = Color(1.0, 0.6, 0.2)
-	flame_mat.emission_energy_multiplier = 4.5
-	flame.material_override = flame_mat
-	flame.position = Vector3(0, 0.22, -0.2)
-	holder.add_child(flame)
-
-	var light := OmniLight3D.new()
-	# Warm accent on top of cool ambient fill
-	light.light_color = Color(1.0, 0.72, 0.4)
-	light.light_energy = 2.2
-	light.omni_range = 6.5
-	light.omni_attenuation = 1.35
-	light.position = Vector3(0, 0.25, -0.3)
-	holder.add_child(light)
+	## 2D cartoon torch sprite + soft glow halo + real 3D OmniLight.
+	TorchSprites.make_wall_torch(props_root, pos, wall_dir)
 
 
 func _spawn_decorations() -> void:

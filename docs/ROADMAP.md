@@ -1,7 +1,7 @@
 # Ashen Depths — Roadmap
 
 Короткий чеклист.  
-Детали: [DESIGN.md](./DESIGN.md) — §7 карты · **§8 backpack/shop/merchant**.
+Детали: [DESIGN.md](./DESIGN.md) — **§7** Inscryption-cards (**no board**), враги в коридоре · **§8** BB backpack.
 
 ## Фаза 0 — Репо и скелет ✅
 - [x] Репо `ashen-depths` (GitHub)
@@ -25,8 +25,9 @@
 - [ ] Hub stub
 
 ## Фаза 3 — Бой + draft слой 1–2
-- [ ] Combat state machine
-- [ ] Hand / energy / end turn / intents
+- [ ] Enemies in corridor (billboard) + combat overlay
+- [ ] Hand / ⚡3 / END TURN / Block / intents (**no board**)
+- [ ] Sigils + blood cost (Inscryption-flavor cards)
 - [ ] **Layer 1:** post-combat 1 of 3 **or** skip→gold
 - [ ] **Layer 2:** level-up → upgrade **or** rare
 - [ ] Mini-boss + floor boss (simple rewards)

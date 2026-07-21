@@ -25,6 +25,17 @@ var _input_lock: float = 0.0
 var _mouse_captured: bool = true
 var _move_tween: Tween = null
 
+# Viewmodel hand sway (left torch / right knife)
+var _viewmodel: Node3D = null
+var _hand_left: Node3D = null
+var _hand_right: Node3D = null
+var _left_base: Vector3 = Vector3.ZERO
+var _right_base: Vector3 = Vector3.ZERO
+var _left_rot_base: Vector3 = Vector3.ZERO
+var _right_rot_base: Vector3 = Vector3.ZERO
+var _sway_side: float = 1.0
+var _sway_tween: Tween = null
+
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -41,46 +52,16 @@ func _ready() -> void:
 func _spawn_view_torch() -> void:
 	if camera == null:
 		return
-	var holder := Node3D.new()
-	holder.name = "ViewTorch"
-	holder.position = Vector3(-0.38, -0.32, -0.55)
-	camera.add_child(holder)
-
-	var stick := MeshInstance3D.new()
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.03
-	cyl.bottom_radius = 0.04
-	cyl.height = 0.45
-	stick.mesh = cyl
-	var sm := StandardMaterial3D.new()
-	sm.albedo_color = Color(0.35, 0.2, 0.1)
-	stick.material_override = sm
-	stick.rotation_degrees = Vector3(18, 0, -8)
-	stick.position = Vector3(0, -0.1, 0)
-	holder.add_child(stick)
-
-	var flame := MeshInstance3D.new()
-	var sph := SphereMesh.new()
-	sph.radius = 0.09
-	sph.height = 0.18
-	flame.mesh = sph
-	var fm := StandardMaterial3D.new()
-	fm.albedo_color = Color(1.0, 0.55, 0.15)
-	fm.emission_enabled = true
-	fm.emission = Color(1.0, 0.6, 0.2)
-	fm.emission_energy_multiplier = 3.5
-	flame.material_override = fm
-	flame.position = Vector3(0, 0.14, 0.02)
-	holder.add_child(flame)
-
-	var light := OmniLight3D.new()
-	# Local warm boost; map stays readable from cool ambient alone
-	light.light_color = Color(1.0, 0.75, 0.42)
-	light.light_energy = 1.9
-	light.omni_range = 5.5
-	light.omni_attenuation = 1.4
-	light.position = Vector3(0, 0.16, 0)
-	holder.add_child(light)
+	const TorchSprites = preload("res://scripts/torch_sprites.gd")
+	_viewmodel = TorchSprites.make_hand_torch(camera)
+	_hand_left = _viewmodel.get_node_or_null("HandTorch") as Node3D
+	_hand_right = _viewmodel.get_node_or_null("HandKnife") as Node3D
+	if _hand_left:
+		_left_base = _hand_left.position
+		_left_rot_base = _hand_left.rotation_degrees
+	if _hand_right:
+		_right_base = _hand_right.position
+		_right_rot_base = _hand_right.rotation_degrees
 
 
 func setup_dungeon(dungeon_ref: Node3D) -> void:
@@ -166,6 +147,7 @@ func _try_step(delta_cell: Vector2i) -> void:
 	_move_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	_move_tween.tween_property(self, "global_position", target, step_time)
 	_move_tween.finished.connect(_on_move_done)
+	_play_step_sway(1.0)  # walk sway L/R
 
 
 func _turn(dir: int) -> void:
@@ -180,6 +162,7 @@ func _turn(dir: int) -> void:
 	_move_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	_move_tween.tween_method(_set_yaw, rotation.y, _lerp_angle_to(rotation.y, target_yaw), turn_time)
 	_move_tween.finished.connect(_on_move_done)
+	_play_step_sway(0.65 * float(dir))  # milder sway when turning
 
 
 func _set_yaw(y: float) -> void:
@@ -211,6 +194,50 @@ func _bump() -> void:
 	var base := camera.position
 	tw.tween_property(camera, "position", base + Vector3(0.04, 0, 0), 0.04)
 	tw.tween_property(camera, "position", base, 0.06)
+	_play_step_sway(0.4)
+
+
+## Hands sway left/right (and slight bob) while stepping — alternate side each step.
+func _play_step_sway(strength: float = 1.0) -> void:
+	if _hand_left == null and _hand_right == null:
+		return
+	_sway_side *= -1.0
+	var side := _sway_side * strength
+	# Horizontal sway + small vertical bob + tiny roll
+	var amp_x := 0.04 * side
+	var amp_y := 0.018 * absf(strength)
+	var roll := 5.0 * side  # degrees
+
+	if _sway_tween and _sway_tween.is_valid():
+		_sway_tween.kill()
+	_sway_tween = create_tween()
+	_sway_tween.set_parallel(true)
+	_sway_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+	var half := step_time * 0.45
+	var rest := step_time * 0.55
+
+	if _hand_left:
+		var l_peak := _left_base + Vector3(amp_x, amp_y, 0.0)
+		var l_rot_peak := _left_rot_base + Vector3(0.0, 0.0, roll * 0.6)
+		_sway_tween.tween_property(_hand_left, "position", l_peak, half)
+		_sway_tween.tween_property(_hand_left, "rotation_degrees", l_rot_peak, half)
+	if _hand_right:
+		# Opposite phase — like walking gait
+		var r_peak := _right_base + Vector3(-amp_x * 0.9, amp_y * 0.85, 0.0)
+		var r_rot_peak := _right_rot_base + Vector3(0.0, 0.0, -roll * 0.55)
+		_sway_tween.tween_property(_hand_right, "position", r_peak, half)
+		_sway_tween.tween_property(_hand_right, "rotation_degrees", r_rot_peak, half)
+
+	# Return to rest (chain after peak)
+	_sway_tween.chain().set_parallel(true)
+	_sway_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	if _hand_left:
+		_sway_tween.tween_property(_hand_left, "position", _left_base, rest)
+		_sway_tween.tween_property(_hand_left, "rotation_degrees", _left_rot_base, rest)
+	if _hand_right:
+		_sway_tween.tween_property(_hand_right, "position", _right_base, rest)
+		_sway_tween.tween_property(_hand_right, "rotation_degrees", _right_rot_base, rest)
 
 
 func _cell_world_pos(c: Vector2i) -> Vector3:

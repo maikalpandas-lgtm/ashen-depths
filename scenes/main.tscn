@@ -7,32 +7,36 @@
 
 [sub_resource type="Environment" id="Environment_fog"]
 background_mode = 1
-background_color = Color(0.04, 0.08, 0.12, 1)
+background_color = Color(0.02, 0.04, 0.07, 1)
 ambient_light_source = 2
-ambient_light_color = Color(0.25, 0.4, 0.48, 1)
-ambient_light_energy = 0.28
+ambient_light_color = Color(0.18, 0.28, 0.34, 1)
+ambient_light_energy = 0.18
 tonemap_mode = 2
 glow_enabled = true
-glow_intensity = 0.35
-glow_bloom = 0.08
+glow_intensity = 0.28
+glow_bloom = 0.05
 fog_enabled = true
-fog_light_color = Color(0.06, 0.12, 0.16, 1)
-fog_sun_scatter = 0.05
-fog_density = 0.055
-fog_aerial_perspective = 0.45
-fog_sky_affect = 0.85
+fog_mode = 1
+fog_light_color = Color(0.05, 0.09, 0.13, 1)
+fog_sun_scatter = 0.0
+fog_density = 1.0
+fog_aerial_perspective = 0.6
+fog_sky_affect = 1.0
 fog_height = 0.0
 fog_height_density = 0.0
+fog_depth_curve = 0.85
+fog_depth_begin = 1.5
+fog_depth_end = 11.0
 adjustment_enabled = true
-adjustment_brightness = 1.0
-adjustment_contrast = 1.04
-adjustment_saturation = 1.05
+adjustment_brightness = 0.98
+adjustment_contrast = 1.05
+adjustment_saturation = 1.02
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_1"]
 dof_blur_far_enabled = true
-dof_blur_far_distance = 14.0
-dof_blur_far_transition = 8.0
-dof_blur_amount = 0.08
+dof_blur_far_distance = 9.0
+dof_blur_far_transition = 5.0
+dof_blur_amount = 0.12
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_left"]
 bg_color = Color(0.22, 0.15, 0.1, 0.95)

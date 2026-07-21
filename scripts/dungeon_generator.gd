@@ -413,40 +413,39 @@ func _temp_collect() -> Array[Vector2i]:
 ## Art-first: floor/wall/ceiling as textured planes (painted look) + solid colliders.
 ## PlaneMesh is XZ facing +Y — floor needs NO rotate; ceiling flips 180° on X.
 func _build_art_corridor() -> void:
+	## Overlap all panels slightly so seams never open (black cracks).
+	var floor_span := cell_size * 1.08
 	for y in range(grid_height):
 		for x in range(grid_width):
 			if not _is_walkable(_get_cell(x, y)):
 				continue
 			var world := cell_to_world(Vector2i(x, y))
-			# Floor visual (horizontal)
+			# Floor — slight Y lift so wall bottoms tuck under
 			_add_plane(
 				geometry_root,
-				world + Vector3(0, 0.0, 0),
-				Vector2(cell_size * 1.02, cell_size * 1.02),
+				world + Vector3(0, 0.01, 0),
+				Vector2(floor_span, floor_span),
 				_floor_mat,
 				Vector3(0, 0, 0),
 				false
 			)
-			# Thick floor collider (cannot fall through)
 			_add_solid_box(
 				world + Vector3(0, -0.25, 0),
-				Vector3(cell_size * 1.05, 0.5, cell_size * 1.05)
+				Vector3(cell_size * 1.1, 0.5, cell_size * 1.1)
 			)
-			# Ceiling visual — flip so texture faces down into corridor
+			# Ceiling overlaps walls
 			_add_plane(
 				geometry_root,
-				world + Vector3(0, wall_height, 0),
-				Vector2(cell_size * 1.02, cell_size * 1.02),
+				world + Vector3(0, wall_height - 0.01, 0),
+				Vector2(floor_span, floor_span),
 				_ceiling_mat,
 				Vector3(180, 0, 0),
 				false
 			)
-			# Ceiling blocker (optional safety)
 			_add_solid_box(
 				world + Vector3(0, wall_height + 0.2, 0),
-				Vector3(cell_size * 1.05, 0.4, cell_size * 1.05)
+				Vector3(cell_size * 1.1, 0.4, cell_size * 1.1)
 			)
-			# Walls
 			_maybe_wall_plane(x, y, 1, 0, world)
 			_maybe_wall_plane(x, y, -1, 0, world)
 			_maybe_wall_plane(x, y, 0, 1, world)
@@ -456,25 +455,34 @@ func _build_art_corridor() -> void:
 func _maybe_wall_plane(x: int, y: int, dx: int, dy: int, world: Vector3) -> void:
 	if _is_walkable(_get_cell(x + dx, y + dy)):
 		return
-	# Inset slightly from cell edge → less face-plant into texture, less z-fight with neighbor
-	var edge := cell_size * 0.5 - 0.12
+	# Flush to cell edge; width > cell so neighbors overlap (no vertical slits)
+	var edge := cell_size * 0.5 - 0.02
 	var pos := world + Vector3(float(dx) * edge, wall_height * 0.5, float(dy) * edge)
 	var into := Vector3(-float(dx), 0.0, -float(dy))
-	_add_wall_plane(pos, into, cell_size * 0.98, wall_height * 0.98, _wall_mat)
+	# 8% wider + a bit taller than cell so seams close with floor/ceiling
+	_add_wall_plane(pos, into, cell_size * 1.1, wall_height + 0.12, _wall_mat)
 
 
 func _add_wall_plane(pos: Vector3, face_into: Vector3, width: float, height: float, mat: Material) -> void:
-	## Single-sided wall (into corridor only) — no double-plane z-fight.
+	## Single-sided wall into corridor; overlapping width kills slits.
 	var mi := MeshInstance3D.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var hw := width * 0.5
 	var hh := height * 0.5
-	# UV tiles 2×2 for mip stability
-	_quad_uv(st, Vector3(-hw, -hh, 0), Vector3(hw, -hh, 0), Vector3(hw, hh, 0), Vector3(-hw, hh, 0), Vector3(0, 0, 1), 2.0)
+	var tile_u := width / cell_size * 2.0
+	var tile_v := height / wall_height * 2.0
+	_quad_uv_rect(
+		st,
+		Vector3(-hw, -hh, 0), Vector3(hw, -hh, 0), Vector3(hw, hh, 0), Vector3(-hw, hh, 0),
+		Vector3(0, 0, 1),
+		tile_u, tile_v
+	)
 	mi.mesh = st.commit()
 	mi.material_override = mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Prefer closer polygons when they overlap (seams)
+	mi.sorting_offset = 0.01
 
 	var yaw := 0.0
 	if absf(face_into.x) > 0.5:
@@ -484,8 +492,35 @@ func _add_wall_plane(pos: Vector3, face_into: Vector3, width: float, height: flo
 	mi.transform = Transform3D(Basis.from_euler(Vector3(0, yaw, 0)), pos)
 	geometry_root.add_child(mi)
 
-	var col_size := Vector3(width, height, 0.4) if absf(face_into.z) > 0.5 else Vector3(0.4, height, width)
-	_add_solid_box(pos + face_into * -0.05, col_size)
+	var col_size := Vector3(width, height, 0.45) if absf(face_into.z) > 0.5 else Vector3(0.45, height, width)
+	_add_solid_box(pos + face_into * -0.08, col_size)
+
+
+func _quad_uv_rect(
+	st: SurfaceTool,
+	a: Vector3, b: Vector3, c: Vector3, d: Vector3,
+	n: Vector3,
+	u_tile: float,
+	v_tile: float
+) -> void:
+	st.set_normal(n)
+	st.set_uv(Vector2(0, v_tile))
+	st.add_vertex(a)
+	st.set_normal(n)
+	st.set_uv(Vector2(u_tile, v_tile))
+	st.add_vertex(b)
+	st.set_normal(n)
+	st.set_uv(Vector2(u_tile, 0))
+	st.add_vertex(c)
+	st.set_normal(n)
+	st.set_uv(Vector2(0, v_tile))
+	st.add_vertex(a)
+	st.set_normal(n)
+	st.set_uv(Vector2(u_tile, 0))
+	st.add_vertex(c)
+	st.set_normal(n)
+	st.set_uv(Vector2(0, 0))
+	st.add_vertex(d)
 
 
 func _quad_uv(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, n: Vector3, tile: float) -> void:
@@ -629,10 +664,10 @@ func _add_torch(pos: Vector3, wall_dir: Vector2i) -> void:
 	holder.add_child(flame)
 
 	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.7, 0.38)
-	light.light_energy = 3.2
-	light.omni_range = 7.5
-	light.omni_attenuation = 1.4
+	light.light_color = Color(1.0, 0.65, 0.32)
+	light.light_energy = 2.6
+	light.omni_range = 5.5
+	light.omni_attenuation = 1.7
 	light.position = Vector3(0, 0.25, -0.3)
 	holder.add_child(light)
 

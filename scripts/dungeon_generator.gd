@@ -480,9 +480,11 @@ func _add_wall_plane(pos: Vector3, face_into: Vector3, width: float, height: flo
 	mi.mesh = st.commit()
 	mi.material_override = mat
 	mi.position = pos
-	# Orient local +Z toward face_into
+	# Orient local -Z toward face_into (look_at convention); flip so +Z of quad faces corridor
 	if face_into.length_squared() > 0.001:
-		mi.look_at(pos + face_into, Vector3.UP)
+		var basis := Basis.looking_at(face_into.normalized(), Vector3.UP)
+		# looking_at aims -Z; our quad normal is +Z → rotate 180° around Y
+		mi.transform = Transform3D(basis.rotated(Vector3.UP, PI), pos)
 	geometry_root.add_child(mi)
 
 	var body := StaticBody3D.new()

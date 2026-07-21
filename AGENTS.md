@@ -18,6 +18,11 @@
 - Коммитить осмысленно, не коммитить мусор (`_tmp*`, `raw/cut/`, `gen_*` — см. `.gitignore`).
 - Push на `origin/main` после нормального коммита, если пользователь ждёт изменения на GitHub.
 
+## Movement / props
+
+- **Grid crawler only:** шаг клетка вперёд/назад, поворот **90°** (A/D), камера **lock forward** (уже `player_controller.gd`).
+- **Интерьер (факелы и т.п.) — fixed:** без camera-billboard; ориентация к коридору / стене, при необходимости `flip_h` для зеркала. Не крутить props к камере.
+
 ## Design
 
 - Бой/карты/рюкзак — `docs/DESIGN.md` (§7 cards no board, §8 BB backpack).

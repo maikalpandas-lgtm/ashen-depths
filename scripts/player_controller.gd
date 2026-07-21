@@ -1,5 +1,6 @@
 extends CharacterBody3D
-## Grid crawler: step cell-to-cell, 90° turns, camera locked forward.
+## Grid crawler ONLY: step cell-to-cell, 90° turns (A/D), camera locked forward.
+## No free-look mouse yaw — props can stay fixed on walls without billboards.
 ## Y is always locked — cannot fall through the world.
 
 @export var step_time: float = 0.16

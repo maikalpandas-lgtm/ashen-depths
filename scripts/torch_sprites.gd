@@ -1,6 +1,9 @@
 extends RefCounted
 ## Viewmodel + wall torches. Asset catalog: assets/textures/ASSETS.md
 ## Do NOT regenerate sprites unless the user asks — edit code / reuse masters.
+##
+## Grid crawler: player only steps forward/back and turns 90°.
+## Wall props are FIXED (no camera billboard) so they stay "nailed" to walls.
 
 
 const TORCH_TEX_PATH := "res://assets/textures/torch.png"  # prop_wall_torch
@@ -15,6 +18,7 @@ static var _hand_torch_tex: Texture2D
 static var _hand_knife_tex: Texture2D
 static var _glow_tex: Texture2D
 static var _glow_mat: StandardMaterial3D
+static var _glow_mat_fixed: StandardMaterial3D
 
 
 static func _load_png(path: String) -> Texture2D:
@@ -67,21 +71,24 @@ static func _ensure_textures() -> void:
 		_glow_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 		_glow_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
 		_glow_mat.render_priority = 2
+	if _glow_mat_fixed == null and _glow_tex != null:
+		_glow_mat_fixed = _glow_mat.duplicate() as StandardMaterial3D
+		_glow_mat_fixed.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED
 
 
-## Mild squash/stretch on the torch sprite itself (no extra flame object). Lights stay static.
-static func _add_torch_stretch(parent: Node, sprite: Node3D, amount: float = 0.08) -> void:
+static func _add_torch_stretch(parent: Node, sprite: Node3D, amount: float = 0.05) -> void:
 	var fx := FlameFlicker.new()
 	fx.name = "FlameFlicker"
 	fx.stretch_amount = amount
-	fx.wobble_deg = 2.5
-	fx.speed = 1.1 + randf() * 0.35
+	fx.wobble_deg = 2.0
+	fx.speed = 1.1 + randf() * 0.3
 	fx.flicker_lights = false
 	parent.add_child(fx)
 	fx.setup(sprite, null, null)
 
 
-## Wall torch — always readable in corridor (Y-billboard), single sprite, stretch anim.
+## Wall torch FIXED to wall (no camera billboard). Grid crawler only faces 4 dirs.
+## wall_dir = grid step from floor cell into the wall (normal of wall facing out of rock).
 static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) -> Node3D:
 	_ensure_textures()
 	if _torch_tex == null:
@@ -91,25 +98,32 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 	var holder := Node3D.new()
 	holder.name = "WallTorch"
 	holder.position = pos
-	# Face roughly into corridor so light sits right; sprite billboards on Y for visibility
+	# Sprite3D faces -Z by default. Point -Z into corridor (= -wall_dir).
 	if wall_dir.x != 0:
-		holder.rotation.y = PI * 0.5 if wall_dir.x > 0 else -PI * 0.5
+		holder.rotation.y = PI * 0.5 if wall_dir.x > 0.0 else -PI * 0.5
 	else:
-		holder.rotation.y = 0.0 if wall_dir.y > 0 else PI
+		holder.rotation.y = 0.0 if wall_dir.y > 0.0 else PI
 	parent.add_child(holder)
 
-	if _glow_mat:
-		var glow := _make_glow_quad(Vector2(0.4, 0.4))
-		glow.name = "Glow"
-		glow.position = Vector3(0.0, 0.15, -0.08)
+	# Fixed glow (not billboard) — sits with the torch
+	if _glow_mat_fixed:
+		var glow := MeshInstance3D.new()
+		var quad := QuadMesh.new()
+		quad.size = Vector2(0.35, 0.35)
+		glow.mesh = quad
+		glow.material_override = _glow_mat_fixed
+		glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		glow.position = Vector3(0.0, 0.12, -0.06)
 		holder.add_child(glow)
 
-	# One sprite only (body + flame + mount) — Y-billboard so always visible
-	var body := _make_sprite(_torch_tex, 0.0026, true)
+	# Fixed sprite — nailed to wall, double-sided for side views
+	var body := _make_sprite(_torch_tex, 0.0024, false)
 	body.name = "TorchBody"
-	body.position = Vector3(0.0, 0.0, -0.08)
+	body.position = Vector3(0.0, 0.0, -0.02)
+	# Mirror when on certain walls so bracket art reads correctly
+	if wall_dir.x < 0 or wall_dir.y < 0:
+		body.flip_h = true
 	holder.add_child(body)
-	# Mild stretch on wall torch only (small prop, not full arm)
 	_add_torch_stretch(holder, body, 0.05)
 
 	var light := OmniLight3D.new()
@@ -119,7 +133,8 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 	light.omni_range = 7.0
 	light.omni_attenuation = 1.15
 	light.shadow_enabled = false
-	light.position = Vector3(0.0, 0.2, -0.2)
+	# Light into the corridor
+	light.position = Vector3(0.0, 0.18, -0.25)
 	holder.add_child(light)
 
 	var fill := OmniLight3D.new()
@@ -127,13 +142,13 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 	fill.light_color = Color(1.0, 0.55, 0.25)
 	fill.light_energy = 0.9
 	fill.omni_range = 2.4
-	fill.position = Vector3(0.0, 0.1, -0.08)
+	fill.position = Vector3(0.0, 0.1, -0.1)
 	holder.add_child(fill)
 
 	return holder
 
 
-## FPS viewmodel: single hand torch sprite (stretch for fire), knife, no extra flame prop.
+## FPS viewmodel: solid hand (no shake), knife.
 static func make_hand_torch(camera: Camera3D) -> Node3D:
 	_ensure_textures()
 	var root := Node3D.new()
@@ -142,7 +157,6 @@ static func make_hand_torch(camera: Camera3D) -> Node3D:
 
 	var left := Node3D.new()
 	left.name = "HandTorch"
-	# Higher in frame so hand+torch aren't clipped by bottom of screen
 	left.position = Vector3(-0.34, -0.18, -0.48)
 	left.rotation_degrees = Vector3(2, 8, -3)
 	root.add_child(left)
@@ -158,7 +172,7 @@ static func make_hand_torch(camera: Camera3D) -> Node3D:
 		hand.name = "HandSprite"
 		hand.position = Vector3(0.0, 0.0, 0.0)
 		left.add_child(hand)
-		# No stretch on full hand sprite — whole arm shook. Hand stays solid.
+		# Hand stays solid — no full-body stretch/shake
 
 	var light := OmniLight3D.new()
 	light.name = "HandTorchLight"

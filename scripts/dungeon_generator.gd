@@ -865,9 +865,9 @@ func _spawn_torches() -> void:
 				continue
 			var d: Vector2i = wall_dirs[placed % wall_dirs.size()]
 			var world := cell_to_world(Vector2i(x, y))
-			# Into corridor enough to stay visible (not buried in wall mesh)
-			var wall_dist := cell_size * 0.5 - 0.28
-			var pos := world + Vector3(d.x * wall_dist, 1.55, d.y * wall_dist)
+			# Flush to wall surface, slightly into corridor (fixed prop, no billboard)
+			var wall_dist := cell_size * 0.5 - 0.12
+			var pos := world + Vector3(d.x * wall_dist, 1.5, d.y * wall_dist)
 			_add_torch(pos, d)
 			placed += 1
 	print("[Dungeon] torches=%d" % placed)

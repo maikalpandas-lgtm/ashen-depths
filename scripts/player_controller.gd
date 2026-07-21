@@ -1,15 +1,15 @@
 extends CharacterBody3D
-## Grid crawler: step cell-to-cell, 90° turns, camera locked forward (competitor-style).
+## Grid crawler: step cell-to-cell, 90° turns, camera locked forward.
+## Y is always locked — cannot fall through the world.
 
 @export var step_time: float = 0.16
 @export var turn_time: float = 0.12
-@export var eye_height: float = 1.55
 @export var move_cooldown: float = 0.02
+@export var feet_y: float = 0.0
 
 @onready var head: Node3D = $Head
 @onready var camera: Camera3D = $Head/Camera3D
 
-## N, E, S, W — grid delta (x, y) where y maps to world Z
 const FACINGS: Array[Vector2i] = [
 	Vector2i(0, -1),
 	Vector2i(1, 0),
@@ -23,12 +23,12 @@ var facing_index: int = 0
 var _busy: bool = false
 var _input_lock: float = 0.0
 var _mouse_captured: bool = true
+var _move_tween: Tween = null
 
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_mouse_captured = true
-	# Lock pitch — always look forward slightly down corridor
 	if head:
 		head.rotation.x = deg_to_rad(-2.0)
 	if camera:
@@ -84,15 +84,20 @@ func setup_dungeon(dungeon_ref: Node3D) -> void:
 
 
 func teleport_to(world_pos: Vector3) -> void:
+	_kill_tween()
 	velocity = Vector3.ZERO
 	_busy = false
+	_input_lock = 0.0
 	if dungeon and dungeon.has_method("world_to_cell"):
 		cell = dungeon.world_to_cell(world_pos)
+		# Safety: if cell not walkable, snap to start
+		if not dungeon.is_walkable_cell(cell.x, cell.y) and dungeon.get("start_cell") != null:
+			cell = dungeon.start_cell
 		global_position = _cell_world_pos(cell)
 		facing_index = _pick_open_facing()
 		rotation.y = _yaw_for_facing(facing_index)
 	else:
-		global_position = world_pos
+		global_position = Vector3(world_pos.x, feet_y, world_pos.z)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -104,7 +109,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _busy or _input_lock > 0.0:
 		return
 
-	# Turn: A/D or left/right arrows
 	if event.is_action_pressed("move_left") or event.is_action_pressed("ui_left"):
 		_turn(-1)
 		get_viewport().set_input_as_handled()
@@ -113,15 +117,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		_turn(1)
 		get_viewport().set_input_as_handled()
 		return
-
-	# Step: W/S or up/down
 	if event.is_action_pressed("move_forward") or event.is_action_pressed("ui_up"):
 		_try_step(FACINGS[facing_index])
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("move_back") or event.is_action_pressed("ui_down"):
-		var back: Vector2i = FACINGS[facing_index] * -1
-		_try_step(back)
+		_try_step(FACINGS[facing_index] * -1)
 		get_viewport().set_input_as_handled()
 		return
 
@@ -132,10 +133,17 @@ func _process(delta: float) -> void:
 
 
 func _physics_process(_delta: float) -> void:
-	# Stay grounded; no free motion
 	velocity = Vector3.ZERO
-	if not _busy and dungeon:
-		global_position = _cell_world_pos(cell)
+	# Always pin height — never fall out of the world
+	if not _busy:
+		var p := global_position
+		if dungeon:
+			p = _cell_world_pos(cell)
+		p.y = feet_y
+		global_position = p
+	else:
+		# During step tween still force Y
+		global_position.y = feet_y
 
 
 func _try_step(delta_cell: Vector2i) -> void:
@@ -149,10 +157,11 @@ func _try_step(delta_cell: Vector2i) -> void:
 	_busy = true
 	_input_lock = step_time + move_cooldown
 	var target := _cell_world_pos(cell)
-	var tw := create_tween()
-	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "global_position", target, step_time)
-	tw.finished.connect(_on_move_done)
+	_kill_tween()
+	_move_tween = create_tween()
+	_move_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_move_tween.tween_property(self, "global_position", target, step_time)
+	_move_tween.finished.connect(_on_move_done)
 
 
 func _turn(dir: int) -> void:
@@ -162,11 +171,11 @@ func _turn(dir: int) -> void:
 	_input_lock = turn_time + move_cooldown
 	facing_index = posmod(facing_index + dir, 4)
 	var target_yaw := _yaw_for_facing(facing_index)
-	# Shortest angle tween
-	var tw := create_tween()
-	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tw.tween_method(_set_yaw, rotation.y, _lerp_angle_to(rotation.y, target_yaw), turn_time)
-	tw.finished.connect(_on_move_done)
+	_kill_tween()
+	_move_tween = create_tween()
+	_move_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_move_tween.tween_method(_set_yaw, rotation.y, _lerp_angle_to(rotation.y, target_yaw), turn_time)
+	_move_tween.finished.connect(_on_move_done)
 
 
 func _set_yaw(y: float) -> void:
@@ -182,10 +191,16 @@ func _on_move_done() -> void:
 	rotation.y = _yaw_for_facing(facing_index)
 	if dungeon:
 		global_position = _cell_world_pos(cell)
+	global_position.y = feet_y
+
+
+func _kill_tween() -> void:
+	if _move_tween and _move_tween.is_valid():
+		_move_tween.kill()
+	_move_tween = null
 
 
 func _bump() -> void:
-	# Tiny camera shake for wall hit
 	if camera == null:
 		return
 	var tw := create_tween()
@@ -197,12 +212,11 @@ func _bump() -> void:
 func _cell_world_pos(c: Vector2i) -> Vector3:
 	if dungeon and dungeon.has_method("cell_to_world"):
 		var w: Vector3 = dungeon.cell_to_world(c)
-		return Vector3(w.x, 0.0, w.z)
-	return global_position
+		return Vector3(w.x, feet_y, w.z)
+	return Vector3(global_position.x, feet_y, global_position.z)
 
 
 func _yaw_for_facing(idx: int) -> float:
-	# Godot: yaw 0 faces -Z (grid N = 0,-1)
 	match idx:
 		0:
 			return 0.0

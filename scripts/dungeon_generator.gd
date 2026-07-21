@@ -414,33 +414,43 @@ func _temp_collect() -> Array[Vector2i]:
 	return floor_cells
 
 
-## Art-first: floor/wall/ceiling as textured planes (painted look), thin colliders only.
+## Art-first: floor/wall/ceiling as textured planes (painted look) + solid colliders.
+## PlaneMesh is XZ facing +Y — floor needs NO rotate; ceiling flips 180° on X.
 func _build_art_corridor() -> void:
 	for y in range(grid_height):
 		for x in range(grid_width):
 			if not _is_walkable(_get_cell(x, y)):
 				continue
 			var world := cell_to_world(Vector2i(x, y))
-			# Floor plane (faces up)
+			# Floor visual (horizontal)
 			_add_plane(
 				geometry_root,
 				world + Vector3(0, 0.0, 0),
-				Vector2(cell_size * 1.01, cell_size * 1.01),
+				Vector2(cell_size * 1.02, cell_size * 1.02),
 				_floor_mat,
-				Vector3(-90, 0, 0),
-				true,
-				Vector3(cell_size, 0.2, cell_size)
+				Vector3(0, 0, 0),
+				false
 			)
-			# Ceiling plane (faces down into corridor)
+			# Thick floor collider (cannot fall through)
+			_add_solid_box(
+				world + Vector3(0, -0.25, 0),
+				Vector3(cell_size * 1.05, 0.5, cell_size * 1.05)
+			)
+			# Ceiling visual — flip so texture faces down into corridor
 			_add_plane(
 				geometry_root,
 				world + Vector3(0, wall_height, 0),
-				Vector2(cell_size * 1.01, cell_size * 1.01),
+				Vector2(cell_size * 1.02, cell_size * 1.02),
 				_ceiling_mat,
-				Vector3(90, 0, 0),
+				Vector3(180, 0, 0),
 				false
 			)
-			# Walls — one plane per solid neighbor, facing inward
+			# Ceiling blocker (optional safety)
+			_add_solid_box(
+				world + Vector3(0, wall_height + 0.2, 0),
+				Vector3(cell_size * 1.05, 0.4, cell_size * 1.05)
+			)
+			# Walls
 			_maybe_wall_plane(x, y, 1, 0, world)
 			_maybe_wall_plane(x, y, -1, 0, world)
 			_maybe_wall_plane(x, y, 0, 1, world)
@@ -458,46 +468,62 @@ func _maybe_wall_plane(x: int, y: int, dx: int, dy: int, world: Vector3) -> void
 
 
 func _add_wall_plane(pos: Vector3, face_into: Vector3, width: float, height: float, mat: Material) -> void:
-	## Build a vertical quad whose +Z local faces `face_into` (into the corridor).
+	## Vertical double-sided quad + solid wall box.
 	var mi := MeshInstance3D.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var hw := width * 0.5
 	var hh := height * 0.5
-	# Local verts facing +Z
-	var verts := [
-		Vector3(-hw, -hh, 0), Vector3(hw, -hh, 0), Vector3(hw, hh, 0),
-		Vector3(-hw, -hh, 0), Vector3(hw, hh, 0), Vector3(-hw, hh, 0),
-	]
-	var uvs := [
-		Vector2(0, 1), Vector2(1, 1), Vector2(1, 0),
-		Vector2(0, 1), Vector2(1, 0), Vector2(0, 0),
-	]
-	for i in range(6):
-		st.set_normal(Vector3(0, 0, 1))
-		st.set_uv(uvs[i])
-		st.add_vertex(verts[i])
+	_quad(st, Vector3(-hw, -hh, 0), Vector3(hw, -hh, 0), Vector3(hw, hh, 0), Vector3(-hw, hh, 0), Vector3(0, 0, 1))
+	_quad(st, Vector3(hw, -hh, 0), Vector3(-hw, -hh, 0), Vector3(-hw, hh, 0), Vector3(hw, hh, 0), Vector3(0, 0, -1))
 	mi.mesh = st.commit()
-	mi.material_override = mat
-	mi.position = pos
-	# Orient local -Z toward face_into (look_at convention); flip so +Z of quad faces corridor
-	if face_into.length_squared() > 0.001:
-		var basis := Basis.looking_at(face_into.normalized(), Vector3.UP)
-		# looking_at aims -Z; our quad normal is +Z → rotate 180° around Y
-		mi.transform = Transform3D(basis.rotated(Vector3.UP, PI), pos)
+	var wall_mat := mat.duplicate() as StandardMaterial3D
+	if wall_mat:
+		wall_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mi.material_override = wall_mat if wall_mat else mat
+
+	var yaw := 0.0
+	if absf(face_into.x) > 0.5:
+		yaw = -PI * 0.5 if face_into.x > 0.0 else PI * 0.5
+	else:
+		yaw = 0.0 if face_into.z < 0.0 else PI
+	mi.transform = Transform3D(Basis.from_euler(Vector3(0, yaw, 0)), pos)
 	geometry_root.add_child(mi)
 
+	var col_size := Vector3(width, height, 0.45) if absf(face_into.z) > 0.5 else Vector3(0.45, height, width)
+	_add_solid_box(pos, col_size)
+
+
+func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, n: Vector3) -> void:
+	st.set_normal(n)
+	st.set_uv(Vector2(0, 1))
+	st.add_vertex(a)
+	st.set_normal(n)
+	st.set_uv(Vector2(1, 1))
+	st.add_vertex(b)
+	st.set_normal(n)
+	st.set_uv(Vector2(1, 0))
+	st.add_vertex(c)
+	st.set_normal(n)
+	st.set_uv(Vector2(0, 1))
+	st.add_vertex(a)
+	st.set_normal(n)
+	st.set_uv(Vector2(1, 0))
+	st.add_vertex(c)
+	st.set_normal(n)
+	st.set_uv(Vector2(0, 0))
+	st.add_vertex(d)
+
+
+func _add_solid_box(pos: Vector3, size: Vector3) -> void:
 	var body := StaticBody3D.new()
 	var col := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
-	# Thin collider along wall
-	if absf(face_into.x) > 0.5:
-		shape.size = Vector3(0.28, height, width)
-	else:
-		shape.size = Vector3(width, height, 0.28)
+	shape.size = size
 	col.shape = shape
 	body.position = pos
 	body.collision_layer = 1
+	body.collision_mask = 0
 	body.add_child(col)
 	geometry_root.add_child(body)
 
@@ -517,27 +543,18 @@ func _add_plane(
 	plane.subdivide_width = 1
 	plane.subdivide_depth = 1
 	mi.mesh = plane
-	mi.material_override = mat
+	var m := mat.duplicate() as StandardMaterial3D
+	if m:
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mi.material_override = m
+	else:
+		mi.material_override = mat
 	mi.position = pos
 	mi.rotation_degrees = rot_deg
 	parent.add_child(mi)
-	if not collision:
-		return
-	var body := StaticBody3D.new()
-	var col := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
-	if col_size == Vector3.ZERO:
-		shape.size = Vector3(size.x, 0.2, size.y)
-	else:
-		shape.size = col_size
-	col.shape = shape
-	body.position = pos
-	# Floor collider slightly below feet
-	if col_size.y < 0.5:
-		body.position.y = -0.05
-	body.collision_layer = 1
-	body.add_child(col)
-	parent.add_child(body)
+	if collision:
+		var s := col_size if col_size != Vector3.ZERO else Vector3(size.x, 0.4, size.y)
+		_add_solid_box(pos + Vector3(0, -0.15, 0), s)
 
 
 func _add_box(parent: Node3D, pos: Vector3, size: Vector3, mat: Material, collision: bool = true) -> void:

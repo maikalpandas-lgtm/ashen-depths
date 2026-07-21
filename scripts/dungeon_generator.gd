@@ -415,17 +415,16 @@ func _temp_collect() -> Array[Vector2i]:
 ## Art-first: floor/wall/ceiling as textured planes (painted look) + solid colliders.
 ## PlaneMesh is XZ facing +Y — floor needs NO rotate; ceiling flips 180° on X.
 func _build_art_corridor() -> void:
-	## Overlap all panels slightly so seams never open (black cracks).
-	var floor_span := cell_size * 1.08
+	## Floor/ceiling = exact cell span (+tiny epsilon). Walls meet at face edges — no pillars.
+	var floor_span := cell_size + 0.02
 	for y in range(grid_height):
 		for x in range(grid_width):
 			if not _is_walkable(_get_cell(x, y)):
 				continue
 			var world := cell_to_world(Vector2i(x, y))
-			# Floor — slight Y lift so wall bottoms tuck under
 			_add_plane(
 				geometry_root,
-				world + Vector3(0, 0.01, 0),
+				world + Vector3(0, 0.0, 0),
 				Vector2(floor_span, floor_span),
 				_floor_mat,
 				Vector3(0, 0, 0),
@@ -433,12 +432,11 @@ func _build_art_corridor() -> void:
 			)
 			_add_solid_box(
 				world + Vector3(0, -0.25, 0),
-				Vector3(cell_size * 1.1, 0.5, cell_size * 1.1)
+				Vector3(cell_size, 0.5, cell_size)
 			)
-			# Ceiling overlaps walls
 			_add_plane(
 				geometry_root,
-				world + Vector3(0, wall_height - 0.01, 0),
+				world + Vector3(0, wall_height, 0),
 				Vector2(floor_span, floor_span),
 				_ceiling_mat,
 				Vector3(180, 0, 0),
@@ -446,56 +444,34 @@ func _build_art_corridor() -> void:
 			)
 			_add_solid_box(
 				world + Vector3(0, wall_height + 0.2, 0),
-				Vector3(cell_size * 1.1, 0.4, cell_size * 1.1)
+				Vector3(cell_size, 0.4, cell_size)
 			)
 			_maybe_wall_plane(x, y, 1, 0, world)
 			_maybe_wall_plane(x, y, -1, 0, world)
 			_maybe_wall_plane(x, y, 0, 1, world)
 			_maybe_wall_plane(x, y, 0, -1, world)
-			_fill_cell_corners(x, y, world)
 
 
 func _maybe_wall_plane(x: int, y: int, dx: int, dy: int, world: Vector3) -> void:
 	if _is_walkable(_get_cell(x + dx, y + dy)):
 		return
-	# Almost flush; slight inset; OVERLAP neighbors so no black slits
-	var edge := cell_size * 0.5 - 0.01
+	# Exact cell face: width = cell_size so L-corners meet at an edge (no pillars, no overhang).
+	var edge := cell_size * 0.5
 	var pos := world + Vector3(float(dx) * edge, wall_height * 0.5, float(dy) * edge)
 	var into := Vector3(-float(dx), 0.0, -float(dy))
-	_add_wall_plane(pos, into, cell_size * 1.14, wall_height + 0.16, _wall_mat)
-
-
-func _fill_cell_corners(x: int, y: int, world: Vector3) -> void:
-	## Square pillars where two wall sides meet — cleans L/T corners.
-	var pairs: Array = [
-		[Vector2i(1, 0), Vector2i(0, -1), Vector3(1, 0, -1)],
-		[Vector2i(1, 0), Vector2i(0, 1), Vector3(1, 0, 1)],
-		[Vector2i(-1, 0), Vector2i(0, -1), Vector3(-1, 0, -1)],
-		[Vector2i(-1, 0), Vector2i(0, 1), Vector3(-1, 0, 1)],
-	]
-	var half := cell_size * 0.5 - 0.02
-	var pillar := 0.22
-	for p in pairs:
-		var d0: Vector2i = p[0]
-		var d1: Vector2i = p[1]
-		var off: Vector3 = p[2]
-		var wall0 := not _is_walkable(_get_cell(x + d0.x, y + d0.y))
-		var wall1 := not _is_walkable(_get_cell(x + d1.x, y + d1.y))
-		if not (wall0 and wall1):
-			continue
-		var pos := world + Vector3(off.x * half, wall_height * 0.5, off.z * half)
-		_add_textured_box(pos, Vector3(pillar, wall_height + 0.16, pillar), _wall_mat)
+	# Epsilon only — closes raster gaps without sticking into the corridor
+	_add_wall_plane(pos, into, cell_size + 0.02, wall_height, _wall_mat)
 
 
 func _add_wall_plane(pos: Vector3, face_into: Vector3, width: float, height: float, mat: Material) -> void:
-	## Single-sided wall into corridor; overlapping width kills slits.
+	## Single-sided wall on the cell face; neighbors share edges cleanly.
 	var mi := MeshInstance3D.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var hw := width * 0.5
 	var hh := height * 0.5
-	var tile_u := width / cell_size * 2.0
-	var tile_v := height / wall_height * 2.0
+	var tile_u := 2.0
+	var tile_v := 2.0
 	_quad_uv_rect(
 		st,
 		Vector3(-hw, -hh, 0), Vector3(hw, -hh, 0), Vector3(hw, hh, 0), Vector3(-hw, hh, 0),
@@ -505,19 +481,20 @@ func _add_wall_plane(pos: Vector3, face_into: Vector3, width: float, height: flo
 	mi.mesh = st.commit()
 	mi.material_override = mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# Prefer closer polygons when they overlap (seams)
-	mi.sorting_offset = 0.01
 
 	var yaw := 0.0
 	if absf(face_into.x) > 0.5:
 		yaw = -PI * 0.5 if face_into.x > 0.0 else PI * 0.5
 	else:
 		yaw = 0.0 if face_into.z < 0.0 else PI
-	mi.transform = Transform3D(Basis.from_euler(Vector3(0, yaw, 0)), pos)
+	# Nudge 1cm into the wall (away from corridor) so face is not inside the walk volume
+	var pos_nudge := pos - face_into * 0.01
+	mi.transform = Transform3D(Basis.from_euler(Vector3(0, yaw, 0)), pos_nudge)
 	geometry_root.add_child(mi)
 
-	var col_size := Vector3(width, height, 0.45) if absf(face_into.z) > 0.5 else Vector3(0.45, height, width)
-	_add_solid_box(pos + face_into * -0.08, col_size)
+	# Thin collider behind the face (outside walk space)
+	var col_size := Vector3(width, height, 0.2) if absf(face_into.z) > 0.5 else Vector3(0.2, height, width)
+	_add_solid_box(pos - face_into * 0.12, col_size)
 
 
 func _quad_uv_rect(

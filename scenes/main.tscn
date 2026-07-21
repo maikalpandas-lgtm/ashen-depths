@@ -1,38 +1,81 @@
-[gd_scene load_steps=7 format=3 uid="uid://bmain001ashen"]
+[gd_scene load_steps=9 format=3 uid="uid://bmain001ashen"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/dungeon_generator.gd" id="2_dungeon"]
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="3_player"]
+[ext_resource type="Script" path="res://scripts/minimap.gd" id="4_minimap"]
 
 [sub_resource type="Environment" id="Environment_fog"]
 background_mode = 1
 background_color = Color(0.04, 0.03, 0.07, 1)
 ambient_light_source = 2
-ambient_light_color = Color(0.25, 0.22, 0.35, 1)
-ambient_light_energy = 0.35
+ambient_light_color = Color(0.28, 0.24, 0.38, 1)
+ambient_light_energy = 0.28
 tonemap_mode = 2
 glow_enabled = true
-glow_intensity = 0.35
-glow_bloom = 0.15
+glow_intensity = 0.4
+glow_bloom = 0.12
 fog_enabled = true
-fog_light_color = Color(0.12, 0.1, 0.18, 1)
-fog_density = 0.035
-fog_aerial_perspective = 0.4
+fog_light_color = Color(0.14, 0.11, 0.2, 1)
+fog_density = 0.028
+fog_aerial_perspective = 0.35
 adjustment_enabled = true
-adjustment_saturation = 1.05
+adjustment_saturation = 1.08
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_1"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-bg_color = Color(0.05, 0.04, 0.08, 0.72)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_left"]
+bg_color = Color(0.09, 0.07, 0.12, 0.92)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.35, 0.28, 0.22, 0.9)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+content_margin_left = 10.0
+content_margin_top = 10.0
+content_margin_right = 10.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_map"]
+bg_color = Color(0.05, 0.04, 0.08, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.55, 0.42, 0.28, 0.85)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bottom"]
+bg_color = Color(0.06, 0.05, 0.09, 0.75)
 corner_radius_top_left = 8
 corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
-content_margin_left = 12.0
+content_margin_left = 14.0
 content_margin_top = 8.0
-content_margin_right = 12.0
+content_margin_right = 14.0
 content_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp"]
+bg_color = Color(0.15, 0.1, 0.12, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_fill"]
+bg_color = Color(0.75, 0.28, 0.32, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
@@ -43,8 +86,8 @@ camera_attributes = SubResource("CameraAttributesPractical_1")
 
 [node name="FillLight" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 12, 0)
-light_color = Color(0.45, 0.4, 0.65, 1)
-light_energy = 0.25
+light_color = Color(0.4, 0.36, 0.55, 1)
+light_energy = 0.18
 shadow_enabled = false
 
 [node name="Dungeon" type="Node3D" parent="."]
@@ -61,37 +104,97 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 
 [node name="UI" type="CanvasLayer" parent="."]
 
-[node name="Margin" type="MarginContainer" parent="UI"]
-anchors_preset = 10
-anchor_right = 1.0
-offset_bottom = 110.0
-grow_horizontal = 2
-theme_override_constants/margin_left = 16
-theme_override_constants/margin_top = 12
-theme_override_constants/margin_right = 16
+[node name="LeftPanel" type="PanelContainer" parent="UI"]
+offset_left = 14.0
+offset_top = 14.0
+offset_right = 214.0
+offset_bottom = 420.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_left")
 
-[node name="Panel" type="PanelContainer" parent="UI/Margin"]
+[node name="Margin" type="MarginContainer" parent="UI/LeftPanel"]
 layout_mode = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
-[node name="VBox" type="VBoxContainer" parent="UI/Margin/Panel"]
+[node name="VBox" type="VBoxContainer" parent="UI/LeftPanel/Margin"]
 layout_mode = 2
-theme_override_constants/separation = 4
+theme_override_constants/separation = 8
 
-[node name="SeedLabel" type="Label" parent="UI/Margin/Panel/VBox"]
+[node name="TitleLabel" type="Label" parent="UI/LeftPanel/Margin/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.92, 0.85, 0.7, 1)
-theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.95, 0.88, 0.7, 1)
+theme_override_font_sizes/font_size = 18
 text = "Ashen Depths"
+horizontal_alignment = 1
 
-[node name="GoldLabel" type="Label" parent="UI/Margin/Panel/VBox"]
+[node name="FloorLabel" type="Label" parent="UI/LeftPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.65, 0.78, 1)
+theme_override_font_sizes/font_size = 12
+text = "Floor 1"
+horizontal_alignment = 1
+
+[node name="MinimapFrame" type="PanelContainer" parent="UI/LeftPanel/Margin/VBox"]
+custom_minimum_size = Vector2(176, 176)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_map")
+
+[node name="Minimap" type="Control" parent="UI/LeftPanel/Margin/VBox/MinimapFrame"]
+custom_minimum_size = Vector2(168, 168)
+layout_mode = 2
+script = ExtResource("4_minimap")
+
+[node name="MapLegend" type="Label" parent="UI/LeftPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.5, 0.6, 1)
+theme_override_font_sizes/font_size = 10
+text = "● you  ■ floor  ◆ exit
+■ chest  ■ fight  ■ door"
+horizontal_alignment = 1
+
+[node name="HpBar" type="ProgressBar" parent="UI/LeftPanel/Margin/VBox"]
+custom_minimum_size = Vector2(0, 14)
+layout_mode = 2
+theme_override_styles/background = SubResource("StyleBoxFlat_hp")
+theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
+max_value = 88.0
+value = 88.0
+show_percentage = false
+
+[node name="StatsRow" type="HBoxContainer" parent="UI/LeftPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="HpLabel" type="Label" parent="UI/LeftPanel/Margin/VBox/StatsRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.55, 0.55, 1)
+theme_override_font_sizes/font_size = 13
+text = "❤  88/88"
+
+[node name="GoldLabel" type="Label" parent="UI/LeftPanel/Margin/VBox/StatsRow"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.4, 1)
-theme_override_font_sizes/font_size = 14
-text = "Gold: 0"
-
-[node name="HintLabel" type="Label" parent="UI/Margin/Panel/VBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.75, 0.72, 0.8, 1)
 theme_override_font_sizes/font_size = 13
-text = "WASD move · Mouse look · R re-roll dungeon · Esc free mouse"
+text = "🪙  0"
+
+[node name="BottomBar" type="PanelContainer" parent="UI"]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 220.0
+offset_top = -48.0
+offset_right = -16.0
+offset_bottom = -12.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_bottom")
+
+[node name="Margin" type="MarginContainer" parent="UI/BottomBar"]
+layout_mode = 2
+
+[node name="HintLabel" type="Label" parent="UI/BottomBar/Margin"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.74, 0.85, 1)
+theme_override_font_sizes/font_size = 13
+text = "WASD · Mouse · R new dungeon · Esc free cursor  |  Explore: chest (gold) · red = encounter"

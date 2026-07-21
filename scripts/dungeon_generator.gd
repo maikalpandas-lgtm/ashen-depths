@@ -1,6 +1,8 @@
 extends Node3D
 ## Procedural rooms + corridors labyrinth (Phase 1 MVP).
 
+const TextureFactory = preload("res://scripts/texture_factory.gd")
+
 enum Cell {
 	WALL,
 	FLOOR,
@@ -21,7 +23,7 @@ signal generation_finished(start_world: Vector3)
 @export var cell_size: float = 3.0
 @export var wall_height: float = 3.2
 @export var encounter_rooms: int = 4
-@export var torch_spacing: int = 4
+@export var torch_spacing: int = 5
 
 var grid: Array = []  # 2D: grid[y][x] -> Cell
 var rooms: Array[Rect2i] = []
@@ -79,22 +81,52 @@ func cell_to_world(cell: Vector2i) -> Vector3:
 	return Vector3(ox + cell.x * cell_size + cell_size * 0.5, 0.0, oz + cell.y * cell_size + cell_size * 0.5)
 
 
+func world_to_cell(world: Vector3) -> Vector2i:
+	var ox := -grid_width * cell_size * 0.5
+	var oz := -grid_height * cell_size * 0.5
+	var x := int(floor((world.x - ox) / cell_size))
+	var y := int(floor((world.z - oz) / cell_size))
+	return Vector2i(clampi(x, 0, grid_width - 1), clampi(y, 0, grid_height - 1))
+
+
+func is_walkable_cell(x: int, y: int) -> bool:
+	return _is_walkable(_get_cell(x, y))
+
+
+func get_cell_type(x: int, y: int) -> int:
+	return _get_cell(x, y)
+
+
 func _build_materials() -> void:
 	_floor_mat = StandardMaterial3D.new()
-	_floor_mat.albedo_color = Color(0.22, 0.2, 0.28)
+	_floor_mat.albedo_texture = TextureFactory.stone_floor(128)
+	_floor_mat.albedo_color = Color(0.85, 0.85, 0.9)
 	_floor_mat.roughness = 0.92
+	_floor_mat.uv1_triplanar = true
+	_floor_mat.uv1_triplanar_sharpness = 4.0
+	_floor_mat.uv1_scale = Vector3(0.45, 0.45, 0.45)
 
 	_wall_mat = StandardMaterial3D.new()
-	_wall_mat.albedo_color = Color(0.35, 0.32, 0.42)
+	_wall_mat.albedo_texture = TextureFactory.stone_wall(128)
+	_wall_mat.albedo_color = Color(0.95, 0.95, 1.0)
 	_wall_mat.roughness = 0.88
+	_wall_mat.uv1_triplanar = true
+	_wall_mat.uv1_triplanar_sharpness = 4.0
+	_wall_mat.uv1_scale = Vector3(0.4, 0.4, 0.4)
 
 	_door_mat = StandardMaterial3D.new()
-	_door_mat.albedo_color = Color(0.45, 0.28, 0.18)
+	_door_mat.albedo_texture = TextureFactory.wood_door(64)
+	_door_mat.albedo_color = Color(1, 1, 1)
 	_door_mat.roughness = 0.7
+	_door_mat.uv1_triplanar = true
+	_door_mat.uv1_scale = Vector3(0.5, 0.5, 0.5)
 
 	_ceiling_mat = StandardMaterial3D.new()
-	_ceiling_mat.albedo_color = Color(0.12, 0.1, 0.16)
+	_ceiling_mat.albedo_texture = TextureFactory.ceiling_dark(64)
+	_ceiling_mat.albedo_color = Color(0.8, 0.8, 0.85)
 	_ceiling_mat.roughness = 1.0
+	_ceiling_mat.uv1_triplanar = true
+	_ceiling_mat.uv1_scale = Vector3(0.35, 0.35, 0.35)
 
 
 func _clear_children(node: Node) -> void:
@@ -161,7 +193,6 @@ func _room_center(rect: Rect2i) -> Vector2i:
 
 
 func _carve_corridor(a: Vector2i, b: Vector2i) -> void:
-	# L-shaped corridor
 	if randf() < 0.5:
 		_carve_h(a.x, b.x, a.y)
 		_carve_v(a.y, b.y, b.x)
@@ -187,13 +218,11 @@ func _carve_v(y0: int, y1: int, x: int) -> void:
 func _connect_rooms() -> void:
 	if rooms.is_empty():
 		return
-	# Connect each room to the next (simple spanning path) + a few extra links
 	var centers: Array[Vector2i] = []
 	for r in rooms:
 		centers.append(_room_center(r))
 	for i in range(1, centers.size()):
 		_carve_corridor(centers[i - 1], centers[i])
-	# Extra loops for less linear maze
 	var extra := mini(3, centers.size() - 1)
 	for _i in range(extra):
 		var a := centers[randi() % centers.size()]
@@ -211,24 +240,20 @@ func _in_any_room(x: int, y: int) -> bool:
 
 
 func _mark_doors() -> void:
-	# Door where floor has room-neighbor and corridor-neighbor
 	for y in range(1, grid_height - 1):
 		for x in range(1, grid_width - 1):
 			if _get_cell(x, y) != Cell.FLOOR:
 				continue
 			if _in_any_room(x, y):
 				continue
-			# corridor cell adjacent to room
 			var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 			var touches_room := false
 			for d in dirs:
 				if _in_any_room(x + d.x, y + d.y) and _is_walkable(_get_cell(x + d.x, y + d.y)):
 					touches_room = true
 					break
-			if touches_room:
-				# only mark some as doors for readability
-				if (x + y) % 2 == 0:
-					_set_cell(x, y, Cell.DOOR)
+			if touches_room and (x + y) % 2 == 0:
+				_set_cell(x, y, Cell.DOOR)
 
 
 func _floor_neighbors(x: int, y: int) -> int:
@@ -258,7 +283,6 @@ func _place_start_and_exit() -> void:
 		_set_cell(start_cell.x, start_cell.y, Cell.START)
 		exit_cell = start_cell
 		return
-	# Start = first room center, Exit = farthest room center
 	start_cell = _room_center(rooms[0])
 	var best := rooms[0]
 	var best_d := -1
@@ -276,12 +300,9 @@ func _place_start_and_exit() -> void:
 func _place_chest_in_dead_end() -> void:
 	var dead := _find_dead_ends()
 	if dead.is_empty():
-		# fallback: corner of a non-start room
 		if rooms.size() > 1:
 			var r: Rect2i = rooms[1]
-			var cx := r.position.x + 1
-			var cy := r.position.y + 1
-			_set_cell(cx, cy, Cell.CHEST)
+			_set_cell(r.position.x + 1, r.position.y + 1, Cell.CHEST)
 		return
 	var pick: Vector2i = dead[randi() % dead.size()]
 	_set_cell(pick.x, pick.y, Cell.CHEST)
@@ -300,12 +321,12 @@ func _place_encounters() -> void:
 	var n := mini(encounter_rooms, candidates.size())
 	for i in range(n):
 		var c := _room_center(candidates[i])
-		if _get_cell(c.x, c.y) == Cell.FLOOR or _get_cell(c.x, c.y) == Cell.START:
+		var cur: int = _get_cell(c.x, c.y)
+		if cur == Cell.FLOOR or cur == Cell.START:
 			_set_cell(c.x, c.y, Cell.ENCOUNTER)
 
 
 func _build_meshes() -> void:
-	# Floor plane pieces + walls where adjacent is wall
 	for y in range(grid_height):
 		for x in range(grid_width):
 			var cell: int = _get_cell(x, y)
@@ -318,25 +339,23 @@ func _build_meshes() -> void:
 				Vector3(cell_size, 0.3, cell_size),
 				_floor_mat if cell != Cell.DOOR else _door_mat
 			)
-			# ceiling
 			_add_box(
 				geometry_root,
 				world + Vector3(0, wall_height + 0.1, 0),
 				Vector3(cell_size, 0.25, cell_size),
 				_ceiling_mat
 			)
-			# walls on edges toward WALL cells
 			_maybe_wall(x, y, 1, 0, world)
 			_maybe_wall(x, y, -1, 0, world)
 			_maybe_wall(x, y, 0, 1, world)
 			_maybe_wall(x, y, 0, -1, world)
 
-			# door arch visual
 			if cell == Cell.DOOR:
+				# wooden door frame on sides, leave walkable center
 				_add_box(
 					geometry_root,
-					world + Vector3(0, wall_height * 0.45, 0),
-					Vector3(cell_size * 0.25, wall_height * 0.9, cell_size * 0.25),
+					world + Vector3(0, wall_height * 0.85, 0),
+					Vector3(cell_size * 0.9, 0.25, 0.2),
 					_door_mat
 				)
 
@@ -344,8 +363,8 @@ func _build_meshes() -> void:
 func _maybe_wall(x: int, y: int, dx: int, dy: int, world: Vector3) -> void:
 	if _is_walkable(_get_cell(x + dx, y + dy)):
 		return
-	var thickness := 0.35
-	var size := Vector3(cell_size, wall_height, cell_size)
+	var thickness := 0.4
+	var size: Vector3
 	var offset := Vector3(dx, 0, dy) * (cell_size * 0.5 - thickness * 0.5)
 	if dx != 0:
 		size = Vector3(thickness, wall_height, cell_size)
@@ -376,59 +395,91 @@ func _add_box(parent: Node3D, pos: Vector3, size: Vector3, mat: Material) -> voi
 
 
 func _spawn_torches() -> void:
+	## Mount torches ON walls, not floating in corridor center.
 	var placed := 0
+	var dirs: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)
+	]
 	for y in range(grid_height):
 		for x in range(grid_width):
 			if not _is_walkable(_get_cell(x, y)):
 				continue
-			if (x + y * 3) % torch_spacing != 0:
+			if (x * 7 + y * 13) % torch_spacing != 0:
 				continue
-			# prefer cells next to a wall
-			if _floor_neighbors(x, y) >= 4 and not _in_any_room(x, y):
+			# Pick one wall neighbor
+			var wall_dirs: Array[Vector2i] = []
+			for d in dirs:
+				if not _is_walkable(_get_cell(x + d.x, y + d.y)):
+					wall_dirs.append(d)
+			if wall_dirs.is_empty():
 				continue
+			var d: Vector2i = wall_dirs[placed % wall_dirs.size()]
 			var world := cell_to_world(Vector2i(x, y))
-			_add_torch(world + Vector3(0.0, 1.6, 0.0))
+			# Push to wall surface (slightly inward from wall face)
+			var wall_dist := cell_size * 0.5 - 0.28
+			var pos := world + Vector3(d.x * wall_dist, 1.55, d.y * wall_dist)
+			_add_torch(pos, d)
 			placed += 1
-	print("[Dungeon] torches=%d" % placed)
+	print("[Dungeon] wall torches=%d" % placed)
 
 
-func _add_torch(pos: Vector3) -> void:
+func _add_torch(pos: Vector3, wall_dir: Vector2i) -> void:
 	var holder := Node3D.new()
 	holder.position = pos
+	# Face out from wall into corridor
+	if wall_dir.x != 0:
+		holder.rotation.y = PI * 0.5 if wall_dir.x > 0 else -PI * 0.5
+	else:
+		holder.rotation.y = 0.0 if wall_dir.y > 0 else PI
 	props_root.add_child(holder)
 
+	# Bracket on wall
+	var bracket := MeshInstance3D.new()
+	var bracket_mesh := BoxMesh.new()
+	bracket_mesh.size = Vector3(0.12, 0.18, 0.08)
+	bracket.mesh = bracket_mesh
+	var bracket_mat := StandardMaterial3D.new()
+	bracket_mat.albedo_color = Color(0.35, 0.32, 0.3)
+	bracket_mat.metallic = 0.6
+	bracket.material_override = bracket_mat
+	bracket.position = Vector3(0, 0, 0.02)
+	holder.add_child(bracket)
+
+	# Stick pointing slightly into room
 	var stick := MeshInstance3D.new()
 	var stick_mesh := CylinderMesh.new()
-	stick_mesh.top_radius = 0.04
-	stick_mesh.bottom_radius = 0.05
-	stick_mesh.height = 0.5
+	stick_mesh.top_radius = 0.035
+	stick_mesh.bottom_radius = 0.045
+	stick_mesh.height = 0.45
 	stick.mesh = stick_mesh
 	var stick_mat := StandardMaterial3D.new()
-	stick_mat.albedo_color = Color(0.25, 0.15, 0.08)
+	stick_mat.albedo_color = Color(0.28, 0.16, 0.08)
 	stick.material_override = stick_mat
-	stick.position = Vector3(0, -0.15, 0)
+	stick.rotation.x = deg_to_rad(25)
+	stick.position = Vector3(0, -0.05, -0.12)
 	holder.add_child(stick)
 
 	var flame := MeshInstance3D.new()
 	var flame_mesh := SphereMesh.new()
-	flame_mesh.radius = 0.12
-	flame_mesh.height = 0.22
+	flame_mesh.radius = 0.1
+	flame_mesh.height = 0.2
 	flame.mesh = flame_mesh
 	var flame_mat := StandardMaterial3D.new()
 	flame_mat.albedo_color = Color(1.0, 0.45, 0.1)
 	flame_mat.emission_enabled = true
-	flame_mat.emission = Color(1.0, 0.5, 0.15)
-	flame_mat.emission_energy_multiplier = 2.5
+	flame_mat.emission = Color(1.0, 0.55, 0.15)
+	flame_mat.emission_energy_multiplier = 3.0
 	flame.material_override = flame_mat
-	flame.position = Vector3(0, 0.15, 0)
+	flame.position = Vector3(0, 0.18, -0.22)
 	holder.add_child(flame)
 
 	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.65, 0.35)
-	light.light_energy = 1.4
-	light.omni_range = 8.0
+	light.light_color = Color(1.0, 0.62, 0.32)
+	light.light_energy = 1.6
+	light.omni_range = 7.5
+	light.omni_attenuation = 1.2
 	light.shadow_enabled = false
-	light.position = Vector3(0, 0.2, 0)
+	light.position = Vector3(0, 0.2, -0.25)
 	holder.add_child(light)
 
 
@@ -463,9 +514,12 @@ func _spawn_chest(world: Vector3) -> void:
 	box.size = Vector3(0.9, 0.55, 0.6)
 	mesh.mesh = box
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.7, 0.5, 0.15)
-	mat.metallic = 0.35
-	mat.roughness = 0.45
+	mat.albedo_color = Color(0.75, 0.52, 0.18)
+	mat.metallic = 0.4
+	mat.roughness = 0.4
+	mat.emission_enabled = true
+	mat.emission = Color(0.4, 0.25, 0.05)
+	mat.emission_energy_multiplier = 0.4
 	mesh.material_override = mat
 	area.add_child(mesh)
 
@@ -481,6 +535,7 @@ func _spawn_chest(world: Vector3) -> void:
 	label.position = Vector3(0, 0.7, 0)
 	label.font_size = 32
 	label.modulate = Color(1, 0.9, 0.5)
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	area.add_child(label)
 
 	area.set_script(load("res://scripts/chest.gd"))
@@ -527,6 +582,7 @@ func _spawn_encounter(world: Vector3, pack_name: String) -> void:
 	label.position = Vector3(0, 1.4, 0)
 	label.font_size = 28
 	label.modulate = Color(1, 0.4, 0.4)
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	area.add_child(label)
 
 	area.set_script(load("res://scripts/encounter_placeholder.gd"))
@@ -552,10 +608,11 @@ func _spawn_exit_marker(world: Vector3) -> void:
 	props_root.add_child(mi)
 
 	var label := Label3D.new()
-	label.text = "EXIT / BOSS (soon)"
+	label.text = "EXIT / BOSS"
 	label.position = world + Vector3(0, 1.5, 0)
 	label.font_size = 36
 	label.modulate = Color(0.75, 0.5, 1.0)
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	props_root.add_child(label)
 
 

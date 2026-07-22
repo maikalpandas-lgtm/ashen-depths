@@ -365,6 +365,25 @@ func _mark_doors() -> void:
 				_set_cell(x, y, Cell.DOOR)
 
 
+## A tile you can only meet a pack head-on in: a dead end, or a straight run of
+## corridor. T-junctions and crossroads are rejected.
+func _is_corridor_or_dead_end(x: int, y: int) -> bool:
+	var n := _floor_neighbors(x, y)
+	if n == 1:
+		return true  # dead end
+	if n != 2:
+		return false
+	# Two exits must be opposite each other, or it is a corner
+	var ew := is_walkable_cell(x - 1, y) and is_walkable_cell(x + 1, y)
+	var ns := is_walkable_cell(x, y - 1) and is_walkable_cell(x, y + 1)
+	return ew or ns
+
+
+## Floor surface height — props and combat formations need it to sit on rock.
+func floor_height_at(wx: float, wz: float) -> float:
+	return _floor_height(wx, wz)
+
+
 func _floor_neighbors(x: int, y: int) -> int:
 	var n := 0
 	for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
@@ -437,7 +456,10 @@ func _place_encounters() -> void:
 	for c in floor_cells if not floor_cells.is_empty() else _temp_collect():
 		if c == start_cell or c == exit_cell:
 			continue
-		if _floor_neighbors(c.x, c.y) >= 3 or _in_any_room(c.x, c.y):
+		# Corridors and dead ends ONLY. Junctions used to be the preferred spot,
+		# which is exactly where a pack can be walked into from three sides and
+		# ends up standing around the player instead of across the corridor.
+		if _is_corridor_or_dead_end(c.x, c.y):
 			candidates.append(c)
 	if candidates.is_empty():
 		_collect_floor_cells()

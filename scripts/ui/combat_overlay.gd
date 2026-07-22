@@ -68,6 +68,7 @@ func _on_combat_requested(pack: Array, source: Node) -> void:
 	_combat = Combat.new(party, pack, fight_seed)
 	_dragging = -1
 	_face_the_pack()
+	_form_up()
 	_enter_combat_view()
 	_root.visible = true
 	get_tree().paused = true
@@ -83,6 +84,46 @@ func _collect_enemy_nodes() -> void:
 	for child in _source.get_children():
 		if child is Node3D and str(child.name).begins_with("Enemy_"):
 			_enemy_nodes.append(child)
+
+
+## Line the pack up across the corridor, facing whoever just walked in.
+##
+## In the world they are scattered around their tile, so depending on which way
+## the player arrived some ended up BEHIND the others and could not be seen or
+## clicked. Combat re-forms them into a row perpendicular to the approach, which
+## also means the same pack reads the same from any direction.
+func _form_up() -> void:
+	if not is_instance_valid(_source) or _enemy_nodes.is_empty():
+		return
+	var players := get_tree().get_nodes_in_group("player")
+	if players.is_empty():
+		return
+	var player := players[0] as Node3D
+
+	var forward := _source.global_position - player.global_position
+	forward.y = 0.0
+	if forward.length() < 0.01:
+		forward = Vector3.FORWARD
+	forward = forward.normalized()
+	var right := Vector3(-forward.z, 0.0, forward.x)
+
+	var dungeon := _source.get_parent().get_parent() if _source.get_parent() else null
+	var n := _enemy_nodes.size()
+	# Corridors are one tile wide, so the row has to stay inside ~±1.15m or the
+	# outer monsters stand inside the rock.
+	var spacing: float = 2.3 / maxf(1.0, float(n - 1)) if n > 1 else 0.0
+	spacing = minf(spacing, 1.25)
+
+	for i in range(n):
+		var node := _enemy_nodes[i] as Node3D
+		if not is_instance_valid(node):
+			continue
+		var offset := (float(i) - float(n - 1) * 0.5) * spacing
+		var spot: Vector3 = _source.global_position + right * offset
+		var ground := spot.y
+		if dungeon and dungeon.has_method("floor_height_at"):
+			ground = dungeon.call("floor_height_at", spot.x, spot.z)
+		node.global_position = Vector3(spot.x, ground, spot.z)
 
 
 ## Turn the crawler to look at the pack. The trigger fires from the neighbouring

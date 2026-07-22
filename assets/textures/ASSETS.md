@@ -19,8 +19,16 @@ Masters (исходники + готовые PNG): `assets/textures/masters/`.
 ### 2) Cut — `tools/sprite_cutter.py --ffmpeg` (предпочтительно)
 
 ```bash
-python3 tools/sprite_cutter.py src.jpg out.png --color FFFFFF --tolerance 55 --pad 4 --ffmpeg
+python3 tools/sprite_cutter.py src.jpg out.png --tolerance 60 --pad 4 --ffmpeg --erode-light 2
 ```
+
+🚨 **`--color` НЕ указывать.** По умолчанию `auto` — ключ считывается с рамки
+кадра. Генератор **никогда** не отдаёт ровно `#FF00FF`: в батче 1 фоны были
+`#F31E9C`, `#F92E8A`, `#F81098`, `#F41290`, `#FA17AC`, `#EB1692`, `#F50D7A`,
+`#F52190` — все разные. Если задать `--color FF00FF`, ffmpeg не поймает ничего
+(расстояние ~116), резка молча свалится на flood, и **фон, окружённый артом**
+(просвет между клинком и дугой, петля шнура) останется розовым пятном внутри
+спрайта. Именно так и вышло в батче 1.
 
 ffmpeg `colorkey` снимает альфу аккуратнее по сглаженному краю, чем flood.
 Раньше его было нельзя (он keyит **весь кадр** и выедал светлое ядро пламени /

@@ -127,13 +127,19 @@ func _make_surface_mat(tex: Texture2D, albedo: Color, roughness: float) -> Stand
 	m.albedo_color = albedo
 	m.roughness = roughness
 	m.metallic = 0.0
-	m.specular = 0.25
+	m.specular = 0.22
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	m.texture_repeat = true
+	# World UV is already in mesh; keep scale 1 (mesh UV uses large rock scale)
 	m.uv1_scale = Vector3(1.0, 1.0, 1.0)
 	m.cull_mode = BaseMaterial3D.CULL_BACK
 	m.vertex_color_use_as_albedo = true  # soft joint AO only
 	return m
+
+
+## World UV scale: larger rocks, fewer repeats (works with seamless texture).
+func _world_uv_scale() -> float:
+	return 1.0 / (cell_size * 2.4)
 
 
 func _make_skirting_mat() -> StandardMaterial3D:
@@ -437,14 +443,14 @@ func _build_art_corridor() -> void:
 			_maybe_cave_wall(x, y, 0, -1, world, skirt_mat)
 
 
-## One continuous cave floor — uneven rock, wall rise, world UV (no tile seams).
+## One continuous cave floor — rocky undulation, world UV (seamless tex + large scale).
 func _build_merged_floor() -> void:
 	var mi := MeshInstance3D.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var segs := 4  # enough for cave undulation
+	var segs := 5
 	var half := cell_size * 0.5
-	var uv_s := 1.0 / cell_size
+	var uv_s := _world_uv_scale()
 	for cell in floor_cells:
 		var world := cell_to_world(cell)
 		var x := cell.x
@@ -488,18 +494,19 @@ func _floor_pt(
 	var z := (v - 0.5) * 2.0 * half
 	var wx := world.x + x
 	var wz := world.z + z
-	# Cave floor: rocky undulation (world-stable → seamless between cells)
-	var h := _cave_noise(wx, wz, 0) * 0.07 + _cave_noise(wx * 2.1, wz * 2.0, 5) * 0.03
+	# Uneven rocky floor (world-stable)
+	var h: float = _cave_noise(wx, wz, 0) * 0.1 + _cave_noise(wx * 2.2, wz * 2.1, 5) * 0.05
+	h += _cave_noise(wx * 4.0, wz * 3.8, 9) * 0.025
 	# Rise toward walls (trough in corridor center)
 	var rise := 0.0
 	if wall_px:
-		rise = maxf(rise, pow(u, 1.5) * 0.12)
+		rise = maxf(rise, pow(u, 1.45) * 0.16)
 	if wall_nx:
-		rise = maxf(rise, pow(1.0 - u, 1.5) * 0.12)
+		rise = maxf(rise, pow(1.0 - u, 1.45) * 0.16)
 	if wall_pz:
-		rise = maxf(rise, pow(v, 1.5) * 0.12)
+		rise = maxf(rise, pow(v, 1.45) * 0.16)
 	if wall_nz:
-		rise = maxf(rise, pow(1.0 - v, 1.5) * 0.12)
+		rise = maxf(rise, pow(1.0 - v, 1.45) * 0.16)
 	return world + Vector3(x, h + rise, z)
 
 
@@ -541,7 +548,7 @@ func _build_merged_ceiling() -> void:
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var segs := 5
 	var half := cell_size * 0.5 + 0.1
-	var uv_s := 1.0 / cell_size
+	var uv_s := _world_uv_scale()
 	for cell in floor_cells:
 		var world := cell_to_world(cell)
 		var cx := cell.x
@@ -585,12 +592,11 @@ func _ceil_pt(
 	var z := (v - 0.5) * 2.0 * half
 	var wx := world.x + x
 	var wz := world.z + z
-	# Strong cave rock + hanging stalactite dips (world-stable)
-	var n := _cave_noise(wx, wz, 11)
-	var n2 := _cave_noise(wx * 1.6 + 2.0, wz * 1.5, 19)
-	var n3 := _cave_noise(wx * 3.0, wz * 2.8, 31)
-	var hang := maxf(0.0, n) * 0.22 + maxf(0.0, n2) * 0.12 + maxf(0.0, n3) * 0.06
-	# Vault lower near walls (tube roof) without per-cell grid seams
+	# Rocky vault + hanging dips (competitor-like uneven roof)
+	var n: float = _cave_noise(wx, wz, 11)
+	var n2: float = _cave_noise(wx * 1.6 + 2.0, wz * 1.5, 19)
+	var n3: float = _cave_noise(wx * 3.0, wz * 2.8, 31)
+	var hang: float = maxf(0.0, n) * 0.32 + maxf(0.0, n2) * 0.18 + maxf(0.0, n3) * 0.1
 	var wall_t := 0.0
 	if wall_px:
 		wall_t = maxf(wall_t, u)
@@ -600,8 +606,8 @@ func _ceil_pt(
 		wall_t = maxf(wall_t, v)
 	if wall_nz:
 		wall_t = maxf(wall_t, 1.0 - v)
-	var vault := wall_t * wall_t * 0.35
-	var y := wall_height + 0.28 - vault - hang + n2 * 0.04
+	var vault: float = wall_t * wall_t * 0.48
+	var y: float = wall_height + 0.22 - vault - hang + n2 * 0.06
 	return world + Vector3(x, y, z)
 
 
@@ -689,15 +695,15 @@ func _tri_alpha(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, n: Vector3,
 
 
 func _add_cave_wall_mesh(base: Vector3, face_into: Vector3) -> void:
-	## Organic cave wall: tube bulge + rock noise. World UV / noise = no seams.
+	## Rocky cave wall: strong faceted relief + world UV from displaced verts.
 	var mi := MeshInstance3D.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var segs_w := 6
-	var segs_h := 7
-	var width := cell_size + 0.08
+	var segs_w := 8
+	var segs_h := 10
+	var width := cell_size + 0.1
 	var right := Vector3(-face_into.z, 0.0, face_into.x)
-	var uv_s := 1.0 / cell_size
+	var uv_s := _world_uv_scale()
 
 	for j in range(segs_h):
 		for i in range(segs_w):
@@ -713,12 +719,24 @@ func _add_cave_wall_mesh(base: Vector3, face_into: Vector3) -> void:
 			var a10 := _wall_ao(u1, v0)
 			var a11 := _wall_ao(u1, v1)
 			var a01 := _wall_ao(u0, v1)
-			var ua0 := (base + right * ((u0 - 0.5) * width)).dot(right) * uv_s
-			var ua1 := (base + right * ((u1 - 0.5) * width)).dot(right) * uv_s
-			var va0 := v0 * (wall_height / cell_size)
-			var va1 := v1 * (wall_height / cell_size)
-			_tri_ao(st, p00, p10, p11, face_into, ua0, va0, ua1, va0, ua1, va1, a00, a10, a11)
-			_tri_ao(st, p00, p11, p01, face_into, ua0, va0, ua1, va1, ua0, va1, a00, a11, a01)
+			# UV from actual world position → continuous across panels, no tile lines
+			var ua0 := p00.dot(right) * uv_s
+			var ua1 := p10.dot(right) * uv_s
+			var ua2 := p11.dot(right) * uv_s
+			var ua3 := p01.dot(right) * uv_s
+			var va0 := p00.y * uv_s
+			var va1 := p10.y * uv_s
+			var va2 := p11.y * uv_s
+			var va3 := p01.y * uv_s
+			# Face normal from triangle geometry (lighting on rock faces)
+			var n_a := (p10 - p00).cross(p11 - p00).normalized()
+			if n_a.dot(face_into) < 0.0:
+				n_a = -n_a
+			var n_b := (p11 - p00).cross(p01 - p00).normalized()
+			if n_b.dot(face_into) < 0.0:
+				n_b = -n_b
+			_tri_ao(st, p00, p10, p11, n_a, ua0, va0, ua1, va1, ua2, va2, a00, a10, a11)
+			_tri_ao(st, p00, p11, p01, n_b, ua0, va0, ua2, va2, ua3, va3, a00, a11, a01)
 	st.generate_normals()
 	mi.mesh = st.commit()
 	mi.material_override = _wall_mat
@@ -731,24 +749,26 @@ func _wall_pt(
 	u: float, v: float, width: float
 ) -> Vector3:
 	var along := (u - 0.5) * width
-	var h := -0.18 + v * (wall_height + 0.42)
+	var h := -0.2 + v * (wall_height + 0.5)
 	var pos := base + right * along + Vector3.UP * h
-	# Soft at panel corners so seams don't fin; mid-wall gets full relief
+	# Soft at panel corners so seams don't fin; mid-wall full rocky relief
 	var edge_w := sin(clampf(u, 0.0, 1.0) * PI)
 	edge_w = edge_w * edge_w
-	var amp := lerpf(0.2, 1.0, edge_w)
-	# Mild tube + stronger angular rock facets (stepped noise = cave blocks)
-	var tube: float = sin(v * PI) * 0.18 + pow(v, 1.7) * 0.14
-	var n1: float = _cave_noise(pos.x * 0.7 + pos.z * 0.7, h * 1.1, 3)
-	var n2: float = _cave_noise(along * 1.1 + pos.x * 0.15, h * 1.7, 8)
-	var n3: float = _cave_noise(along * 2.6, h * 3.2, 17)
-	# Quantize mid frequencies → flatter angular planes instead of soft blobs
-	var facet: float = floorf(n2 * 4.0) / 4.0
-	var rock: float = n1 * 0.1 + facet * 0.16 + n3 * 0.07
-	# Occasional hard ledge shelf
-	var ledge: float = maxf(0.0, facet) * sin(v * PI) * 0.14
-	var push: float = (tube + rock + ledge) * amp
-	return pos + face_into * (push - 0.015)
+	var amp: float = lerpf(0.22, 1.0, edge_w)
+	# Mild vault + strong rocky outcrops (competitor: rocky cave, not smooth tube)
+	var tube: float = sin(v * PI) * 0.12 + pow(v, 1.55) * 0.1
+	var n1: float = _cave_noise(pos.x * 0.55 + pos.z * 0.55, h * 0.9, 3)
+	var n2: float = _cave_noise(pos.x * 1.2 + along * 0.8, h * 1.5, 8)
+	var n3: float = _cave_noise(along * 2.8 + pos.z * 0.3, h * 2.8, 17)
+	var n4: float = _cave_noise(pos.x * 3.5, h * 4.0 + along, 23)
+	# Faceted shelves + raw rock noise
+	var facet: float = floorf(n2 * 5.0) / 5.0
+	var rock: float = n1 * 0.16 + facet * 0.28 + n3 * 0.12 + n4 * 0.08
+	var ledge: float = maxf(0.0, facet) * (0.08 + 0.12 * sin(v * PI))
+	# Occasional hard bulge into corridor
+	var spike: float = maxf(0.0, n1 - 0.35) * 0.35
+	var push: float = (tube + rock + ledge + spike) * amp
+	return pos + face_into * (push - 0.02)
 
 
 ## Wall base + roof darkening (no vertical edge dark bands that look like seams).

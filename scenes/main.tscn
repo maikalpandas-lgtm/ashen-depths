@@ -7,30 +7,30 @@
 
 [sub_resource type="Environment" id="Environment_fog"]
 background_mode = 1
-background_color = Color(0.05, 0.1, 0.14, 1)
+background_color = Color(0.03, 0.06, 0.1, 1)
 ambient_light_source = 2
-ambient_light_color = Color(0.22, 0.38, 0.46, 1)
-ambient_light_energy = 0.28
+ambient_light_color = Color(0.18, 0.32, 0.4, 1)
+ambient_light_energy = 0.24
 tonemap_mode = 2
 glow_enabled = true
-glow_intensity = 0.45
-glow_bloom = 0.08
+glow_intensity = 0.5
+glow_bloom = 0.1
 fog_enabled = true
 fog_mode = 1
-fog_light_color = Color(0.18, 0.32, 0.42, 1)
-fog_sun_scatter = 0.04
+fog_light_color = Color(0.1, 0.2, 0.3, 1)
+fog_sun_scatter = 0.03
 fog_density = 1.0
-fog_aerial_perspective = 0.55
-fog_sky_affect = 0.8
+fog_aerial_perspective = 0.72
+fog_sky_affect = 0.9
 fog_height = 0.0
 fog_height_density = 0.0
-fog_depth_curve = 1.05
-fog_depth_begin = 3.0
-fog_depth_end = 14.0
+fog_depth_curve = 1.25
+fog_depth_begin = 1.6
+fog_depth_end = 9.5
 adjustment_enabled = true
-adjustment_brightness = 1.0
-adjustment_contrast = 1.05
-adjustment_saturation = 1.0
+adjustment_brightness = 0.98
+adjustment_contrast = 1.08
+adjustment_saturation = 0.95
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_1"]
 dof_blur_far_enabled = true

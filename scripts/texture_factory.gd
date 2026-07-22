@@ -41,6 +41,16 @@ static func cave_ceiling(size: int = 384) -> ImageTexture:
 	)
 
 
+## Toroidal (wrap) delta so rock texture tiles without visible square seams.
+static func _wrap_d(d: float, period: float) -> float:
+	var h := period * 0.5
+	if d > h:
+		d -= period
+	elif d < -h:
+		d += period
+	return d
+
+
 static func _angular_rock(
 	size: int,
 	ink: Color,
@@ -52,15 +62,16 @@ static func _angular_rock(
 	drips: bool
 ) -> ImageTexture:
 	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	var cols := maxi(5, int(1.0 / cell_scale))
-	var rows := cols + (1 if drips else 0)
+	var sf := float(size)
+	# Interior lattice only — wrap distance makes edges seamless
+	var cols := maxi(6, int(1.0 / cell_scale))
+	var rows := cols
 	var pts: Array[Vector2] = []
 	var ids: Array[int] = []
-	for j in range(rows + 2):
-		for i in range(cols + 2):
-			# Stronger jitter → irregular angular blocks
-			var px := (float(i) + 0.08 + _hash(i, j) * 0.84) / float(cols) * float(size)
-			var py := (float(j) + 0.08 + _hash(i + 4, j + 2) * 0.84) / float(rows) * float(size)
+	for j in range(rows):
+		for i in range(cols):
+			var px := (float(i) + 0.1 + _hash(i, j) * 0.8) / float(cols) * sf
+			var py := (float(j) + 0.1 + _hash(i + 4, j + 2) * 0.8) / float(rows) * sf
 			pts.append(Vector2(px, py))
 			ids.append(i * 97 + j * 31)
 
@@ -71,15 +82,14 @@ static func _angular_rock(
 			var second := 1e9
 			var bid := 0
 			for k in range(pts.size()):
-				var q: Vector2 = p - pts[k]
-				# Faceted distance: mix Chebyshev + Manhattan → angular stones, not round pebbles
-				var ax := absf(q.x)
-				var ay := absf(q.y) * (0.7 + _hash(ids[k], 3) * 0.6)
+				var qx := _wrap_d(p.x - pts[k].x, sf)
+				var qy := _wrap_d(p.y - pts[k].y, sf)
+				# Faceted rocky cells (not round pebbles)
+				var ax := absf(qx)
+				var ay := absf(qy) * (0.72 + _hash(ids[k], 3) * 0.55)
 				var d_box := maxf(ax, ay)
-				var d_man := (ax + ay) * 0.55
-				var d := d_box * 0.62 + d_man * 0.38
-				# Slight euclidean to avoid pure diamonds
-				d = d * 0.78 + sqrt(ax * ax + ay * ay) * 0.22
+				var d_man := (ax + ay) * 0.52
+				var d: float = d_box * 0.58 + d_man * 0.32 + sqrt(ax * ax + ay * ay) * 0.1
 				if d < best:
 					second = best
 					best = d
@@ -88,37 +98,36 @@ static func _angular_rock(
 					second = d
 
 			var edge := second - best
-			var ink_w := 3.2 + _hash(bid, 5) * 2.8  # thicker cracks
+			var ink_w := 3.4 + _hash(bid, 5) * 3.0
 			if edge < ink_w:
 				var t := edge / ink_w
 				var c_ink := ink.darkened(_hash(bid, 6) * 0.12)
-				if t < 0.4:
+				if t < 0.38:
 					img.set_pixel(x, y, c_ink)
 					continue
 				var fill := _stone_fill(bid, best, size, deep, mid, lite, hi)
-				img.set_pixel(x, y, c_ink.lerp(fill, (t - 0.4) / 0.6))
+				img.set_pixel(x, y, c_ink.lerp(fill, (t - 0.38) / 0.62))
 				continue
 
 			var fill2 := _stone_fill(bid, best, size, deep, mid, lite, hi)
-			# Harder inner rim (faceted depth)
-			if edge < ink_w + 4.0:
-				fill2 = fill2.darkened(0.14 * (1.0 - (edge - ink_w) / 4.0))
-			# Extra crack lines across large faces
-			if _hash(bid, 9) > 0.82 and int(best * 0.35 + float(x + y) * 0.02) % 17 == 0:
-				fill2 = fill2.darkened(0.18)
+			if edge < ink_w + 4.5:
+				fill2 = fill2.darkened(0.16 * (1.0 - (edge - ink_w) / 4.5))
+			if _hash(bid, 9) > 0.8 and int(best * 0.4 + float(x + y) * 0.03) % 13 == 0:
+				fill2 = fill2.darkened(0.2)
 			img.set_pixel(x, y, fill2)
 
+	# Seamless drips: darken vertical veins that wrap in X
 	if drips:
-		for x in range(size):
-			if _hash(x, 11) < 0.88:
+		for i in range(cols):
+			if _hash(i, 11) < 0.72:
 				continue
-			var len := 12 + int(_hash(x, 12) * 70.0)
-			var x0 := x
-			for y in range(mini(len, size)):
-				var c := img.get_pixel(x0, y)
-				img.set_pixel(x0, y, c.darkened(0.1 + float(y) / float(size) * 0.08))
-				if x0 + 1 < size and _hash(x, y) > 0.35:
-					img.set_pixel(x0 + 1, y, img.get_pixel(x0 + 1, y).darkened(0.06))
+			var x0 := int((float(i) + 0.5) / float(cols) * sf) % size
+			var len := 14 + int(_hash(i, 12) * 50.0)
+			for yy in range(len):
+				var y0 := yy % size
+				img.set_pixel(x0, y0, img.get_pixel(x0, y0).darkened(0.12))
+				var x1 := (x0 + 1) % size
+				img.set_pixel(x1, y0, img.get_pixel(x1, y0).darkened(0.07))
 
 	return _tex_with_mips(img)
 

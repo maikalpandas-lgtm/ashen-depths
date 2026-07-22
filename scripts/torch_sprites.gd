@@ -105,7 +105,7 @@ static func _apply_flame_shimmer(
 	spr.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
 
 
-## Single wall torch (no double V-fold). Glow + emission + light so it reads in dark caves.
+## Single wall torch (no double art). Depth via tilt + halo + emission + light on rock.
 static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) -> Node3D:
 	_ensure_textures()
 	if _torch_tex == null:
@@ -121,60 +121,60 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 		holder.rotation.y = 0.0 if wall_dir.y > 0.0 else PI
 	parent.add_child(holder)
 
-	# Warm halo (helps torch not look like a flat sticker in dark corridor)
-	if _glow_mat_fixed:
-		var glow := MeshInstance3D.new()
-		var quad := QuadMesh.new()
-		quad.size = Vector2(0.7, 0.85)
-		glow.mesh = quad
-		var gmat := _glow_mat_fixed.duplicate() as StandardMaterial3D
-		gmat.albedo_color = Color(1.0, 0.7, 0.3, 0.5)
-		glow.material_override = gmat
-		glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		glow.position = Vector3(0.0, 0.18, -0.14)
-		holder.add_child(glow)
-
-	# Soft contact shadow on wall behind bracket
+	# Soft contact shadow on wall
 	var blob := MeshInstance3D.new()
 	var bq := QuadMesh.new()
-	bq.size = Vector2(0.5, 0.85)
+	bq.size = Vector2(0.55, 0.95)
 	blob.mesh = bq
 	var bm := StandardMaterial3D.new()
 	bm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	bm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	bm.albedo_color = Color(0.0, 0.0, 0.0, 0.4)
+	bm.albedo_color = Color(0.0, 0.0, 0.0, 0.5)
 	bm.cull_mode = BaseMaterial3D.CULL_DISABLED
 	blob.material_override = bm
 	blob.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	blob.position = Vector3(0.0, -0.02, 0.05)
+	blob.position = Vector3(0.0, -0.04, 0.06)
 	holder.add_child(blob)
 
+	# Warm volume glow (not a second torch sprite)
+	if _glow_mat_fixed:
+		var glow := MeshInstance3D.new()
+		var quad := QuadMesh.new()
+		quad.size = Vector2(0.85, 1.0)
+		glow.mesh = quad
+		var gmat := _glow_mat_fixed.duplicate() as StandardMaterial3D
+		gmat.albedo_color = Color(1.0, 0.65, 0.28, 0.55)
+		glow.material_override = gmat
+		glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		glow.position = Vector3(0.0, 0.2, -0.18)
+		holder.add_child(glow)
+
 	var flip := wall_dir.x < 0 or wall_dir.y < 0
-	# Slight pitch so sprite isn't perfectly wall-parallel paper
-	var body := _make_sprite(_torch_tex, 0.0036, false)
+	# Tilt off the wall plane so it reads as volume (still ONE sprite)
+	var body := _make_sprite(_torch_tex, 0.0040, false)
 	body.name = "TorchBody"
-	body.position = Vector3(0.0, 0.0, -0.1)
-	body.rotation_degrees = Vector3(-6.0, 0.0, 0.0)
+	body.position = Vector3(0.0, 0.02, -0.14)
+	body.rotation_degrees = Vector3(-8.0, 18.0 if not flip else -18.0, 0.0)
 	body.flip_h = flip
 	holder.add_child(body)
-	_apply_flame_shimmer(body, _torch_tex, 0.5, 0.65, 0.018, 0.009, 2.4)
+	_apply_flame_shimmer(body, _torch_tex, 0.5, 0.65, 0.018, 0.009, 2.8)
 
 	var light := OmniLight3D.new()
 	light.name = "Light"
-	light.light_color = Color(1.0, 0.68, 0.35)
-	light.light_energy = 5.2
-	light.omni_range = 9.0
-	light.omni_attenuation = 0.95
+	light.light_color = Color(1.0, 0.65, 0.32)
+	light.light_energy = 5.8
+	light.omni_range = 9.5
+	light.omni_attenuation = 0.9
 	light.shadow_enabled = false
-	light.position = Vector3(0.0, 0.22, -0.38)
+	light.position = Vector3(0.0, 0.24, -0.42)
 	holder.add_child(light)
 
 	var fill := OmniLight3D.new()
 	fill.name = "Fill"
-	fill.light_color = Color(1.0, 0.5, 0.22)
-	fill.light_energy = 1.4
-	fill.omni_range = 2.8
-	fill.position = Vector3(0.0, 0.12, -0.16)
+	fill.light_color = Color(1.0, 0.48, 0.2)
+	fill.light_energy = 1.55
+	fill.omni_range = 3.0
+	fill.position = Vector3(0.0, 0.12, -0.18)
 	holder.add_child(fill)
 
 	return holder

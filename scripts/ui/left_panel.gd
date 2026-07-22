@@ -9,7 +9,7 @@ signal inventory_pressed
 signal settings_pressed
 
 @export var minimap_path: NodePath
-@export var portrait_size: float = 148.0
+@export var portrait_size: float = 100.0
 
 var _title: Label = null
 var _floor: Label = null
@@ -30,11 +30,11 @@ func _ready() -> void:
 func bind_minimap(m: Control) -> void:
 	_minimap = m
 	if _minimap and _minimap.has_method("setup"):
-		# Zoomed-in map: fewer cells, larger tiles
-		_minimap.set("tile", 24)
-		_minimap.set("gap", 3)
+		# Compact HUD map (competitor-sized panel, still readable)
+		_minimap.set("tile", 16)
+		_minimap.set("gap", 2)
 		_minimap.set("view_radius", 5)
-		_minimap.set("panel_size", 240)
+		_minimap.set("panel_size", 168)
 
 
 func set_minimap_node(m: Control) -> void:
@@ -82,14 +82,14 @@ func _build() -> void:
 
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_bottom", 12)
+	margin.add_theme_constant_override("margin_left", 8)
+	margin.add_theme_constant_override("margin_right", 8)
+	margin.add_theme_constant_override("margin_top", 8)
+	margin.add_theme_constant_override("margin_bottom", 8)
 	add_child(margin)
 
 	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 10)
+	col.add_theme_constant_override("separation", 6)
 	margin.add_child(col)
 
 	# --- header: title + gear ---
@@ -100,7 +100,7 @@ func _build() -> void:
 	_title = Label.new()
 	_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_title.add_theme_font_size_override("font_size", 20)
+	_title.add_theme_font_size_override("font_size", 15)
 	_title.add_theme_color_override("font_color", Color(0.95, 0.88, 0.7))
 	if UiTheme.display_font():
 		_title.add_theme_font_override("font", UiTheme.display_font())
@@ -116,32 +116,31 @@ func _build() -> void:
 
 	_floor = Label.new()
 	_floor.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_floor.add_theme_font_size_override("font_size", 12)
+	_floor.add_theme_font_size_override("font_size", 11)
 	_floor.add_theme_color_override("font_color", Color(0.72, 0.66, 0.78))
 	if UiTheme.title_font():
 		_floor.add_theme_font_override("font", UiTheme.title_font())
 	col.add_child(_floor)
 
-	# --- big minimap (slot; real Minimap reparented by main) ---
+	# --- compact minimap (competitor scale) ---
 	var map_frame := PanelContainer.new()
 	map_frame.name = "MinimapFrame"
-	map_frame.custom_minimum_size = Vector2(248, 248)
+	map_frame.custom_minimum_size = Vector2(176, 176)
 	map_frame.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	var map_style := StyleBoxFlat.new()
 	map_style.bg_color = Color(0.28, 0.22, 0.16, 1)
 	map_style.border_color = Color(0.55, 0.4, 0.25, 1)
 	map_style.set_border_width_all(3)
-	map_style.set_corner_radius_all(10)
-	map_style.content_margin_left = 6
-	map_style.content_margin_right = 6
-	map_style.content_margin_top = 6
-	map_style.content_margin_bottom = 6
+	map_style.set_corner_radius_all(8)
+	map_style.content_margin_left = 4
+	map_style.content_margin_right = 4
+	map_style.content_margin_top = 4
+	map_style.content_margin_bottom = 4
 	map_frame.add_theme_stylebox_override("panel", map_style)
 	col.add_child(map_frame)
-	# Placeholder so main can reparent minimap here
 	var map_slot := Control.new()
 	map_slot.name = "MinimapSlot"
-	map_slot.custom_minimum_size = Vector2(236, 236)
+	map_slot.custom_minimum_size = Vector2(168, 168)
 	map_frame.add_child(map_slot)
 
 	# --- large portrait (cartoon, emotional) ---
@@ -167,7 +166,7 @@ func _build() -> void:
 
 	_hero_name = Label.new()
 	_hero_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hero_name.add_theme_font_size_override("font_size", 16)
+	_hero_name.add_theme_font_size_override("font_size", 13)
 	_hero_name.add_theme_color_override("font_color", Color(0.95, 0.85, 0.65))
 	if UiTheme.title_font():
 		_hero_name.add_theme_font_override("font", UiTheme.title_font())
@@ -175,7 +174,7 @@ func _build() -> void:
 
 	# --- HP ---
 	_hp_bar = ProgressBar.new()
-	_hp_bar.custom_minimum_size = Vector2(0, 16)
+	_hp_bar.custom_minimum_size = Vector2(0, 12)
 	_hp_bar.show_percentage = false
 	var hp_bg := StyleBoxFlat.new()
 	hp_bg.bg_color = Color(0.12, 0.08, 0.1, 1)
@@ -200,19 +199,20 @@ func _build() -> void:
 	col.add_child(bottom)
 
 	_gold_label = Label.new()
-	_gold_label.add_theme_font_size_override("font_size", 18)
+	_gold_label.add_theme_font_size_override("font_size", 15)
 	_gold_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.35))
 	if UiTheme.title_font():
 		_gold_label.add_theme_font_override("font", UiTheme.title_font())
 	bottom.add_child(_gold_label)
 
 	var inv := Button.new()
-	inv.text = " 🎒 Инвентарь "
-	inv.custom_minimum_size = Vector2(0, 36)
+	inv.text = " 🎒 "
+	inv.tooltip_text = "Инвентарь / колода"
+	inv.custom_minimum_size = Vector2(40, 30)
 	inv.pressed.connect(func(): inventory_pressed.emit())
 	bottom.add_child(inv)
 
-	custom_minimum_size = Vector2(268, 620)
+	custom_minimum_size = Vector2(188, 520)
 
 
 func take_minimap_slot() -> Control:

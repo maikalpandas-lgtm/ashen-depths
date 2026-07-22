@@ -107,30 +107,37 @@ func _form_up() -> void:
 		return
 	var player := players[0] as Node3D
 
+	# "Forward" = from player toward pack (along corridor). Row spreads on `right`.
 	var forward := _source.global_position - player.global_position
 	forward.y = 0.0
 	if forward.length() < 0.01:
 		forward = Vector3.FORWARD
 	forward = forward.normalized()
 	var right := Vector3(-forward.z, 0.0, forward.x)
+	# Pull the line slightly toward the player so fat sprites sit in free air,
+	# not half-buried in the rock wall behind the pack tile.
+	var center: Vector3 = _source.global_position - forward * 0.35
 
 	var dungeon := _source.get_parent().get_parent() if _source.get_parent() else null
 	var n := _enemy_nodes.size()
-	# Corridors are one tile wide, so the row has to stay inside ~±1.15m or the
-	# outer monsters stand inside the rock.
-	var spacing: float = 2.3 / maxf(1.0, float(n - 1)) if n > 1 else 0.0
-	spacing = minf(spacing, 1.25)
+	# Corridor free width ~2.0–2.2m. Prefer a clear left→right row even if tight:
+	# grubs are wide (~1m art) so for 3+ we use denser spacing + slight scale-down.
+	var half_span: float = 0.95 if n <= 2 else 1.05
+	var spacing: float = 0.0 if n <= 1 else (2.0 * half_span) / float(n - 1)
+	var combat_scale: float = 1.0 if n <= 2 else (0.82 if n == 3 else 0.72)
 
 	for i in range(n):
 		var node := _enemy_nodes[i] as Node3D
 		if not is_instance_valid(node):
 			continue
 		var offset := (float(i) - float(n - 1) * 0.5) * spacing
-		var spot: Vector3 = _source.global_position + right * offset
+		var spot: Vector3 = center + right * offset
 		var ground := spot.y
 		if dungeon and dungeon.has_method("floor_height_at"):
-			ground = dungeon.call("floor_height_at", spot.x, spot.z)
+			ground = float(dungeon.call("floor_height_at", spot.x, spot.z))
 		node.global_position = Vector3(spot.x, ground, spot.z)
+		node.scale = Vector3(combat_scale, combat_scale, combat_scale)
+		# Billboard FIXED_Y on the sprite handles facing — don't yaw the holder
 
 
 ## Turn the crawler to look at the pack. The trigger fires from the neighbouring
@@ -175,12 +182,13 @@ func _enter_combat_view() -> void:
 	back = back.normalized()
 
 	_cam = Camera3D.new()
-	_cam.fov = 62.0
+	# Wider FOV + step back so a 3-wide pack fits side-by-side on screen
+	_cam.fov = 68.0
 	_cam.near = 0.05
 	_cam.far = 40.0
 	get_tree().current_scene.add_child(_cam)
-	_cam.global_position = pack + back * 3.6 + Vector3.UP * 2.05
-	_cam.look_at(pack + Vector3.UP * 0.75, Vector3.UP)
+	_cam.global_position = pack + back * 4.1 + Vector3.UP * 2.15
+	_cam.look_at(pack + Vector3.UP * 0.7, Vector3.UP)
 	_cam.current = true
 
 	_stage_light = OmniLight3D.new()

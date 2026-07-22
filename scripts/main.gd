@@ -58,10 +58,11 @@ func _setup_left_hud() -> void:
 	if left_panel.has_method("_build"):
 		left_panel.call("_build")
 
-	left_panel.offset_left = 12.0
-	left_panel.offset_top = 12.0
-	left_panel.offset_right = 292.0
-	left_panel.offset_bottom = 720.0
+	# Compact competitor-scale panel (~188px wide)
+	left_panel.offset_left = 10.0
+	left_panel.offset_top = 10.0
+	left_panel.offset_right = 200.0
+	left_panel.offset_bottom = 560.0
 
 	if held_map:
 		var slot: Control = left_panel.call("take_minimap_slot") as Control
@@ -83,7 +84,7 @@ func _setup_left_hud() -> void:
 		if not left_panel.settings_pressed.is_connected(_on_settings):
 			left_panel.settings_pressed.connect(_on_settings)
 
-	bottom_bar.offset_left = 304.0
+	bottom_bar.offset_left = 212.0
 
 
 func _on_inventory() -> void:

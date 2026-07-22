@@ -19,13 +19,14 @@ const ART_DIR := "res://assets/textures/"
 const CARD_W := 150
 const CARD_H := 210
 
-## Zones inside the frame, as fractions of the card. These are the contract with
-## the artwork — the same table is in docs/ART_PROMPTS.md §3.5, and a frame that
-## does not match it will have text sitting off its ribbon.
-const COST_RECT := Rect2(0.02, 0.01, 0.20, 0.15)
-const ART_RECT := Rect2(0.08, 0.15, 0.84, 0.37)
-const NAME_RECT := Rect2(0.06, 0.54, 0.88, 0.09)
-const TEXT_RECT := Rect2(0.10, 0.66, 0.80, 0.27)
+## Zones inside the frame, as fractions of the card. MEASURED off card_frame.png
+## rather than guessed — the delivered frame put its window and ribbon well
+## inside my original estimates, so text would have sat on bare parchment.
+## Same table is mirrored in docs/ART_PROMPTS.md §3.5 for the next frame.
+const COST_RECT := Rect2(0.126, 0.081, 0.238, 0.170)  ## medallion socket
+const ART_RECT := Rect2(0.210, 0.147, 0.570, 0.276)  ## inside the wooden window
+const NAME_RECT := Rect2(0.260, 0.487, 0.480, 0.069)  ## flat middle of the ribbon
+const TEXT_RECT := Rect2(0.160, 0.600, 0.680, 0.280)  ## empty parchment below
 
 var _party: Party = null
 var _deck: Deck = null
@@ -240,6 +241,15 @@ func _make_card(entry: Dictionary) -> Control:
 	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_place(art, ART_RECT)
 	root.add_child(art)
+
+	# The frame's medallion socket overlaps the top-left of its own art window,
+	# so the badge has to go ON TOP of the illustration or the art buries it.
+	var badge := TextureRect.new()
+	badge.texture = _load_art("card_cost_badge_blood" if is_blood else "card_cost_badge")
+	badge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	badge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_place(badge, COST_RECT)
+	root.add_child(badge)
 
 	var cost := Label.new()
 	cost.text = str(card["blood"]) if is_blood else str(card["energy"])

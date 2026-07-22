@@ -18,13 +18,13 @@ const NAV_FROM_FLOOR := 3
 ## when a floor sits on the boundary.
 const ENEMIES := {
 	# --- копи (верхние этажи) ---
-	"grub": {"art": "enemy_grub", "height": 0.95, "hp": 8, "name": "Пещерный грызун", "realm": "mine"},
+	"grub": {"art": "enemy_grub", "height": 1.25, "hp": 8, "name": "Пещерный грызун", "realm": "mine"},
 	"brute": {"art": "enemy_brute", "height": 2.25, "hp": 26, "name": "Каменный дед", "realm": "mine"},
 	"shade": {"art": "enemy_shade", "height": 1.7, "hp": 14, "name": "Тень рудокопа", "realm": "mine"},
 	# --- навь (нижние этажи) ---
-	"anchutka": {"art": "enemy_anchutka", "height": 0.8, "hp": 7, "name": "Анчутка", "realm": "nav"},
+	"anchutka": {"art": "enemy_anchutka", "height": 1.1, "hp": 7, "name": "Анчутка", "realm": "nav"},
 	"likho": {"art": "enemy_likho", "height": 2.1, "hp": 30, "name": "Лихо Одноглазое", "realm": "nav"},
-	"mavka": {"art": "enemy_mavka", "height": 1.65, "hp": 15, "name": "Мавка", "realm": "nav"},
+	"mavka": {"art": "enemy_mavka", "height": 1.75, "hp": 15, "name": "Мавка", "realm": "nav"},
 	"poludnitsa": {"art": "enemy_poludnitsa", "height": 1.75, "hp": 20, "name": "Полудница", "realm": "nav"},
 }
 

@@ -27,6 +27,17 @@ var _source: Node3D = null  ## pack node in the world, freed on victory
 var _enemy_nodes: Array = []  ## world node per combat.enemies index
 var _dragging: int = -1  ## hand index being dragged, -1 = none
 var _drag_from := Vector2.ZERO
+## Rebuilding the hand happens on the next frame, never inside a card's own
+## button signal: freeing the button that is mid-emit makes add_child fail with
+## "parent node is busy setting up children" and the hand vanishes.
+var _hand_dirty := false
+
+## Combat framing: a dedicated camera and light, both dropped in for the fight
+## and removed after. Fighting through the crawler camera put the pack tiny,
+## unlit and half-hidden behind the player's own torch.
+var _cam: Camera3D = null
+var _stage_light: OmniLight3D = null
+var _viewmodel: Node3D = null
 
 var _root: Control = null
 var _world_layer: Control = null  ## HP bars drawn over the 3D view
@@ -57,6 +68,7 @@ func _on_combat_requested(pack: Array, source: Node) -> void:
 	_combat = Combat.new(party, pack, fight_seed)
 	_dragging = -1
 	_face_the_pack()
+	_enter_combat_view()
 	_root.visible = true
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -91,7 +103,67 @@ func _face_the_pack() -> void:
 	player.rotation.y = round(yaw / (PI * 0.5)) * (PI * 0.5)
 
 
+## Frame the pack: camera pulled back and lifted, looking slightly down so the
+## monsters sit in the upper half above the hand, plus a light so they are not
+## silhouettes. The player's hands are hidden — they fill a third of the screen
+## and there is nothing to swing during a card fight.
+func _enter_combat_view() -> void:
+	if not is_instance_valid(_source):
+		return
+	var players := get_tree().get_nodes_in_group("player")
+	if players.is_empty():
+		return
+	var player := players[0] as Node3D
+
+	_viewmodel = player.get_node_or_null("Head/Camera3D/ViewModel") as Node3D
+	if _viewmodel:
+		_viewmodel.visible = false
+
+	var pack: Vector3 = _source.global_position
+	var back := (player.global_position - pack)
+	back.y = 0.0
+	if back.length() < 0.01:
+		back = Vector3.BACK
+	back = back.normalized()
+
+	_cam = Camera3D.new()
+	_cam.fov = 62.0
+	_cam.near = 0.05
+	_cam.far = 40.0
+	get_tree().current_scene.add_child(_cam)
+	_cam.global_position = pack + back * 3.6 + Vector3.UP * 2.05
+	_cam.look_at(pack + Vector3.UP * 0.75, Vector3.UP)
+	_cam.current = true
+
+	_stage_light = OmniLight3D.new()
+	_stage_light.light_color = Color(1.0, 0.9, 0.78)
+	_stage_light.light_energy = 4.2
+	_stage_light.omni_range = 7.0
+	_stage_light.omni_attenuation = 1.1
+	get_tree().current_scene.add_child(_stage_light)
+	_stage_light.global_position = pack + Vector3.UP * 2.6 + back * 1.2
+
+
+func _exit_combat_view() -> void:
+	if _viewmodel and is_instance_valid(_viewmodel):
+		_viewmodel.visible = true
+	_viewmodel = null
+	if _cam and is_instance_valid(_cam):
+		_cam.queue_free()
+	_cam = null
+	if _stage_light and is_instance_valid(_stage_light):
+		_stage_light.queue_free()
+	_stage_light = null
+	# Hand the view back to the crawler
+	var players := get_tree().get_nodes_in_group("player")
+	if not players.is_empty():
+		var pc := (players[0] as Node3D).get_node_or_null("Head/Camera3D") as Camera3D
+		if pc:
+			pc.current = true
+
+
 func _close() -> void:
+	_exit_combat_view()
 	_root.visible = false
 	get_tree().paused = false
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -103,6 +175,9 @@ func _close() -> void:
 func _process(_delta: float) -> void:
 	if not _root.visible:
 		return
+	if _hand_dirty:
+		_hand_dirty = false
+		_render_hand()
 	_world_layer.queue_redraw()
 	if _dragging >= 0:
 		_line_layer.queue_redraw()
@@ -120,7 +195,7 @@ func _build_ui() -> void:
 	var shade := ColorRect.new()
 	shade.color = Color(0.02, 0.03, 0.05, 0.5)
 	shade.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	shade.offset_top = -230
+	shade.offset_top = -212
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(shade)
 
@@ -190,7 +265,7 @@ func _build_ui() -> void:
 func _refresh() -> void:
 	if _combat == null:
 		return
-	_render_hand()
+	_hand_dirty = true
 	_sync_world_sprites()
 
 	_status.text = "⚡ %d/%d    🛡 %d    🦴 %d    ❤ %d" % [
@@ -335,7 +410,7 @@ func _start_drag(index: int, holder: Control) -> void:
 		return
 	_dragging = index
 	_drag_from = holder.global_position + holder.size * 0.5
-	_render_hand()
+	_hand_dirty = true
 
 
 ## Released: over an enemy it resolves there; a card that needs no target

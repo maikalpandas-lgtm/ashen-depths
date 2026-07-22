@@ -306,9 +306,10 @@ func _build_ui() -> void:
 
 	_status = Label.new()
 	_status.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_status.offset_left = 26
+	# Sit clear of the left HUD (~188px) so ⚡ energy is actually readable
+	_status.offset_left = 210
 	_status.offset_top = -212
-	_status.offset_right = 470
+	_status.offset_right = 620
 	_status.offset_bottom = -178
 	_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	UiTheme.as_title(_status, 19, Color(0.95, 0.96, 1.0))
@@ -642,6 +643,9 @@ func _make_hand_card(index: int) -> Control:
 	var hit := Button.new()
 	hit.flat = true
 	hit.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Without this, moving the cursor off the card cancels the press — button_up
+	# never fires on release over an enemy, so damage cards never resolve.
+	hit.keep_pressed_outside = true
 	hit.disabled = not playable or _combat.phase != Combat.Phase.PLAYER
 	hit.button_down.connect(func(): _start_drag(index, holder))
 	hit.button_up.connect(_finish_drag)
@@ -651,6 +655,18 @@ func _make_hand_card(index: int) -> Control:
 
 
 # ---------------------------------------------------------------- interaction
+
+## Global mouse-up is the reliable finish: Button.button_up alone fails when the
+## release lands outside the card (which is every real target drop).
+func _input(event: InputEvent) -> void:
+	if not _root.visible or _dragging < 0:
+		return
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed:
+			_finish_drag()
+			get_viewport().set_input_as_handled()
+
 
 func _start_drag(index: int, holder: Control) -> void:
 	if _combat == null or _combat.phase != Combat.Phase.PLAYER:
@@ -680,17 +696,27 @@ func _finish_drag() -> void:
 	if int(card["damage"]) <= 0:
 		_combat.play_card(index, 0)
 	else:
-		var target := _hover_enemy()
-		if target < 0:
-			target = _only_living_enemy()
+		var target := _pick_damage_target()
 		if target >= 0:
 			_combat.play_card(index, target)
 		else:
 			# Missed the drop: give a short log so it doesn't feel broken
 			if _status:
-				_status.text = "наведи карту на врага"
+				_status.text = "наведи карту на врага  ·  ⚡ %d" % _combat.energy
 	_play_events()
 	_refresh()
+
+
+## Prefer the enemy under the cursor; else solo pack auto-target; else nearest.
+func _pick_damage_target() -> int:
+	var hovered := _hover_enemy()
+	if hovered >= 0:
+		return hovered
+	var only := _only_living_enemy()
+	if only >= 0:
+		return only
+	# Multi-pack and a near miss: still land on the closest silhouette
+	return _nearest_living_enemy(420.0)
 
 
 ## One living foe left → always a valid target (solo packs / last standing).
@@ -707,35 +733,67 @@ func _only_living_enemy() -> int:
 	return found
 
 
-## Which living enemy the cursor is over, by screen distance to its sprite.
-func _hover_enemy() -> int:
+## Closest living enemy within max screen distance, or -1.
+func _nearest_living_enemy(max_dist: float) -> int:
 	if _combat == null:
 		return -1
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
 		return -1
-	# Viewport coords — matches Camera3D.unproject_position (not Control-local)
 	var mouse := get_viewport().get_mouse_position()
 	var best := -1
-	var best_d := 260.0  # generous — fat sprites + offset UI
-	for i in range(mini(_enemy_nodes.size(), _combat.enemies.size())):
-		var node := _enemy_nodes[i] as Node3D
-		if not is_instance_valid(node) or int(_combat.enemies[i]["hp"]) <= 0:
+	var best_d := max_dist
+	for i in range(_combat.enemies.size()):
+		if int(_combat.enemies[i]["hp"]) <= 0:
 			continue
-		var top_h := _enemy_top(i)
-		# Test mid + a few points on the silhouette so tall/short enemies all hit
-		var points: Array[Vector3] = [
-			node.global_position + Vector3.UP * (top_h * 0.55),
-			node.global_position + Vector3.UP * (top_h * 0.25),
-			node.global_position + Vector3.UP * (top_h * 0.85),
-		]
-		for mid in points:
-			if cam.is_position_behind(mid):
-				continue
-			var d := cam.unproject_position(mid).distance_to(mouse)
-			if d < best_d:
-				best_d = d
-				best = i
+		var screen := _enemy_screen_pos(i, cam)
+		if screen.x < -9000.0:
+			continue
+		var d: float = screen.distance_to(mouse)
+		if d < best_d:
+			best_d = d
+			best = i
+	return best
+
+
+## Which living enemy the cursor is over, by screen distance to its sprite.
+func _hover_enemy() -> int:
+	return _nearest_living_enemy(300.0)
+
+
+## Project an enemy silhouette sample to viewport pixels. Returns far-off point
+## if the node/camera cannot resolve it (so distance checks fail closed).
+func _enemy_screen_pos(index: int, cam: Camera3D) -> Vector2:
+	if index < 0 or index >= _enemy_nodes.size():
+		# No 3D node (desync) — still allow targeting via combat row heuristics
+		var n := _combat.enemies.size()
+		if n <= 0:
+			return Vector2(-99999, -99999)
+		var vp := get_viewport().get_visible_rect().size
+		var t := 0.5 if n == 1 else float(index) / float(n - 1)
+		return Vector2(lerpf(vp.x * 0.28, vp.x * 0.72, t), vp.y * 0.38)
+	var node := _enemy_nodes[index] as Node3D
+	if not is_instance_valid(node):
+		return Vector2(-99999, -99999)
+	var top_h := _enemy_top(index)
+	var points: Array[Vector3] = [
+		node.global_position + Vector3.UP * (top_h * 0.55),
+		node.global_position + Vector3.UP * (top_h * 0.25),
+		node.global_position + Vector3.UP * (top_h * 0.85),
+		node.global_position + Vector3.UP * (top_h * 0.45) + Vector3.RIGHT * 0.35,
+		node.global_position + Vector3.UP * (top_h * 0.45) + Vector3.LEFT * 0.35,
+	]
+	var best := Vector2(-99999, -99999)
+	var best_d := INF
+	var mouse := get_viewport().get_mouse_position()
+	for mid in points:
+		if cam.is_position_behind(mid):
+			continue
+		var p := cam.unproject_position(mid)
+		var d := p.distance_to(mouse)
+		if d < best_d:
+			best_d = d
+			best = p
 	return best
 
 

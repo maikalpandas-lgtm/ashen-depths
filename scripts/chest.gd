@@ -28,12 +28,13 @@ func try_open() -> void:
 	print("[Chest] +%d gold (total %d)" % [amount, GameState.gold if GameState else amount])
 	var label := get_node_or_null("Label3D") as Label3D
 	if label:
-		label.text = "Empty"
-	var mesh := get_node_or_null("MeshInstance3D") as MeshInstance3D
-	if mesh:
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color(0.25, 0.2, 0.12)
-		mesh.material_override = mat
+		label.text = "Пусто"
+	# Dim the 2D chest sprite once looted
+	var holder := get_node_or_null("ChestSprite") as Node3D
+	if holder:
+		var spr := holder.get_node_or_null("Sprite") as Sprite3D
+		if spr:
+			spr.modulate = Color(0.45, 0.42, 0.4, 0.9)
 
 
 func _on_body_entered(body: Node3D) -> void:

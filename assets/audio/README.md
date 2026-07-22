@@ -1,16 +1,18 @@
-# Audio (MVP)
+# Audio
 
-SFX curated from **Kenney** packs (CC0 1.0 — see `KENNEY_LICENSE.txt`):
+## SFX (Kenney CC0)
 
-- [Impact Sounds](https://kenney.nl/assets/impact-sounds)
-- [UI Audio](https://kenney.nl/assets/ui-audio)
-- [RPG Audio](https://kenney.nl/assets/rpg-audio)
-- [Interface Sounds](https://kenney.nl/assets/interface-sounds)
-- [Digital Audio](https://kenney.nl/assets/digital-audio)
-
-Renamed in `sfx/` for game ids. Play via autoload `Sfx.play("hit")`.
+See `KENNEY_LICENSE.txt`. Packs: Impact, UI, RPG, Interface, Digital.  
+Play: `Sfx.play("hit")`.
 
 ## Music
 
-- `music/explore_loop.ogg`, `music/combat_loop.ogg` — short procedural ambient beds (project-made, free to use).
-- `jingles/` — from [Kenney Music Jingles](https://kenney.nl/assets/music-jingles) (CC0).
+Full credits: **`MUSIC_CREDITS.md`**.
+
+| File | Role |
+|------|------|
+| `music/explore_loop.mp3` | Dungeon crawl bed (Dark Ambience, CC0) |
+| `music/combat_loop.mp3` | Combat bed (Battle Theme A, CC0) |
+| `jingles/*.ogg` | Title / win / lose / level-up / shop (Kenney CC0) |
+
+Buses: **Master · Music · SFX** (`default_bus_layout.tres`). Volumes: Esc menu → `user://audio_settings.cfg`.

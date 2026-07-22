@@ -176,8 +176,11 @@ python3 tools/sprite_cutter.py path/to/raw.jpg assets/textures/out.png \
 | **prop_wall_torch** | `torch.png` | `masters/prop_wall_torch.png` | `masters/prop_wall_torch_source.jpg` | Факел на стене + крепёж (**одно ухо справа**) |
 | **fx_flame** | `flame_only.png` | `masters/fx_flame.png` | `masters/fx_flame_source.jpg` | Только пламя (анимация tip) |
 | **fx_torch_glow** | `torch_glow.png` | `masters/fx_torch_glow.png` | procedural | Soft radial glow |
+| **prop_chest** | `prop_chest.png` | `masters/prop_chest.png` | `masters/prop_chest_source.jpg` | Сундук (Sprite3D, billboard Y) |
+| **prop_brazier** | `prop_brazier.png` | `masters/prop_brazier.png` | `masters/prop_brazier_source.jpg` | Настенная жаровня + cyan OmniLight |
 
-Код: `scripts/torch_sprites.gd` → `make_wall_torch()`.
+Код: `scripts/torch_sprites.gd` → `make_wall_torch()`;  
+`scripts/prop_sprites.gd` → `make_chest()` / `make_brazier()`.
 
 ⚠️ **prop_wall_torch:** в игре должен быть вариант с **одним** креплением справа
 (режется из `masters/prop_wall_torch_source.jpg`, белый фон):
@@ -212,3 +215,14 @@ python3 tools/sprite_cutter.py assets/textures/masters/prop_wall_torch_source.jp
 | `images/7.jpg` | fx_flame |
 
 Позже magenta-пачка (`12–15` / `raw/*_raw.jpg`) — запасные, не трогаем без запроса.
+
+---
+
+## Props (коридор, 2D)
+
+| ID | Файл в игре | Master PNG | Source | Назначение |
+|----|-------------|------------|--------|------------|
+| **prop_chest** | `prop_chest.png` | `masters/prop_chest.png` | `masters/prop_chest_source.jpg` | Сундук (Area3D + Sprite3D) |
+| **prop_brazier** | `prop_brazier.png` | `masters/prop_brazier.png` | `masters/prop_brazier_source.jpg` | Настенная жаровня + cyan light |
+
+Код: `scripts/prop_sprites.gd` · спавн: `dungeon_generator.gd` `_spawn_chest` / `_spawn_brazier`.

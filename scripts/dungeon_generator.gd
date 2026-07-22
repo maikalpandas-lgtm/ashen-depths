@@ -3,6 +3,7 @@ extends Node3D
 
 const TorchSprites = preload("res://scripts/torch_sprites.gd")
 const EnemySprites = preload("res://scripts/enemy_sprites.gd")
+const PropSprites = preload("res://scripts/prop_sprites.gd")
 const ROCK_SHADER = preload("res://shaders/cave_rock.gdshader")
 
 ## How far rock may bulge into the corridor. Keeps the walking line clear —
@@ -1170,36 +1171,10 @@ func _first_wall_dir(x: int, y: int) -> Vector2i:
 
 
 func _spawn_brazier(pos: Vector3) -> void:
-	var bowl := MeshInstance3D.new()
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.18
-	cyl.bottom_radius = 0.14
-	cyl.height = 0.22
-	bowl.mesh = cyl
-	var bm := StandardMaterial3D.new()
-	bm.albedo_color = Color(0.25, 0.3, 0.34)
-	bowl.material_override = bm
-	bowl.position = pos + Vector3(0, 0.12, 0)
-	props_root.add_child(bowl)
-	var flame := MeshInstance3D.new()
-	var sm := SphereMesh.new()
-	sm.radius = 0.12
-	sm.height = 0.22
-	flame.mesh = sm
-	var fm := StandardMaterial3D.new()
-	fm.albedo_color = Color(0.45, 0.8, 1.0)
-	fm.emission_enabled = true
-	fm.emission = Color(0.4, 0.75, 1.0)
-	fm.emission_energy_multiplier = 2.5
-	flame.material_override = fm
-	flame.position = pos + Vector3(0, 0.35, 0)
-	props_root.add_child(flame)
-	var light := OmniLight3D.new()
-	light.light_color = Color(0.55, 0.8, 1.0)
-	light.light_energy = 1.4
-	light.omni_range = 5.0
-	light.position = pos + Vector3(0, 0.4, 0)
-	props_root.add_child(light)
+	# 2D sprite + light (Phase 5 debt: no more cylinder/sphere placeholders)
+	var cell := world_to_cell(pos)
+	var wd := _first_wall_dir(cell.x, cell.y)
+	PropSprites.make_brazier(props_root, pos, wd)
 
 
 func _spawn_props_and_entities() -> void:
@@ -1224,36 +1199,27 @@ func _spawn_props_and_entities() -> void:
 
 func _spawn_chest(world: Vector3) -> void:
 	var area := Area3D.new()
-	area.position = world + Vector3(0, 0.4, 0)
+	# Anchor on floor; sprite stands from ground
+	area.position = world
 	area.collision_layer = 4
 	area.collision_mask = 2
 	area.monitoring = true
 
-	var mesh := MeshInstance3D.new()
-	mesh.name = "MeshInstance3D"
-	var box := BoxMesh.new()
-	box.size = Vector3(0.9, 0.55, 0.6)
-	mesh.mesh = box
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.8, 0.55, 0.2)
-	mat.metallic = 0.45
-	mat.emission_enabled = true
-	mat.emission = Color(0.5, 0.3, 0.05)
-	mat.emission_energy_multiplier = 0.6
-	mesh.material_override = mat
-	area.add_child(mesh)
+	var gy := _floor_height(world.x, world.z) - world.y
+	PropSprites.make_chest(area, Vector3.ZERO, gy)
 
 	var col := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
 	shape.size = Vector3(1.2, 1.0, 1.2)
 	col.shape = shape
+	col.position = Vector3(0, 0.5, 0)
 	area.add_child(col)
 
 	var label := Label3D.new()
 	label.name = "Label3D"
-	label.text = "Chest"
-	label.position = Vector3(0, 0.75, 0)
-	label.font_size = 28
+	label.text = "Сундук"
+	label.position = Vector3(0, 1.15, 0)
+	label.font_size = 26
 	label.modulate = Color(1, 0.9, 0.5)
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	area.add_child(label)

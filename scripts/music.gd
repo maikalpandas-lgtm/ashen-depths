@@ -115,19 +115,19 @@ func _swap_track(stream: AudioStream, target_db: float) -> void:
 
 
 func _start_stream(stream: AudioStream, target_db: float) -> void:
-	if stream is AudioStreamMP3:
-		(stream as AudioStreamMP3).loop = true
-	elif stream is AudioStreamWAV:
-		(stream as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
-	elif stream is AudioStreamOggVorbis:
-		(stream as AudioStreamOggVorbis).loop = true
-	_player.stream = stream
+	# Duplicate so loop flags don't mutate the cached Resource
+	var play_stream: AudioStream = stream.duplicate() if stream != null else null
+	if play_stream is AudioStreamMP3:
+		(play_stream as AudioStreamMP3).loop = true
+	elif play_stream is AudioStreamWAV:
+		(play_stream as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+	elif play_stream is AudioStreamOggVorbis:
+		(play_stream as AudioStreamOggVorbis).loop = true
+	_player.stream = play_stream
 	_player.volume_db = -28.0
 	_player.play()
-	if _fade_tw and _fade_tw.is_valid():
-		pass
 	var tw := create_tween()
-	tw.tween_property(_player, "volume_db", target_db, 0.55)
+	tw.tween_property(_player, "volume_db", target_db, 0.8)
 
 
 func _load_loop(stem: String) -> AudioStream:

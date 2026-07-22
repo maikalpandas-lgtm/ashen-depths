@@ -42,10 +42,18 @@ godot --headless --script tests/run_tests.gd
 
 ## Audio
 
-- SFX: Kenney CC0 (`assets/audio/sfx/`)
-- Jingles: Kenney Music Jingles CC0 (`assets/audio/jingles/`)
-- Explore/combat beds: short procedural loops (`assets/audio/music/`)
+- SFX + jingles: Kenney CC0  
+- Explore: *Dark Ambience* (Alexandr Zhelanov, CC0)  
+- Combat: *Battle Theme A* (jobromedia, CC0)  
+- Credits: `assets/audio/MUSIC_CREDITS.md`
+
+## Export
+
+```bash
+./tools/export_demo.sh macos   # ad-hoc codesign included
+# details: docs/EXPORT.md
+```
 
 ## Status
 
-Phases **0–5** playable demo: labyrinth, combat, drafts, bosses, backpack, shops, music, settings, export presets.
+Phases **0–5** + polish debts (2D props, full music, export tooling) playable demo.

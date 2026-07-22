@@ -61,7 +61,9 @@
 - [x] Title splash + Esc pause/settings
 - [x] Balance pass (enemy HP, slice 7, XP curve)
 - [x] Export presets macOS / Windows / Web + `docs/EXPORT.md`
-- [ ] Further art polish (chest/brazier 2D sprites — still debt)
+- [x] Chest + brazier 2D sprites (`prop_chest` / `prop_brazier`)
+- [x] Full music beds (OGA CC0 Dark Ambience + Battle Theme A)
+- [x] Export templates present + `tools/export_demo.sh` + codesign docs
 
 ---
 
@@ -70,9 +72,7 @@
 - [x] **Славянский арт (батч 5):** Витязь / Поляница / Волхв + анчутка, лихо,
   мавка, полудница — `assets/textures/hero_*` / `enemy_*`, §3.7.
 
-- Сундук и жаровни — до сих пор 3D-меши-заглушки (куб и цилиндр).
-  По концепту все объекты должны быть 2D-спрайтами — см. `AGENTS.md`.
-  Враги уже переведены на спрайты.
+- [x] Сундук и жаровни — 2D-спрайты (`prop_sprites.gd`).
 - Спрайт в руке глушит `no_depth_test` через `material_override`; сейчас спасает
   ограничение выпирания скалы (`PUSH_LIMIT`). Правильное решение — вариант
   шейдера с `depth_test_disabled` через общий `.gdshaderinc`.

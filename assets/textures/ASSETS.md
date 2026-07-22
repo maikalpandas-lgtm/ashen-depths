@@ -104,9 +104,13 @@ python3 tools/sprite_cutter.py path/to/raw.jpg assets/textures/out.png \
 | **hero_kael** | `hero_kael.png` | `masters/hero_kael.png` | `masters/hero_kael_source.jpg` | Каэль, паладин / танк |
 | **hero_lyra** | `hero_lyra.png` | `masters/hero_lyra.png` | `masters/hero_lyra_source.jpg` | Лира, охотница / DPS |
 | **hero_sera** | `hero_sera.png` | `masters/hero_sera.png` | `masters/hero_sera_source.jpg` | Сера, огненный маг / AoE |
+| **hero_vityaz** | `hero_vityaz.png` | `masters/hero_vityaz.png` | `masters/hero_vityaz_source.jpg` | Витязь — богатырь / танк |
+| **hero_polyanitsa** | `hero_polyanitsa.png` | `masters/hero_polyanitsa.png` | `masters/hero_polyanitsa_source.jpg` | Поляница — урон |
+| **hero_volhv** | `hero_volhv.png` | `masters/hero_volhv.png` | `masters/hero_volhv_source.jpg` | Волхв — ведун / чары |
 
 Фон gen: `#FF00FF`. Cut: `--color FF00FF --ffmpeg --erode-light 2`.  
-Без рамок; круглый crop делает UI.
+Без рамок; круглый crop делает UI.  
+Славянские портреты — батч 5 (`ART_PROMPTS.md` §3.7).
 
 ---
 
@@ -156,8 +160,12 @@ python3 tools/sprite_cutter.py path/to/raw.jpg assets/textures/out.png \
 | **enemy_grub** | `enemy_grub.png` | `masters/enemy_grub.png` | `masters/enemy_grub_source.jpg` | Пещерный грызун (weak pack) |
 | **enemy_brute** | `enemy_brute.png` | `masters/enemy_brute.png` | `masters/enemy_brute_source.jpg` | Каменный громила (tank) |
 | **enemy_shade** | `enemy_shade.png` | `masters/enemy_shade.png` | `masters/enemy_shade_source.jpg` | Тень рудокопа (fast debuff) |
+| **enemy_anchutka** | `enemy_anchutka.png` | `masters/enemy_anchutka.png` | `masters/enemy_anchutka_source.jpg` | Анчутка (Навь, pack) |
+| **enemy_likho** | `enemy_likho.png` | `masters/enemy_likho.png` | `masters/enemy_likho_source.jpg` | Лихо Одноглазое (танк) |
+| **enemy_mavka** | `enemy_mavka.png` | `masters/enemy_mavka.png` | `masters/enemy_mavka_source.jpg` | Мавка (быстрая) |
+| **enemy_poludnitsa** | `enemy_poludnitsa.png` | `masters/enemy_poludnitsa.png` | `masters/enemy_poludnitsa_source.jpg` | Полудница (AoE) |
 
-Промпты: `docs/ART_PROMPTS.md` §3.
+Промпты: `docs/ART_PROMPTS.md` §3 + §3.7 (батч 5 Навь).
 
 ---
 

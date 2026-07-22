@@ -738,12 +738,15 @@ func _finish_victory() -> void:
 
 
 func _finish_defeat() -> void:
-	# No death screen yet: leave the party standing on 1 HP so the run can
-	# continue while the meta layer does not exist.
-	if GameState and GameState.party:
-		for m in GameState.party.members:
-			m["hp"] = maxi(1, int(m["hp"]))
 	_close()
+	var defeat := get_node_or_null("../DefeatOverlay")
+	if defeat and defeat.has_method("show_defeat"):
+		defeat.call("show_defeat")
+	else:
+		# Fallback if overlay missing
+		if GameState and GameState.party:
+			for m in GameState.party.members:
+				m["hp"] = maxi(1, int(m["hp"]))
 
 
 func _party_hp() -> int:

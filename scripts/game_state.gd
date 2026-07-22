@@ -22,6 +22,8 @@ signal draft_requested(kill_gold: int)
 signal draft_finished(hint: String)
 ## After EXIT step — main regenerates dungeon for the new floor
 signal floor_changed(new_floor: int)
+## Combat wipe — defeat overlay; payload "continue" | "restart"
+signal defeat_finished(choice: String)
 
 
 func _ready() -> void:

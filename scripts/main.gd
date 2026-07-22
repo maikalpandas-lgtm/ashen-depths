@@ -29,6 +29,8 @@ func _ready() -> void:
 			GameState.floor_changed.connect(_on_floor_changed)
 		if GameState.has_signal("draft_finished"):
 			GameState.draft_finished.connect(_on_draft_finished)
+		if GameState.has_signal("defeat_finished"):
+			GameState.defeat_finished.connect(_on_defeat_finished)
 
 	if minimap and minimap.has_method("setup"):
 		minimap.setup(dungeon, player)
@@ -114,6 +116,17 @@ func _on_draft_finished(hint: String) -> void:
 	_update_hud()
 	if hint != "":
 		hud_hint.text = hint
+
+
+func _on_defeat_finished(choice: String) -> void:
+	if choice == "restart":
+		if minimap and minimap.has_method("clear_fog"):
+			minimap.clear_fog()
+		var seed_val: int = GameState.current_seed if GameState else randi()
+		if dungeon.has_method("generate"):
+			dungeon.generate(seed_val)
+		hud_hint.text = "Новый забег"
+	_update_hud()
 
 
 ## EXIT tile → new labyrinth for the next floor (Навь packs from floor 3).

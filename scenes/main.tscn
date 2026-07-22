@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://bmain001ashen"]
+[gd_scene load_steps=13 format=3 uid="uid://bmain001ashen"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/dungeon_generator.gd" id="2_dungeon"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/ui/card_test_overlay.gd" id="9_cardtest"]
 [ext_resource type="Script" path="res://scripts/ui/combat_overlay.gd" id="10_combat"]
 [ext_resource type="Script" path="res://scripts/ui/draft_overlay.gd" id="11_draft"]
+[ext_resource type="Script" path="res://scripts/ui/defeat_overlay.gd" id="12_defeat"]
 
 [sub_resource type="Environment" id="Environment_fog"]
 background_mode = 1
@@ -225,3 +226,6 @@ script = ExtResource("10_combat")
 
 [node name="DraftOverlay" type="CanvasLayer" parent="."]
 script = ExtResource("11_draft")
+
+[node name="DefeatOverlay" type="CanvasLayer" parent="."]
+script = ExtResource("12_defeat")

@@ -4,6 +4,11 @@ extends Node3D
 const TorchSprites = preload("res://scripts/torch_sprites.gd")
 const ROCK_SHADER = preload("res://shaders/cave_rock.gdshader")
 
+## How far rock may bulge into the corridor. Keeps the walking line clear —
+## see wall_push().
+const PUSH_SOFT_KNEE := 0.3
+const PUSH_LIMIT := 0.5
+
 enum Cell {
 	WALL,
 	FLOOR,
@@ -808,7 +813,15 @@ func wall_push(pos: Vector3, h: float, v: float) -> float:
 	var spike: float = maxf(0.0, n1 - 0.35) * 0.35
 	# Slow lateral wander so a straight corridor never reads as a rectangular box
 	var sway: float = _cave_noise(pos.x * 0.22 + pos.z * 0.22, h * 0.28, 41) * 0.22
-	return tube + rock + ledge + spike + sway
+
+	# These terms stack: at the extreme they summed to ~1.5m, which put rock at
+	# the cell centre where the player stands. The viewmodel hangs 0.44m from the
+	# camera, so any bulge past ~1.0m started drawing over the torch in hand.
+	# Compress the tail instead of hard-clipping it, or bulges turn into plateaus.
+	var total: float = tube + rock + ledge + spike + sway
+	if total > PUSH_SOFT_KNEE:
+		total = PUSH_SOFT_KNEE + (total - PUSH_SOFT_KNEE) * 0.22
+	return minf(total, PUSH_LIMIT)
 
 
 ## Wall base + roof darkening (no vertical edge dark bands that look like seams).

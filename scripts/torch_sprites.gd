@@ -12,6 +12,7 @@ const TORCH_TEX_PATH := "res://assets/textures/torch.png"
 const HAND_TORCH_PATH := "res://assets/textures/hand_torch.png"
 const HAND_KNIFE_PATH := "res://assets/textures/hand_knife.png"
 const GLOW_TEX_PATH := "res://assets/textures/torch_glow.png"
+const FLAME_TEX_PATH := "res://assets/textures/flame_only.png"
 const FLAME_SHADER_PATH := "res://shaders/flame_shimmer.gdshader"
 
 static var _torch_tex: Texture2D
@@ -21,6 +22,10 @@ static var _glow_tex: Texture2D
 static var _glow_mat: StandardMaterial3D
 static var _glow_mat_fixed: StandardMaterial3D
 static var _flame_shader: Shader
+static var _flame_tex: Texture2D
+static var _soft_glow_tex: Texture2D
+static var _iron_mat: StandardMaterial3D
+static var _wood_mat: StandardMaterial3D
 
 
 static func _load_png(path: String) -> Texture2D:
@@ -76,6 +81,20 @@ static func _ensure_textures() -> void:
 	if _glow_mat_fixed == null and _glow_tex != null:
 		_glow_mat_fixed = _glow_mat.duplicate() as StandardMaterial3D
 		_glow_mat_fixed.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED
+	if _flame_tex == null:
+		_flame_tex = _load_png(FLAME_TEX_PATH)
+	if _soft_glow_tex == null:
+		_soft_glow_tex = _make_fallback_glow()
+	if _iron_mat == null:
+		_iron_mat = StandardMaterial3D.new()
+		_iron_mat.albedo_color = Color(0.17, 0.18, 0.21)
+		_iron_mat.metallic = 0.55
+		_iron_mat.roughness = 0.48
+	if _wood_mat == null:
+		_wood_mat = StandardMaterial3D.new()
+		_wood_mat.albedo_color = Color(0.34, 0.23, 0.14)
+		_wood_mat.metallic = 0.0
+		_wood_mat.roughness = 0.85
 	if _flame_shader == null and ResourceLoader.exists(FLAME_SHADER_PATH):
 		_flame_shader = load(FLAME_SHADER_PATH) as Shader
 
@@ -87,7 +106,8 @@ static func _apply_flame_shimmer(
 	time_scale: float = 0.7,
 	warp: float = 0.018,
 	blur: float = 0.009,
-	emission: float = 1.6
+	emission: float = 1.6,
+	billboard_y: bool = false
 ) -> void:
 	if _flame_shader == null or tex == null:
 		return
@@ -101,16 +121,17 @@ static func _apply_flame_shimmer(
 	mat.set_shader_parameter("flame_soft", 0.2)
 	mat.set_shader_parameter("alpha_scissor", 0.08)
 	mat.set_shader_parameter("emission_strength", emission)
+	mat.set_shader_parameter("billboard_y", 1.0 if billboard_y else 0.0)
 	spr.material_override = mat
 	spr.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
 
 
-## Single wall torch (no double art). Depth via tilt + halo + emission + light on rock.
+## Wall torch = real 3D bracket bolted to the wall (backplate → arm → stick → cup)
+## + ONE flame sprite. Geometry is fixed to the wall; only the fire faces the player,
+## so the prop reads correct from every 90° crawler angle.
+## Local space: +Y up, -Z out into the corridor, +Z into the rock.
 static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) -> Node3D:
 	_ensure_textures()
-	if _torch_tex == null:
-		push_warning("[TorchSprites] wall torch texture missing")
-		return Node3D.new()
 
 	var holder := Node3D.new()
 	holder.name = "WallTorch"
@@ -121,43 +142,60 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 		holder.rotation.y = 0.0 if wall_dir.y > 0.0 else PI
 	parent.add_child(holder)
 
-	# Soft contact shadow on wall
-	var blob := MeshInstance3D.new()
-	var bq := QuadMesh.new()
-	bq.size = Vector2(0.55, 0.95)
-	blob.mesh = bq
-	var bm := StandardMaterial3D.new()
-	bm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	bm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	bm.albedo_color = Color(0.0, 0.0, 0.0, 0.5)
-	bm.cull_mode = BaseMaterial3D.CULL_DISABLED
-	blob.material_override = bm
-	blob.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	blob.position = Vector3(0.0, -0.04, 0.06)
-	holder.add_child(blob)
+	# Backplate bolted to the rock
+	var plate := _mesh_node(holder, BoxMesh.new(), _iron_mat)
+	(plate.mesh as BoxMesh).size = Vector3(0.30, 0.30, 0.07)
+	plate.position = Vector3(0.0, 0.0, 0.035)
 
-	# Warm volume glow (not a second torch sprite)
-	if _glow_mat_fixed:
-		var glow := MeshInstance3D.new()
-		var quad := QuadMesh.new()
-		quad.size = Vector2(0.85, 1.0)
-		glow.mesh = quad
-		var gmat := _glow_mat_fixed.duplicate() as StandardMaterial3D
-		gmat.albedo_color = Color(1.0, 0.65, 0.28, 0.55)
-		glow.material_override = gmat
-		glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		glow.position = Vector3(0.0, 0.2, -0.18)
-		holder.add_child(glow)
+	# Bolts — read as "screwed into the wall" at a glance
+	for s in [-1.0, 1.0]:
+		for t in [-1.0, 1.0]:
+			var bolt := _mesh_node(holder, SphereMesh.new(), _iron_mat)
+			var bm := bolt.mesh as SphereMesh
+			bm.radius = 0.022
+			bm.height = 0.044
+			bolt.position = Vector3(0.105 * s, 0.105 * t, -0.01)
 
-	var flip := wall_dir.x < 0 or wall_dir.y < 0
-	# Tilt off the wall plane so it reads as volume (still ONE sprite)
-	var body := _make_sprite(_torch_tex, 0.0040, false)
-	body.name = "TorchBody"
-	body.position = Vector3(0.0, 0.02, -0.14)
-	body.rotation_degrees = Vector3(-8.0, 18.0 if not flip else -18.0, 0.0)
-	body.flip_h = flip
-	holder.add_child(body)
-	_apply_flame_shimmer(body, _torch_tex, 0.5, 0.65, 0.018, 0.009, 2.8)
+	# Arm out of the wall (45° up/out)
+	var arm := _mesh_node(holder, CylinderMesh.new(), _iron_mat)
+	var am := arm.mesh as CylinderMesh
+	am.top_radius = 0.033
+	am.bottom_radius = 0.038
+	am.height = 0.26
+	arm.position = Vector3(0.0, 0.09, -0.06)
+	arm.rotation_degrees = Vector3(-45.0, 0.0, 0.0)
+
+	# Wooden stick, slight lean into the corridor
+	var stick := _mesh_node(holder, CylinderMesh.new(), _wood_mat)
+	var sm := stick.mesh as CylinderMesh
+	sm.top_radius = 0.045
+	sm.bottom_radius = 0.055
+	sm.height = 0.50
+	stick.position = Vector3(0.0, 0.42, -0.23)
+	stick.rotation_degrees = Vector3(-18.0, 0.0, 0.0)
+
+	# Iron cup holding the fire
+	var cup := _mesh_node(holder, CylinderMesh.new(), _iron_mat)
+	var cm := cup.mesh as CylinderMesh
+	cm.top_radius = 0.105
+	cm.bottom_radius = 0.055
+	cm.height = 0.13
+	cup.position = Vector3(0.0, 0.69, -0.32)
+	cup.rotation_degrees = Vector3(-18.0, 0.0, 0.0)
+
+	# Soft radial halo — procedural, so no hard quad edge on the wall
+	var glow := _make_soft_glow(0.95)
+	glow.position = Vector3(0.0, 0.88, -0.34)
+	holder.add_child(glow)
+
+	# Fire: single sprite, fixed-Y billboard so it never goes edge-on
+	if _flame_tex:
+		var flame := _make_sprite(_flame_tex, 0.0021, true)
+		flame.name = "Flame"
+		flame.position = Vector3(0.0, 0.87, -0.33)
+		flame.render_priority = 5
+		holder.add_child(flame)
+		_apply_flame_shimmer(flame, _flame_tex, 1.0, 0.65, 0.020, 0.010, 2.6, true)
 
 	var light := OmniLight3D.new()
 	light.name = "Light"
@@ -166,7 +204,7 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 	light.omni_range = 9.5
 	light.omni_attenuation = 0.9
 	light.shadow_enabled = false
-	light.position = Vector3(0.0, 0.24, -0.42)
+	light.position = Vector3(0.0, 0.88, -0.46)
 	holder.add_child(light)
 
 	var fill := OmniLight3D.new()
@@ -174,10 +212,41 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 	fill.light_color = Color(1.0, 0.48, 0.2)
 	fill.light_energy = 1.55
 	fill.omni_range = 3.0
-	fill.position = Vector3(0.0, 0.12, -0.18)
+	fill.position = Vector3(0.0, 0.55, -0.22)
 	holder.add_child(fill)
 
 	return holder
+
+
+static func _mesh_node(parent: Node3D, mesh: Mesh, mat: Material) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+	return mi
+
+
+## Radial falloff quad — alpha reaches 0 well before the quad edge (no visible rectangle).
+static func _make_soft_glow(size: float) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(size, size)
+	mi.mesh = quad
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	mat.albedo_texture = _soft_glow_tex
+	mat.albedo_color = Color(1.0, 0.68, 0.32, 0.5)
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+	mat.render_priority = 2
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
 
 
 ## Gloves low in corners — not raised into corridor.

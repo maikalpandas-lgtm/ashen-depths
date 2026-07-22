@@ -11,6 +11,25 @@ uniform float flame_start : hint_range(0.0, 1.0) = 0.5;
 uniform float flame_soft : hint_range(0.01, 0.5) = 0.2;
 uniform float alpha_scissor : hint_range(0.0, 1.0) = 0.08;
 uniform float emission_strength : hint_range(0.0, 4.0) = 1.6;
+/// 1 = fixed-Y billboard. Sprite3D.billboard is ignored under material_override,
+/// so wall fire has to spin around Y here instead.
+uniform float billboard_y : hint_range(0.0, 1.0) = 0.0;
+
+
+void vertex() {
+	if (billboard_y > 0.5) {
+		MODELVIEW_MATRIX = VIEW_MATRIX * mat4(
+			vec4(normalize(cross(vec3(0.0, 1.0, 0.0), INV_VIEW_MATRIX[2].xyz)), 0.0),
+			vec4(0.0, 1.0, 0.0, 0.0),
+			vec4(normalize(cross(INV_VIEW_MATRIX[0].xyz, vec3(0.0, 1.0, 0.0))), 0.0),
+			MODEL_MATRIX[3]);
+		MODELVIEW_MATRIX = MODELVIEW_MATRIX * mat4(
+			vec4(length(MODEL_MATRIX[0].xyz), 0.0, 0.0, 0.0),
+			vec4(0.0, length(MODEL_MATRIX[1].xyz), 0.0, 0.0),
+			vec4(0.0, 0.0, length(MODEL_MATRIX[2].xyz), 0.0),
+			vec4(0.0, 0.0, 0.0, 1.0));
+	}
+}
 
 
 void fragment() {

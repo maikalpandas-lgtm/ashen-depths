@@ -630,10 +630,25 @@ func _maybe_cave_wall(x: int, y: int, dx: int, dy: int, world: Vector3, skirt_ma
 	var into := Vector3(-float(dx), 0.0, -float(dy))
 	var edge := cell_size * 0.5
 	var base := world + Vector3(float(dx) * edge, 0.0, float(dy) * edge)
-	_add_cave_wall_mesh(base, into)
+	# Does the same wall face continue into the neighbour cell along the wall?
+	# If not, that panel edge is a corner and must sit flush in the grid plane,
+	# otherwise displaced panels leave a crack the void shines through.
+	var rx := dy
+	var ry := -dx
+	var cont_pos := _wall_face_continues(x + rx, y + ry, dx, dy)
+	var cont_neg := _wall_face_continues(x - rx, y - ry, dx, dy)
+	_add_cave_wall_mesh(base, into, cont_neg, cont_pos)
 	_add_floor_wall_skirting(base, into, skirt_mat)
 	var col_size := Vector3(cell_size * 1.12, wall_height + 0.35, 0.5) if absf(into.z) > 0.5 else Vector3(0.5, wall_height + 0.35, cell_size * 1.12)
 	_add_solid_box(base - into * 0.08 + Vector3(0, wall_height * 0.5, 0), col_size)
+
+
+## True when cell (x, y) is walkable and also has a wall in direction (dx, dy) —
+## i.e. the wall panel keeps going, so the shared edge must stay displaced.
+func _wall_face_continues(x: int, y: int, dx: int, dy: int) -> bool:
+	if not _is_walkable(_get_cell(x, y)):
+		return false
+	return not _is_walkable(_get_cell(x + dx, y + dy))
 
 
 func _add_floor_wall_skirting(base: Vector3, face_into: Vector3, mat: Material) -> void:
@@ -694,14 +709,17 @@ func _tri_alpha(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, n: Vector3,
 	st.add_vertex(c)
 
 
-func _add_cave_wall_mesh(base: Vector3, face_into: Vector3) -> void:
+func _add_cave_wall_mesh(base: Vector3, face_into: Vector3, cont_neg: bool, cont_pos: bool) -> void:
 	## Rocky cave wall: strong faceted relief + world UV from displaced verts.
+	## Panel width is EXACTLY one cell and displacement is world-space only, so
+	## neighbouring panels share identical vertices — no cracks, no double-surface
+	## z-fighting stripes along the joins.
 	var mi := MeshInstance3D.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var segs_w := 8
 	var segs_h := 10
-	var width := cell_size + 0.1
+	var width := cell_size
 	var right := Vector3(-face_into.z, 0.0, face_into.x)
 	var uv_s := _world_uv_scale()
 
@@ -711,10 +729,10 @@ func _add_cave_wall_mesh(base: Vector3, face_into: Vector3) -> void:
 			var v0 := float(j) / float(segs_h)
 			var u1 := float(i + 1) / float(segs_w)
 			var v1 := float(j + 1) / float(segs_h)
-			var p00 := _wall_pt(base, face_into, right, u0, v0, width)
-			var p10 := _wall_pt(base, face_into, right, u1, v0, width)
-			var p11 := _wall_pt(base, face_into, right, u1, v1, width)
-			var p01 := _wall_pt(base, face_into, right, u0, v1, width)
+			var p00 := _wall_pt(base, face_into, right, u0, v0, width, cont_neg, cont_pos)
+			var p10 := _wall_pt(base, face_into, right, u1, v0, width, cont_neg, cont_pos)
+			var p11 := _wall_pt(base, face_into, right, u1, v1, width, cont_neg, cont_pos)
+			var p01 := _wall_pt(base, face_into, right, u0, v1, width, cont_neg, cont_pos)
 			var a00 := _wall_ao(u0, v0)
 			var a10 := _wall_ao(u1, v0)
 			var a11 := _wall_ao(u1, v1)
@@ -746,21 +764,27 @@ func _add_cave_wall_mesh(base: Vector3, face_into: Vector3) -> void:
 
 func _wall_pt(
 	base: Vector3, face_into: Vector3, right: Vector3,
-	u: float, v: float, width: float
+	u: float, v: float, width: float,
+	cont_neg: bool, cont_pos: bool
 ) -> Vector3:
 	var along := (u - 0.5) * width
 	var h := -0.2 + v * (wall_height + 0.5)
 	var pos := base + right * along + Vector3.UP * h
-	# Soft at panel corners so seams don't fin; mid-wall full rocky relief
-	var edge_w := sin(clampf(u, 0.0, 1.0) * PI)
-	edge_w = edge_w * edge_w
-	var amp: float = lerpf(0.22, 1.0, edge_w)
-	# Mild vault + strong rocky outcrops (competitor: rocky cave, not smooth tube)
+	# Taper to flush ONLY at corners (where no panel continues). On a continued
+	# join both panels use the same world-space push, so the edge matches exactly.
+	var amp := 1.0
+	if not cont_neg:
+		amp = minf(amp, smoothstep(0.0, 0.28, u))
+	if not cont_pos:
+		amp = minf(amp, smoothstep(0.0, 0.28, 1.0 - u))
+	# Mild vault + strong rocky outcrops (competitor: rocky cave, not smooth tube).
+	# All noise reads WORLD position — never panel-local `along`, which is what
+	# used to make the two sides of a join disagree and split open.
 	var tube: float = sin(v * PI) * 0.12 + pow(v, 1.55) * 0.1
 	var n1: float = _cave_noise(pos.x * 0.55 + pos.z * 0.55, h * 0.9, 3)
-	var n2: float = _cave_noise(pos.x * 1.2 + along * 0.8, h * 1.5, 8)
-	var n3: float = _cave_noise(along * 2.8 + pos.z * 0.3, h * 2.8, 17)
-	var n4: float = _cave_noise(pos.x * 3.5, h * 4.0 + along, 23)
+	var n2: float = _cave_noise(pos.x * 1.2 + pos.z * 1.2, h * 1.5, 8)
+	var n3: float = _cave_noise(pos.x * 2.8 + pos.z * 2.8, h * 2.8, 17)
+	var n4: float = _cave_noise(pos.x * 3.5 + pos.z * 3.5, h * 4.0, 23)
 	# Faceted shelves + raw rock noise
 	var facet: float = floorf(n2 * 5.0) / 5.0
 	var rock: float = n1 * 0.16 + facet * 0.28 + n3 * 0.12 + n4 * 0.08
@@ -768,7 +792,7 @@ func _wall_pt(
 	# Occasional hard bulge into corridor
 	var spike: float = maxf(0.0, n1 - 0.35) * 0.35
 	var push: float = (tube + rock + ledge + spike) * amp
-	return pos + face_into * (push - 0.02)
+	return pos + face_into * push
 
 
 ## Wall base + roof darkening (no vertical edge dark bands that look like seams).
@@ -894,9 +918,10 @@ func _spawn_torches() -> void:
 			var d: Vector2i = wall_dirs[placed % wall_dirs.size()]
 			var world := cell_to_world(Vector2i(x, y))
 			# Cave walls bulge ~0.35–0.55 into corridor mid-height (_wall_pt tube+rock).
-			# Keep torch in free air near wall face, not buried inside rock mesh.
-			var wall_dist := cell_size * 0.5 - 0.58
-			var pos := world + Vector3(d.x * wall_dist, 1.45, d.y * wall_dist)
+			# Backplate sits ~0.03 behind the holder, so this keeps it on the rock
+			# face rather than floating in the corridor.
+			var wall_dist := cell_size * 0.5 - 0.5
+			var pos := world + Vector3(d.x * wall_dist, 1.35, d.y * wall_dist)
 			_add_torch(pos, d)
 			placed += 1
 	print("[Dungeon] torches=%d" % placed)

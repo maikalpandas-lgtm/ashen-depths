@@ -169,6 +169,58 @@ hollow glowing eye sockets
 
 ---
 
+## 3.5. Батч 3 — рамка карты (обложка)
+
+Карта = **одна картинка-подложка** + иллюстрация скилла поверх + текст, который
+рисует движок. Поэтому в рамке **не должно быть ни букв, ни цифр** — иначе они
+разъедутся с реальными значениями при первой же правке баланса.
+
+### Пропорции и зоны (обязательно соблюсти)
+
+Соотношение **5:7** (например 512×716). Внутри рамки код ожидает такие зоны —
+они заданы в `scripts/ui/card_test_overlay.gd` как `ART_RECT` / `NAME_RECT` /
+`TEXT_RECT`:
+
+| Зона | По ширине | По высоте | Что туда ляжет |
+|---|---|---|---|
+| Кружок стоимости | 2–22% | 1–16% | цифра + ⚡/🩸 |
+| Окно иллюстрации | 8–92% | 15–52% | арт скилла (`card_*.png`) |
+| Лента названия | 6–94% | 54–63% | название карты |
+| Поле текста | 10–90% | 66–93% | описание эффекта |
+
+### 3.5.1 `card_frame` — базовая рамка
+
+```
+a blank fantasy card template, aged parchment face with a worn dark leather
+border, an empty recessed rectangular window in the upper half where an
+illustration will be placed, an empty horizontal ribbon banner below that window,
+an empty round metal medallion socket in the top-left corner, lower half is clean
+smooth parchment left completely empty for text, subtle paper grain, soft inner
+shadow around the window, portrait orientation 5:7,
+COMPLETELY EMPTY — no letters, no numbers, no runes, no symbols, no icons
+```
+
+⚠️ Модель любит дописывать «руны» и «символы» в пустые места. Если в отдаче есть
+хоть что-то похожее на буквы — перегенерить, а не замазывать.
+
+### 3.5.2 `card_cost_badge` — кружок стоимости (опционально)
+
+```
+a single round metal medallion badge, worn dark iron rim with a deep blue enamel
+centre, empty middle with nothing written in it, slight bevel and highlight,
+viewed straight on
+```
+
+Второй вариант с **красной** эмалью → `card_cost_badge_blood` (карты за HP).
+
+### 3.5.3 Что дальше делает движок
+
+Название, стоимость, текст и рамку по цвету владельца (золото Каэля / зелень
+Лиры / оранжевый Серы) накладывает код. Одна рамка на все карты — тип и владелец
+различаются подсветкой, а не отдельными картинками.
+
+---
+
 ## 4. Куда класть готовое
 
 1. Исходник (что отдал Grok) → `assets/textures/masters/<id>_source.jpg`

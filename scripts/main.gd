@@ -25,6 +25,10 @@ func _ready() -> void:
 		GameState.chest_opened.connect(_on_chest_opened)
 		GameState.encounter_started.connect(_on_encounter)
 		GameState.dungeon_ready.connect(_on_dungeon_ready)
+		if GameState.has_signal("floor_changed"):
+			GameState.floor_changed.connect(_on_floor_changed)
+		if GameState.has_signal("draft_finished"):
+			GameState.draft_finished.connect(_on_draft_finished)
 
 	if minimap and minimap.has_method("setup"):
 		minimap.setup(dungeon, player)
@@ -34,7 +38,7 @@ func _ready() -> void:
 	_update_hud()
 	UiTheme.as_display(hud_title, 20, Color(0.95, 0.88, 0.7))
 	UiTheme.as_title(hud_floor, 12, Color(0.7, 0.65, 0.78))
-	hud_hint.text = "W/S шаг · A/D поворот 90° · R новый данж · C колода · F9 снимок · Esc меню"
+	hud_hint.text = "W/S · A/D · R новый · C колода · F9 · костёр EXIT → этаж"
 
 	if dungeon.get("start_cell") != null:
 		var start: Vector2i = dungeon.start_cell
@@ -106,15 +110,39 @@ func _on_encounter(encounter_id: String) -> void:
 	hud_hint.text = "⚔ Стая: %s" % encounter_id
 
 
+func _on_draft_finished(hint: String) -> void:
+	_update_hud()
+	if hint != "":
+		hud_hint.text = hint
+
+
+## EXIT tile → new labyrinth for the next floor (Навь packs from floor 3).
+func _on_floor_changed(new_floor: int) -> void:
+	if minimap and minimap.has_method("clear_fog"):
+		minimap.clear_fog()
+	var seed_val: int = GameState.current_seed if GameState else randi()
+	if dungeon.has_method("generate"):
+		dungeon.generate(seed_val)
+	_update_hud()
+	var realm := "Рудники" if new_floor < 3 else "Навь"
+	hud_hint.text = "↓ Этаж %d · %s" % [new_floor, realm]
+
+
 func _update_hud() -> void:
-	var seed_val := 0
 	var floor_i := 1
 	var gold := 0
+	var party_hp := int(hp_bar.value)
+	var party_max := MAX_HP
 	if GameState:
-		seed_val = GameState.current_seed
 		floor_i = GameState.floor_index
 		gold = GameState.gold
+		if GameState.party:
+			party_hp = GameState.party.total_hp()
+			party_max = GameState.party.total_max_hp()
 	hud_title.text = "Навьи Копи"
-	hud_floor.text = "Лабиринты Корня  ·  этаж %d" % floor_i
+	var realm := "Рудники" if floor_i < 3 else "Навь"
+	hud_floor.text = "%s  ·  этаж %d" % [realm, floor_i]
 	hud_gold.text = "🪙  %d" % gold
-	hud_hp.text = "❤  %d/%d" % [int(hp_bar.value), MAX_HP]
+	hp_bar.max_value = party_max
+	hp_bar.value = party_hp
+	hud_hp.text = "❤  %d/%d" % [party_hp, party_max]

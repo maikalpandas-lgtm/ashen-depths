@@ -66,6 +66,9 @@ func generate(seed_value: int = 0) -> void:
 	seed(seed_value)
 	if GameState:
 		GameState.current_seed = seed_value
+		# First layout of a run pins the run seed (floor layouts derive from it)
+		if GameState.run_seed == 0:
+			GameState.run_seed = seed_value
 
 	# Rebuild cave textures/materials so R regenerates new rock look
 	_build_materials()
@@ -1195,7 +1198,7 @@ func _spawn_encounter(world: Vector3, pack_name: String) -> void:
 
 
 func _spawn_exit_marker(world: Vector3) -> void:
-	## Compact campfire — no random junk meshes.
+	## Compact campfire — no random junk meshes. Step on this cell to descend.
 	var flame := MeshInstance3D.new()
 	var sm := SphereMesh.new()
 	sm.radius = 0.2
@@ -1216,7 +1219,8 @@ func _spawn_exit_marker(world: Vector3) -> void:
 	light.position = world + Vector3(0, 0.5, 0)
 	props_root.add_child(light)
 	var label := Label3D.new()
-	label.text = "EXIT"
+	var floor_i: int = GameState.floor_index if GameState else 1
+	label.text = "↓ ЭТАЖ %d" % (floor_i + 1)
 	label.position = world + Vector3(0, 1.2, 0)
 	label.font_size = 28
 	label.modulate = Color(1.0, 0.75, 0.4)

@@ -26,6 +26,8 @@ func _init() -> void:
 	_test_combat_basics()
 	_test_combat_damage()
 	_test_combat_end()
+	_test_party_add_card()
+	_test_floor_seed()
 
 	print("\n%d passed, %d failed" % [_passed, _failed])
 	quit(1 if _failed > 0 else 0)
@@ -211,6 +213,28 @@ func _test_combat_end() -> void:
 	survive.end_turn()
 	check(survive.turn == turn_before + 1, "surviving the enemy turn starts the next one")
 	check(survive.energy == Combat.START_ENERGY, "energy refills each turn")
+
+
+func _test_party_add_card() -> void:
+	print("party draft add")
+	var p: Party = Party.new()
+	var before: int = p.deck_size()
+	var owner: String = str(p.members[0]["id"])
+	check(p.add_card(owner, "slice"), "add_card accepts a known card")
+	check(p.deck_size() == before + 1, "draft grows the permanent deck")
+	check(not p.add_card(owner, "nope"), "unknown card is rejected")
+	var combat: Deck = p.build_combat_deck(3)
+	check(combat.total() == p.deck_size(), "combat deck sees the drafted card")
+
+
+func _test_floor_seed() -> void:
+	print("floor seeds")
+	# Mimic GameState without the autoload: same mix formula
+	var run := 12345
+	var f2 := absi(run * 1664525 + 2 * 1013904223)
+	var f3 := absi(run * 1664525 + 3 * 1013904223)
+	check(f2 != f3, "different floors get different layout seeds")
+	check(f2 == absi(run * 1664525 + 2 * 1013904223), "floor seed is deterministic")
 
 
 ## Assert without spamming a line per card

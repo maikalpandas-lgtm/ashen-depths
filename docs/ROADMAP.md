@@ -37,10 +37,10 @@
 - [x] Фидбэк: подсветка цели, вспышка от удара, разрыв надвое при смерти, выпад + следы когтей + тряска
 - [x] Sigils + blood cost — Sharp/Pierce/Cleave/Drain/Bone/Echo/Sanguine/Ward
 - [x] Тесты боя — 77 проверок headless
-- [ ] **Layer 1:** post-combat 1 of 3 **or** skip→gold
+- [x] **Layer 1:** post-combat 1 of 3 **or** skip→gold — `draft_overlay.gd`
 - [ ] **Layer 2:** level-up → upgrade **or** rare
 - [ ] Mini-boss + floor boss (simple rewards)
-- [ ] Переход между этажами (сейчас выход ничего не делает, этаж всегда 1)
+- [x] Переход между этажами — EXIT → `GameState.advance_floor` + generate
 - [ ] Экран поражения (сейчас партию просто оставляет на 1 HP)
 
 ## Фаза 4 — Босс-слой + Backpack + Shop + хаб

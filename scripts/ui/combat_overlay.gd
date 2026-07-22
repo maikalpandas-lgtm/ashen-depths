@@ -732,6 +732,9 @@ func _finish_victory() -> void:
 			dungeon.call("clear_encounter_at", _source.global_position)
 		_source.queue_free()
 	_close()
+	# Layer 1 draft — pick a card or skip for gold (DESIGN §7.6)
+	if GameState and GameState.has_signal("draft_requested"):
+		GameState.draft_requested.emit(reward)
 
 
 func _finish_defeat() -> void:

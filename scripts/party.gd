@@ -127,3 +127,26 @@ func build_combat_deck(seed_value: int) -> Deck:
 	var deck: Deck = Deck.new(entries, seed_value)
 	deck.shuffle()
 	return deck
+
+
+## Permanently add a drafted card to a hero's personal deck (post-combat layer 1).
+func add_card(owner_id: String, card_id: String) -> bool:
+	if not CardDB.has_card(card_id):
+		push_error("[Party] add_card unknown: %s" % card_id)
+		return false
+	for m in members:
+		if str(m["id"]) != owner_id:
+			continue
+		var deck: Array = m["deck"]
+		deck.append(card_id)
+		m["deck"] = deck
+		return true
+	push_error("[Party] add_card unknown owner: %s" % owner_id)
+	return false
+
+
+func deck_size() -> int:
+	var n := 0
+	for m in members:
+		n += (m["deck"] as Array).size()
+	return n

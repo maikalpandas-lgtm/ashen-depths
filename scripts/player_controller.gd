@@ -201,6 +201,18 @@ func _on_move_done() -> void:
 	if dungeon:
 		global_position = _cell_world_pos(cell)
 	global_position.y = feet_y
+	_check_exit_cell()
+
+
+## EXIT campfire tile — descend one floor (run continues, new labyrinth).
+func _check_exit_cell() -> void:
+	if dungeon == null or not dungeon.has_method("get_cell_type"):
+		return
+	# Cell.EXIT == 4 in dungeon_generator.gd enum
+	if int(dungeon.call("get_cell_type", cell.x, cell.y)) != 4:
+		return
+	if GameState and GameState.has_method("advance_floor"):
+		GameState.advance_floor()
 
 
 func _kill_tween() -> void:

@@ -502,7 +502,7 @@ func _floor_ao(world: Vector3, u: float, v: float, half: float) -> float:
 	# Wide, slow ramp. The old easing (1-(1-t)^2 then smoothstep) shot back to
 	# full brightness within ~0.3m of the wall, so the contact band was invisible.
 	var t: float = pow(1.0 - _wall_near(wx, wz, cell_size * 0.62), 0.55)
-	return lerpf(0.04, 1.0, t)
+	return lerpf(0.16, 1.0, t)
 
 
 ## Distance from a world point to the nearest solid cell, in world units.
@@ -783,7 +783,7 @@ func _wall_ao(u: float, v: float) -> float:
 	var floor_t := clampf(v / 0.35, 0.0, 1.0)
 	floor_t = floor_t * floor_t * (3.0 - 2.0 * floor_t)
 	# Darker contact near floor — deep cave, not lit hallway
-	var ao := lerpf(0.08, 0.92, floor_t)
+	var ao := lerpf(0.2, 0.95, floor_t)
 	var roof_t := clampf((1.0 - v) / 0.22, 0.0, 1.0)
 	roof_t = roof_t * roof_t
 	ao *= lerpf(0.55, 1.0, 1.0 - roof_t)

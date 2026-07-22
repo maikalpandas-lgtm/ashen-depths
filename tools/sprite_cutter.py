@@ -90,9 +90,16 @@ def cut_edge_flood(
                 r, g, b, a = px[x, y]
                 if a == 0:
                     continue
-                # magenta/pink spill or near-key
-                spill = is_key(r, g, b, key, tol * 1.15) or (
-                    r > 160 and b > 90 and g < 150 and r + b > g * 1.8
+                # near-key halo (works for ANY key colour), plus the old
+                # magenta/pink spill heuristic.
+                #
+                # The magenta test requires g < 150, so on a WHITE key it never
+                # fired and the anti-aliased white ramp survived as a bright
+                # outline. The generic distance test below is what catches it.
+                spill = (
+                    color_dist((r, g, b), key) <= tol * 1.9
+                    or is_key(r, g, b, key, tol * 1.15)
+                    or (r > 160 and b > 90 and g < 150 and r + b > g * 1.8)
                 )
                 if not spill:
                     continue

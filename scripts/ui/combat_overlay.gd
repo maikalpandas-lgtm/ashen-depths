@@ -31,6 +31,9 @@ var _drag_from := Vector2.ZERO
 ## button signal: freeing the button that is mid-emit makes add_child fail with
 ## "parent node is busy setting up children" and the hand vanishes.
 var _hand_dirty := false
+## Card face nodes by hand index, so a held card can be lifted WITHOUT rebuilding
+## the row it lives in.
+var _card_views: Array = []
 
 ## Combat framing: a dedicated camera and light, both dropped in for the fight
 ## and removed after. Fighting through the crawler camera put the pack tiny,
@@ -216,7 +219,9 @@ func _close() -> void:
 func _process(_delta: float) -> void:
 	if not _root.visible:
 		return
-	if _hand_dirty:
+	# Never rebuild mid-drag: freeing the pressed button kills its button_up,
+	# and the card would stick to the cursor forever.
+	if _hand_dirty and _dragging < 0:
 		_hand_dirty = false
 		_render_hand()
 	_world_layer.queue_redraw()
@@ -410,7 +415,9 @@ func _draw_target_line() -> void:
 
 func _render_hand() -> void:
 	for c in _hand_row.get_children():
+		_hand_row.remove_child(c)
 		c.queue_free()
+	_card_views.clear()
 	for i in range(_combat.deck.hand.size()):
 		_hand_row.add_child(_make_hand_card(i))
 
@@ -432,6 +439,7 @@ func _make_hand_card(index: int) -> Control:
 	view.modulate = Color.WHITE if playable else Color(0.5, 0.5, 0.55, 0.8)
 	view.position = Vector2(0.0, 0.0 if index == _dragging else DRAG_LIFT)
 	holder.add_child(view)
+	_card_views.append(view)
 
 	var hit := Button.new()
 	hit.flat = true
@@ -451,7 +459,10 @@ func _start_drag(index: int, holder: Control) -> void:
 		return
 	_dragging = index
 	_drag_from = holder.global_position + holder.size * 0.5
-	_hand_dirty = true
+	# Lift the existing node. Rebuilding here is what broke the drag: it freed
+	# the very button that is mid-press, so button_up never arrived.
+	if index < _card_views.size() and is_instance_valid(_card_views[index]):
+		(_card_views[index] as Control).position = Vector2.ZERO
 
 
 ## Released: over an enemy it resolves there; a card that needs no target

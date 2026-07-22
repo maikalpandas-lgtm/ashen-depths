@@ -141,12 +141,12 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 
 	var light := OmniLight3D.new()
 	light.name = "Light"
-	light.light_color = Color(1.0, 0.66, 0.34)
-	# Tight warm pool: the rock must stay teal a couple of cells out, otherwise
-	# 400 torches wash the whole cave to yellow.
-	light.light_energy = 3.2
-	light.omni_range = 7.2
-	light.omni_attenuation = 1.2
+	# Desaturated warm: a fully saturated orange multiplied into teal rock gives
+	# olive, which is why the cave read yellow-green instead of blue.
+	light.light_color = Color(1.0, 0.78, 0.55)
+	light.light_energy = 2.3
+	light.omni_range = 6.4
+	light.omni_attenuation = 1.35
 	light.shadow_enabled = false
 	light.position = Vector3(0.0, 0.66, -0.42)
 	holder.add_child(light)
@@ -216,10 +216,10 @@ static func make_hand_torch(camera: Camera3D) -> Node3D:
 
 	var light := OmniLight3D.new()
 	light.name = "HandTorchLight"
-	light.light_color = Color(1.0, 0.78, 0.45)
-	light.light_energy = 3.4
-	light.omni_range = 7.8
-	light.omni_attenuation = 1.15
+	light.light_color = Color(1.0, 0.84, 0.62)
+	light.light_energy = 2.5
+	light.omni_range = 6.8
+	light.omni_attenuation = 1.3
 	light.shadow_enabled = false
 	light.position = Vector3(0.06, 0.12, 0.28)
 	left.add_child(light)

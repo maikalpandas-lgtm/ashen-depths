@@ -758,6 +758,12 @@ func _wall_pt(
 	var along: float = lerpf(a_neg, a_pos, u)
 	var h := -0.2 + v * (wall_height + 0.5)
 	var pos := base + right * along + Vector3.UP * h
+	return pos + face_into * wall_push(pos, h, v)
+
+
+## How far the rock face bulges into the corridor at a point on the wall plane.
+## Public so props can be seated ON the rock instead of floating in mid-air.
+func wall_push(pos: Vector3, h: float, v: float) -> float:
 	# Mild vault + rocky outcrops (rocky cave, not a smooth tube).
 	# All noise reads WORLD position — never panel-local `along`, which is what
 	# used to make the two sides of a join disagree and split open.
@@ -775,7 +781,7 @@ func _wall_pt(
 	var spike: float = maxf(0.0, n1 - 0.35) * 0.35
 	# Slow lateral wander so a straight corridor never reads as a rectangular box
 	var sway: float = _cave_noise(pos.x * 0.22 + pos.z * 0.22, h * 0.28, 41) * 0.22
-	return pos + face_into * (tube + rock + ledge + spike + sway)
+	return tube + rock + ledge + spike + sway
 
 
 ## Wall base + roof darkening (no vertical edge dark bands that look like seams).
@@ -900,11 +906,16 @@ func _spawn_torches() -> void:
 				continue
 			var d: Vector2i = wall_dirs[placed % wall_dirs.size()]
 			var world := cell_to_world(Vector2i(x, y))
-			# Cave walls bulge ~0.35–0.55 into corridor mid-height (_wall_pt tube+rock).
-			# Backplate sits ~0.03 behind the holder, so this keeps it on the rock
-			# face rather than floating in the corridor.
-			var wall_dist := cell_size * 0.5 - 0.65
-			var pos := world + Vector3(d.x * wall_dist, 1.3, d.y * wall_dist)
+			# Seat the bracket on the ACTUAL rock face. A fixed offset either
+			# floats the torch in mid-air where the wall recedes or buries it
+			# where the wall bulges, so sample the same displacement the mesh uses.
+			var torch_h := 1.3
+			var edge := cell_size * 0.5
+			var base := world + Vector3(float(d.x) * edge, 0.0, float(d.y) * edge)
+			var v := (torch_h + 0.2) / (wall_height + 0.5)
+			var push := wall_push(base + Vector3.UP * torch_h, torch_h, v)
+			var wall_dist: float = clampf(edge - push - 0.08, 0.35, edge - 0.05)
+			var pos := world + Vector3(d.x * wall_dist, torch_h, d.y * wall_dist)
 			_add_torch(pos, d)
 			placed += 1
 	print("[Dungeon] torches=%d" % placed)

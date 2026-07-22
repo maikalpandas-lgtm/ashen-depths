@@ -148,6 +148,44 @@ def cut_ffmpeg(src: Path, dst: Path, key_hex: str, similarity: float, blend: flo
     return r.returncode == 0 and dst.exists()
 
 
+def erode_light_edge(im: Image.Image, light_thr: int, rounds: int) -> Image.Image:
+    """Eat the washed anti-aliasing ramp off the silhouette.
+
+    A JPG source blends the art into its background over 2-3px. Keying removes
+    the background but leaves that ramp as opaque, WASHED pixels — a bright
+    outline that despill's near-key test misses (it is already too far from the
+    key colour to match). Since our art always has a thick ink outline, peeling
+    LIGHT edge pixels is safe: erosion stops the moment it reaches the black
+    line, so the silhouette keeps its shape.
+    """
+    if rounds <= 0:
+        return im
+    im = im.convert("RGBA")
+    w, h = im.size
+    px = im.load()
+    total = 0
+    for _ in range(rounds):
+        kill: list[tuple[int, int]] = []
+        for y in range(h):
+            for x in range(w):
+                r, g, b, a = px[x, y]
+                if a == 0 or min(r, g, b) <= light_thr:
+                    continue
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nx, ny = x + dx, y + dy
+                    if not (0 <= nx < w and 0 <= ny < h) or px[nx, ny][3] == 0:
+                        kill.append((x, y))
+                        break
+        if not kill:
+            break
+        for x, y in kill:
+            px[x, y] = (0, 0, 0, 0)
+        total += len(kill)
+    if total:
+        print(f"    eroded {total} washed edge px (light > {light_thr})")
+    return im
+
+
 def restore_interior(im: Image.Image) -> Image.Image:
     """Make an ffmpeg colorkey pass edge-safe.
 
@@ -203,6 +241,8 @@ def process_file(
     key_hex: str,
     ff_similarity: float,
     ff_blend: float,
+    erode_light: int,
+    light_thr: int,
 ) -> None:
     if use_ffmpeg:
         tmp = dst.with_suffix(".fftmp.png")
@@ -211,6 +251,7 @@ def process_file(
             # colorkey is not edge-safe — put back anything it punched out of
             # the interior, then run the usual edge cleanup + crop
             im = restore_interior(im)
+            im = erode_light_edge(im, light_thr, erode_light)
             im = cut_edge_flood(im, key, tol, pad)
             im.save(dst)
             tmp.unlink(missing_ok=True)
@@ -218,8 +259,8 @@ def process_file(
             return
         print(f"  ffmpeg failed, falling back to flood for {src.name}")
 
-    im = Image.open(src)
-    out = cut_edge_flood(im, key, tol, pad)
+    out = cut_edge_flood(Image.open(src), key, tol, pad)
+    out = erode_light_edge(out, light_thr, erode_light)
     out.save(dst)
     print(f"  flood {src.name} -> {dst.name} {out.size}")
 
@@ -240,6 +281,12 @@ def main() -> None:
                     help="ffmpeg colorkey similarity (lower = keys less)")
     ap.add_argument("--ff-blend", type=float, default=0.05,
                     help="ffmpeg colorkey blend (soft alpha ramp)")
+    ap.add_argument("--erode-light", type=int, default=0,
+                    help="Peel N rounds of washed (light) pixels off the silhouette. "
+                         "Safe on art with a thick ink outline; fixes bright halos "
+                         "left by anti-aliasing in JPG sources.")
+    ap.add_argument("--light-threshold", type=int, default=120,
+                    help="min(r,g,b) above which an edge pixel counts as washed")
     args = ap.parse_args()
 
     key = parse_color(args.color)
@@ -252,7 +299,8 @@ def main() -> None:
         if dst.is_dir():
             dst = dst / (src.stem + ".png")
         process_file(src, dst, key, args.tolerance, args.pad, args.ffmpeg, key_hex,
-                     args.ff_similarity, args.ff_blend)
+                     args.ff_similarity, args.ff_blend, args.erode_light,
+                     args.light_threshold)
         return
 
     if not src.is_dir():
@@ -268,7 +316,8 @@ def main() -> None:
     for f in files:
         process_file(
             f, dst / f"{f.stem}.png", key, args.tolerance, args.pad, args.ffmpeg,
-            key_hex, args.ff_similarity, args.ff_blend
+            key_hex, args.ff_similarity, args.ff_blend, args.erode_light,
+            args.light_threshold
         )
 
 

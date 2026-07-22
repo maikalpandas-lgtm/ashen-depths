@@ -148,7 +148,7 @@ func _make_skirting_mat() -> StandardMaterial3D:
 	## Alpha + unshaded so it reads even with strong ambient/glow.
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.albedo_color = Color(0.01, 0.03, 0.05, 1.0)
+	m.albedo_color = Color(0.0, 0.01, 0.02, 1.0)
 	m.vertex_color_use_as_albedo = true
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.blend_mode = BaseMaterial3D.BLEND_MODE_MIX
@@ -499,10 +499,10 @@ func _floor_pt(world: Vector3, u: float, v: float, half: float) -> Vector3:
 func _floor_ao(world: Vector3, u: float, v: float, half: float) -> float:
 	var wx := world.x + (u - 0.5) * 2.0 * half
 	var wz := world.z + (v - 0.5) * 2.0 * half
-	var t := 1.0 - _wall_near(wx, wz, cell_size * 0.55)
-	t = 1.0 - (1.0 - t) * (1.0 - t)
-	t = t * t * (3.0 - 2.0 * t)
-	return lerpf(0.14, 1.0, t)
+	# Wide, slow ramp. The old easing (1-(1-t)^2 then smoothstep) shot back to
+	# full brightness within ~0.3m of the wall, so the contact band was invisible.
+	var t: float = pow(1.0 - _wall_near(wx, wz, cell_size * 0.62), 0.55)
+	return lerpf(0.04, 1.0, t)
 
 
 ## Distance from a world point to the nearest solid cell, in world units.
@@ -678,7 +678,9 @@ func _add_floor_wall_skirting(base: Vector3, face_into: Vector3, mat: Material) 
 
 func _skirt_pt(base: Vector3, right: Vector3, face_into: Vector3, along: float, depth: float) -> Vector3:
 	var p := base + right * along + face_into * depth
-	return Vector3(p.x, _floor_height(p.x, p.z) + 0.015, p.z)
+	# The floor mesh is tessellated coarser than this strip, so its interpolated
+	# surface can sit above an exactly-sampled height — lift enough to stay on top.
+	return Vector3(p.x, _floor_height(p.x, p.z) + 0.06, p.z)
 
 
 func _tri_alpha(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, n: Vector3, aa: float, ab: float, ac: float) -> void:

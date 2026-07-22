@@ -7,26 +7,27 @@
 
 [sub_resource type="Environment" id="Environment_fog"]
 background_mode = 1
-background_color = Color(0.03, 0.06, 0.1, 1)
+background_color = Color(0.012, 0.03, 0.055, 1)
 ambient_light_source = 2
 ambient_light_color = Color(0.16, 0.34, 0.44, 1)
 ambient_light_energy = 0.3
 tonemap_mode = 2
 glow_enabled = true
-glow_intensity = 0.55
-glow_bloom = 0.12
+glow_intensity = 0.32
+glow_bloom = 0.02
+glow_hdr_threshold = 1.25
 fog_enabled = true
 fog_mode = 1
-fog_light_color = Color(0.05, 0.11, 0.17, 1)
-fog_sun_scatter = 0.03
+fog_light_color = Color(0.018, 0.045, 0.075, 1)
+fog_sun_scatter = 0.0
 fog_density = 1.0
-fog_aerial_perspective = 0.8
-fog_sky_affect = 0.9
+fog_aerial_perspective = 0.9
+fog_sky_affect = 1.0
 fog_height = 0.0
 fog_height_density = 0.0
-fog_depth_curve = 1.4
-fog_depth_begin = 1.4
-fog_depth_end = 8.5
+fog_depth_curve = 1.7
+fog_depth_begin = 0.9
+fog_depth_end = 7.0
 adjustment_enabled = true
 adjustment_brightness = 0.97
 adjustment_contrast = 1.14

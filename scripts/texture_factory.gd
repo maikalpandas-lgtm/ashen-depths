@@ -1,4 +1,10 @@
 extends RefCounted
+## SUPERSEDED by shaders/cave_rock.gdshader — kept for reference only.
+##
+## Baking rock to a bitmap capped detail: 320px stretched over 7.2m of wall is
+## 44 px/m, so stones went to mush up close, and a bigger bitmap cost seconds of
+## load time on every dungeon. The shader draws the same stones per pixel.
+##
 ## Dark angular cave rock: faceted stones, thick ink, drip stains (Spice Mines-ish).
 
 

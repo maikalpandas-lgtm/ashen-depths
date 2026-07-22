@@ -1,8 +1,8 @@
 extends Node3D
 ## Corridor-first cave labyrinth with props (Phase 1+ visuals).
 
-const TextureFactory = preload("res://scripts/texture_factory.gd")
 const TorchSprites = preload("res://scripts/torch_sprites.gd")
+const ROCK_SHADER = preload("res://shaders/cave_rock.gdshader")
 
 enum Cell {
 	WALL,
@@ -35,9 +35,9 @@ var start_cell: Vector2i = Vector2i.ZERO
 var exit_cell: Vector2i = Vector2i.ZERO
 var floor_cells: Array[Vector2i] = []
 
-var _floor_mat: StandardMaterial3D
-var _wall_mat: StandardMaterial3D
-var _ceiling_mat: StandardMaterial3D
+var _floor_mat: ShaderMaterial
+var _wall_mat: ShaderMaterial
+var _ceiling_mat: ShaderMaterial
 var _crystal_sprite_mat: StandardMaterial3D
 var _rock_sprite_mat: StandardMaterial3D
 
@@ -113,34 +113,61 @@ func get_cell_type(x: int, y: int) -> int:
 
 
 func _build_materials() -> void:
-	# Readable cave: darker than neon mint, still visible without a torch in face
-	_floor_mat = _make_surface_mat(TextureFactory.cave_floor(320), Color(0.88, 0.95, 1.0), 0.9)
-	_wall_mat = _make_surface_mat(TextureFactory.cave_wall(320), Color(0.92, 1.0, 0.98), 0.84)
-	_ceiling_mat = _make_surface_mat(TextureFactory.cave_ceiling(320), Color(0.7, 0.82, 0.8), 0.93)
+	# Rock is drawn per pixel by cave_rock.gdshader — no baked bitmap, so detail
+	# does not fall apart up close and generation costs nothing.
+	var jitter := float(randi() % 1000) * 0.37
+
+	_wall_mat = _make_rock_mat(jitter, {
+		"deep_col": Color(0.05, 0.14, 0.17),
+		"mid_col": Color(0.09, 0.24, 0.27),
+		"lite_col": Color(0.16, 0.36, 0.36),
+		"hi_col": Color(0.3, 0.58, 0.55),
+		"big_scale": 2.1,
+		"small_scale": 6.2,
+		"angular": 0.5,
+		"rough": 0.84,
+	})
+	# Floor: flatter, wider slabs, less rim (light rakes across it, not down it)
+	_floor_mat = _make_rock_mat(jitter + 11.0, {
+		"deep_col": Color(0.05, 0.11, 0.16),
+		"mid_col": Color(0.08, 0.18, 0.24),
+		"lite_col": Color(0.13, 0.27, 0.32),
+		"hi_col": Color(0.2, 0.4, 0.44),
+		"big_scale": 1.5,
+		"small_scale": 4.4,
+		"angular": 0.62,
+		"rim_strength": 0.22,
+		"rough": 0.9,
+	})
+	# Ceiling: darkest, finest — it is mostly silhouette
+	_ceiling_mat = _make_rock_mat(jitter + 23.0, {
+		"deep_col": Color(0.04, 0.1, 0.12),
+		"mid_col": Color(0.06, 0.17, 0.19),
+		"lite_col": Color(0.1, 0.26, 0.26),
+		"hi_col": Color(0.18, 0.4, 0.38),
+		"big_scale": 2.5,
+		"small_scale": 7.0,
+		"angular": 0.4,
+		"rim_strength": 0.3,
+		"rough": 0.93,
+	})
 	_crystal_sprite_mat = null
 	_rock_sprite_mat = null
 
 
-func _make_surface_mat(tex: Texture2D, albedo: Color, roughness: float) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL  # receive torch / OmniLight
-	m.albedo_texture = tex
-	m.albedo_color = albedo
-	m.roughness = roughness
-	m.metallic = 0.0
-	m.specular = 0.22
-	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
-	m.texture_repeat = true
-	# World UV is already in mesh; keep scale 1 (mesh UV uses large rock scale)
-	m.uv1_scale = Vector3(1.0, 1.0, 1.0)
-	m.cull_mode = BaseMaterial3D.CULL_BACK
-	m.vertex_color_use_as_albedo = true  # soft joint AO only
+func _make_rock_mat(seed_offset: float, params: Dictionary) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = ROCK_SHADER
+	m.set_shader_parameter("seed_offset", seed_offset)
+	for key in params:
+		m.set_shader_parameter(key, params[key])
 	return m
 
 
-## World UV scale: larger rocks, fewer repeats (works with seamless texture).
+## UV is fed to the shader in WORLD METRES, so stones keep one physical size on
+## walls, floor and ceiling and never repeat.
 func _world_uv_scale() -> float:
-	return 1.0 / (cell_size * 2.4)
+	return 1.0
 
 
 func _make_skirting_mat() -> StandardMaterial3D:

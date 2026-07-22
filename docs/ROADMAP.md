@@ -20,9 +20,12 @@
 - [x] F9 → `shots/` для ревью визуала
 
 ## Фаза 2 — Партия + колоды
-- [ ] 3 hero stubs (HP, portrait)
-- [ ] **Deck per hero** (draw / hand / discard)
-- [ ] Starter decks 8–10 cards
+- [x] 3 hero stubs (HP, portrait) — `scripts/party.gd`, Каэль/Лира/Сера, HP 34+30+24=88
+- [x] **Deck** (draw / hand / discard / recycle / hand cap 10) — `scripts/cards/deck.gd`
+- [x] Starter decks 8–10 карт — по 9 на героя, мерж в один combat deck с owner-тегом
+- [x] Тесты логики — `godot --headless --script tests/run_tests.gd` (54 проверки)
+- [ ] Арт: 3 портрета + 5 карт (промпты в `docs/ART_PROMPTS.md`, генерит Grok)
+- [ ] UI руки: показать карты на экране
 - [ ] Hub stub
 
 ## Фаза 3 — Бой + draft слой 1–2

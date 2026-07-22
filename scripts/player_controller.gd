@@ -18,7 +18,8 @@ const FACINGS: Array[Vector2i] = [
 	Vector2i(-1, 0),
 ]
 
-var dungeon: Node3D = null
+## Typed as DungeonGenerator so is_walkable_cell / cell_to_world resolve (not bare Node3D).
+var dungeon: DungeonGenerator = null
 var cell: Vector2i = Vector2i.ZERO
 var facing_index: int = 0
 var _busy: bool = false
@@ -44,7 +45,7 @@ func _ready() -> void:
 	if head:
 		head.rotation.x = deg_to_rad(-2.0)
 	if camera:
-		camera.fov = 70.0
+		camera.fov = 72.0
 		camera.near = 0.08
 		camera.far = 28.0
 	_spawn_view_torch()
@@ -65,8 +66,10 @@ func _spawn_view_torch() -> void:
 		_right_rot_base = _hand_right.rotation_degrees
 
 
-func setup_dungeon(dungeon_ref: Node3D) -> void:
-	dungeon = dungeon_ref
+func setup_dungeon(dungeon_ref: Node) -> void:
+	dungeon = dungeon_ref as DungeonGenerator
+	if dungeon == null and dungeon_ref != null:
+		push_warning("[Player] setup_dungeon: expected DungeonGenerator, got %s" % dungeon_ref)
 
 
 func teleport_to(world_pos: Vector3) -> void:
@@ -198,16 +201,16 @@ func _bump() -> void:
 	_play_step_sway(0.4)
 
 
-## Hands sway left/right (and slight bob) while stepping — alternate side each step.
+## Hands sway left/right while stepping — alternate side each step (readable, not wild).
 func _play_step_sway(strength: float = 1.0) -> void:
 	if _hand_left == null and _hand_right == null:
 		return
 	_sway_side *= -1.0
 	var side := _sway_side * strength
-	# Horizontal sway + small vertical bob + tiny roll
-	var amp_x := 0.04 * side
-	var amp_y := 0.018 * absf(strength)
-	var roll := 5.0 * side  # degrees
+	# Clear L/R walk bob; stays in lower corners, doesn't cover corridor center
+	var amp_x := 0.038 * side
+	var amp_y := 0.014 * absf(strength)
+	var roll := 7.0 * side  # degrees
 
 	if _sway_tween and _sway_tween.is_valid():
 		_sway_tween.kill()
@@ -215,22 +218,22 @@ func _play_step_sway(strength: float = 1.0) -> void:
 	_sway_tween.set_parallel(true)
 	_sway_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
-	var half := step_time * 0.45
-	var rest := step_time * 0.55
+	var half := step_time * 0.42
+	var rest := step_time * 0.58
 
 	if _hand_left:
 		var l_peak := _left_base + Vector3(amp_x, amp_y, 0.0)
-		var l_rot_peak := _left_rot_base + Vector3(0.0, 0.0, roll * 0.6)
+		var l_rot_peak := _left_rot_base + Vector3(0.0, 0.0, roll * 0.7)
 		_sway_tween.tween_property(_hand_left, "position", l_peak, half)
 		_sway_tween.tween_property(_hand_left, "rotation_degrees", l_rot_peak, half)
 	if _hand_right:
-		# Opposite phase — like walking gait
-		var r_peak := _right_base + Vector3(-amp_x * 0.9, amp_y * 0.85, 0.0)
-		var r_rot_peak := _right_rot_base + Vector3(0.0, 0.0, -roll * 0.55)
+		# Opposite phase — walking gait
+		var r_peak := _right_base + Vector3(-amp_x * 0.95, amp_y * 0.9, 0.0)
+		var r_rot_peak := _right_rot_base + Vector3(0.0, 0.0, -roll * 0.65)
 		_sway_tween.tween_property(_hand_right, "position", r_peak, half)
 		_sway_tween.tween_property(_hand_right, "rotation_degrees", r_rot_peak, half)
 
-	# Return to rest (chain after peak)
+	# Return to rest
 	_sway_tween.chain().set_parallel(true)
 	_sway_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	if _hand_left:

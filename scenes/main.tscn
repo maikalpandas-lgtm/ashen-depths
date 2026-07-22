@@ -7,30 +7,30 @@
 
 [sub_resource type="Environment" id="Environment_fog"]
 background_mode = 1
-background_color = Color(0.12, 0.22, 0.28, 1)
+background_color = Color(0.05, 0.1, 0.14, 1)
 ambient_light_source = 2
-ambient_light_color = Color(0.32, 0.52, 0.62, 1)
-ambient_light_energy = 0.38
+ambient_light_color = Color(0.22, 0.38, 0.46, 1)
+ambient_light_energy = 0.28
 tonemap_mode = 2
 glow_enabled = true
-glow_intensity = 0.4
-glow_bloom = 0.1
+glow_intensity = 0.45
+glow_bloom = 0.08
 fog_enabled = true
 fog_mode = 1
-fog_light_color = Color(0.35, 0.62, 0.78, 1)
-fog_sun_scatter = 0.08
+fog_light_color = Color(0.18, 0.32, 0.42, 1)
+fog_sun_scatter = 0.04
 fog_density = 1.0
 fog_aerial_perspective = 0.55
-fog_sky_affect = 0.75
+fog_sky_affect = 0.8
 fog_height = 0.0
 fog_height_density = 0.0
-fog_depth_curve = 1.0
-fog_depth_begin = 3.5
-fog_depth_end = 16.0
+fog_depth_curve = 1.05
+fog_depth_begin = 3.0
+fog_depth_end = 14.0
 adjustment_enabled = true
-adjustment_brightness = 1.06
-adjustment_contrast = 1.03
-adjustment_saturation = 1.08
+adjustment_brightness = 1.0
+adjustment_contrast = 1.05
+adjustment_saturation = 1.0
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_1"]
 dof_blur_far_enabled = true
@@ -100,8 +100,8 @@ camera_attributes = SubResource("CameraAttributesPractical_1")
 
 [node name="FillLight" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 12, 0)
-light_color = Color(0.55, 0.78, 0.9, 1)
-light_energy = 0.45
+light_color = Color(0.4, 0.58, 0.68, 1)
+light_energy = 0.28
 shadow_enabled = false
 
 [node name="Dungeon" type="Node3D" parent="."]

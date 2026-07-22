@@ -1,4 +1,5 @@
 extends Node3D
+class_name DungeonGenerator
 ## Corridor-first cave labyrinth with props (Phase 1+ visuals).
 
 const TextureFactory = preload("res://scripts/texture_factory.gd")
@@ -25,7 +26,8 @@ signal generation_finished(start_world: Vector3)
 @export var cell_size: float = 3.0
 @export var wall_height: float = 3.2
 @export var encounter_rooms: int = 4
-@export var torch_spacing: int = 4
+## Lower = denser wall torches (1 = every walkable cell with a wall).
+@export var torch_spacing: int = 2
 @export var extra_loops: int = 10
 
 var grid: Array = []
@@ -57,6 +59,8 @@ func generate(seed_value: int = 0) -> void:
 	if GameState:
 		GameState.current_seed = seed_value
 
+	# Rebuild cave textures/materials so R regenerates new rock look
+	_build_materials()
 	_clear_children(geometry_root)
 	_clear_children(props_root)
 	_clear_children(entities_root)
@@ -109,9 +113,10 @@ func get_cell_type(x: int, y: int) -> int:
 
 
 func _build_materials() -> void:
-	_floor_mat = _make_surface_mat(TextureFactory.cave_floor(256), Color(1.08, 1.15, 1.2), 0.9)
-	_wall_mat = _make_surface_mat(TextureFactory.cave_wall(256), Color(1.15, 1.22, 1.18), 0.8)
-	_ceiling_mat = _make_surface_mat(TextureFactory.cave_ceiling(256), Color(1.0, 1.1, 1.1), 0.92)
+	# Readable cave: darker than neon mint, still visible without a torch in face
+	_floor_mat = _make_surface_mat(TextureFactory.cave_floor(320), Color(0.88, 0.95, 1.0), 0.9)
+	_wall_mat = _make_surface_mat(TextureFactory.cave_wall(320), Color(0.92, 1.0, 0.98), 0.84)
+	_ceiling_mat = _make_surface_mat(TextureFactory.cave_ceiling(320), Color(0.7, 0.82, 0.8), 0.93)
 	_crystal_sprite_mat = null
 	_rock_sprite_mat = null
 
@@ -729,29 +734,33 @@ func _wall_pt(
 	var along := (u - 0.5) * width
 	var h := -0.18 + v * (wall_height + 0.42)
 	var pos := base + right * along + Vector3.UP * h
-	# Soft tube: bulge into corridor mid-height + lean to roof
+	# Soft at panel corners so seams don't fin; mid-wall gets full relief
 	var edge_w := sin(clampf(u, 0.0, 1.0) * PI)
 	edge_w = edge_w * edge_w
-	var amp := lerpf(0.18, 1.0, edge_w)  # soft at corners (no fins), full mid
-	var tube := sin(v * PI) * 0.26 + pow(v, 1.65) * 0.18
-	# World-stable rock (same on neighbor panels along a wall)
-	var n1 := _cave_noise(pos.x * 0.9 + pos.z * 0.9, h * 1.3, 3)
-	var n2 := _cave_noise(along * 1.4 + pos.x * 0.2, h * 2.1, 8)
-	var n3 := _cave_noise(along * 3.2, h * 3.8, 17)
-	var rock := n1 * 0.12 + n2 * 0.08 + n3 * 0.05
-	var ledge := maxf(0.0, n2) * sin(v * PI) * 0.1
+	var amp := lerpf(0.2, 1.0, edge_w)
+	# Mild tube + stronger angular rock facets (stepped noise = cave blocks)
+	var tube := sin(v * PI) * 0.18 + pow(v, 1.7) * 0.14
+	var n1 := _cave_noise(pos.x * 0.7 + pos.z * 0.7, h * 1.1, 3)
+	var n2 := _cave_noise(along * 1.1 + pos.x * 0.15, h * 1.7, 8)
+	var n3 := _cave_noise(along * 2.6, h * 3.2, 17)
+	# Quantize mid frequencies → flatter angular planes instead of soft blobs
+	var facet := floor(n2 * 4.0) / 4.0
+	var rock := n1 * 0.1 + facet * 0.16 + n3 * 0.07
+	# Occasional hard ledge shelf
+	var ledge := maxf(0.0, facet) * sin(v * PI) * 0.14
 	var push := (tube + rock + ledge) * amp
 	return pos + face_into * (push - 0.015)
 
 
 ## Wall base + roof darkening (no vertical edge dark bands that look like seams).
 func _wall_ao(u: float, v: float) -> float:
-	var floor_t := clampf(v / 0.4, 0.0, 1.0)
+	var floor_t := clampf(v / 0.35, 0.0, 1.0)
 	floor_t = floor_t * floor_t * (3.0 - 2.0 * floor_t)
-	var ao := lerpf(0.16, 1.0, floor_t)
-	var roof_t := clampf((1.0 - v) / 0.2, 0.0, 1.0)
+	# Darker contact near floor — deep cave, not lit hallway
+	var ao := lerpf(0.08, 0.92, floor_t)
+	var roof_t := clampf((1.0 - v) / 0.22, 0.0, 1.0)
 	roof_t = roof_t * roof_t
-	ao *= lerpf(0.82, 1.0, 1.0 - roof_t)
+	ao *= lerpf(0.55, 1.0, 1.0 - roof_t)
 	return ao
 
 
@@ -855,7 +864,7 @@ func _spawn_torches() -> void:
 		for x in range(grid_width):
 			if not _is_walkable(_get_cell(x, y)):
 				continue
-			if (x * 7 + y * 13) % torch_spacing != 0:
+			if torch_spacing > 1 and (x * 7 + y * 13) % torch_spacing != 0:
 				continue
 			var wall_dirs: Array[Vector2i] = []
 			for d in dirs:
@@ -865,9 +874,10 @@ func _spawn_torches() -> void:
 				continue
 			var d: Vector2i = wall_dirs[placed % wall_dirs.size()]
 			var world := cell_to_world(Vector2i(x, y))
-			# Flush to wall surface, slightly into corridor (fixed prop, no billboard)
-			var wall_dist := cell_size * 0.5 - 0.12
-			var pos := world + Vector3(d.x * wall_dist, 1.5, d.y * wall_dist)
+			# Cave walls bulge ~0.35–0.55 into corridor mid-height (_wall_pt tube+rock).
+			# Keep torch in free air near wall face, not buried inside rock mesh.
+			var wall_dist := cell_size * 0.5 - 0.58
+			var pos := world + Vector3(d.x * wall_dist, 1.45, d.y * wall_dist)
 			_add_torch(pos, d)
 			placed += 1
 	print("[Dungeon] torches=%d" % placed)

@@ -13,10 +13,13 @@
 6. **Обрезка:** только рабочий способ из `ASSETS.md` § «Как обрезать» — edge flood chromakey (`tools/sprite_cutter.py`), **без** жирного outline-inflate и без агрессивного scissor на стали.
 7. **Viewmodel:** не stretch/shake всю руку с факелом — рука статична; лёгкий stretch только у мелких wall-torch props.
 
-## Git
+## Git (обязательно)
 
-- Коммитить осмысленно, не коммитить мусор (`_tmp*`, `raw/cut/`, `gen_*` — см. `.gitignore`).
-- Push на `origin/main` после нормального коммита, если пользователь ждёт изменения на GitHub.
+1. **После каждого осмысленного изменения** — сразу `git commit` + **`git push origin main`** на GitHub.
+2. Не копить кучу правок «на потом» — одно логическое изменение ≈ один коммит.
+3. Сообщения коммитов: коротко **что** и **зачем** (en или ru), без мусора.
+4. Не коммитить: `_tmp*`, `raw/cut/`, `gen_*`, keystore/password — см. `.gitignore`.
+5. Не force-push на `main` без явной просьбы пользователя.
 
 ## Movement / props
 

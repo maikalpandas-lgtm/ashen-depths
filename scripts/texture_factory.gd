@@ -1,47 +1,47 @@
 extends RefCounted
-## Cartoon cave rock like competitor: big stones, thick ink lines, soft fills.
+## Dark angular cave rock: faceted stones, thick ink, drip stains (Spice Mines-ish).
 
 
 static func cave_wall(size: int = 384) -> ImageTexture:
-	return _cartoon_rock(
+	return _angular_rock(
 		size,
-		Color(0.12, 0.22, 0.26),  # ink
-		Color(0.18, 0.42, 0.46),  # deep fill
-		Color(0.28, 0.58, 0.56),  # mid
-		Color(0.42, 0.74, 0.68),  # light
-		Color(0.55, 0.86, 0.78),  # highlight
-		0.09,
-		true
-	)
-
-
-static func cave_floor(size: int = 384) -> ImageTexture:
-	return _cartoon_rock(
-		size,
-		Color(0.08, 0.12, 0.16),
-		Color(0.12, 0.24, 0.30),
-		Color(0.18, 0.34, 0.40),
-		Color(0.26, 0.44, 0.48),
-		Color(0.34, 0.54, 0.56),
-		0.11,
-		false
-	)
-
-
-static func cave_ceiling(size: int = 384) -> ImageTexture:
-	return _cartoon_rock(
-		size,
-		Color(0.08, 0.16, 0.18),
-		Color(0.14, 0.34, 0.36),
-		Color(0.22, 0.48, 0.46),
-		Color(0.32, 0.62, 0.56),
-		Color(0.42, 0.74, 0.64),
+		Color(0.04, 0.08, 0.10),  # ink
+		Color(0.06, 0.16, 0.18),  # deep
+		Color(0.10, 0.26, 0.28),  # mid
+		Color(0.16, 0.38, 0.36),  # lite
+		Color(0.22, 0.48, 0.44),  # hi
 		0.085,
 		true
 	)
 
 
-static func _cartoon_rock(
+static func cave_floor(size: int = 384) -> ImageTexture:
+	return _angular_rock(
+		size,
+		Color(0.03, 0.05, 0.07),
+		Color(0.05, 0.10, 0.14),
+		Color(0.08, 0.16, 0.20),
+		Color(0.12, 0.24, 0.28),
+		Color(0.16, 0.30, 0.32),
+		0.1,
+		false
+	)
+
+
+static func cave_ceiling(size: int = 384) -> ImageTexture:
+	return _angular_rock(
+		size,
+		Color(0.03, 0.06, 0.07),
+		Color(0.05, 0.12, 0.14),
+		Color(0.08, 0.20, 0.20),
+		Color(0.12, 0.30, 0.28),
+		Color(0.16, 0.38, 0.34),
+		0.08,
+		true
+	)
+
+
+static func _angular_rock(
 	size: int,
 	ink: Color,
 	deep: Color,
@@ -52,15 +52,15 @@ static func _cartoon_rock(
 	drips: bool
 ) -> ImageTexture:
 	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	# Jittered grid of stone centers (large chunks like hand-paint)
 	var cols := maxi(5, int(1.0 / cell_scale))
 	var rows := cols + (1 if drips else 0)
 	var pts: Array[Vector2] = []
 	var ids: Array[int] = []
 	for j in range(rows + 2):
 		for i in range(cols + 2):
-			var px := (float(i) + 0.12 + _hash(i, j) * 0.76) / float(cols) * float(size)
-			var py := (float(j) + 0.12 + _hash(i + 4, j + 2) * 0.76) / float(rows) * float(size)
+			# Stronger jitter → irregular angular blocks
+			var px := (float(i) + 0.08 + _hash(i, j) * 0.84) / float(cols) * float(size)
+			var py := (float(j) + 0.08 + _hash(i + 4, j + 2) * 0.84) / float(rows) * float(size)
 			pts.append(Vector2(px, py))
 			ids.append(i * 97 + j * 31)
 
@@ -71,10 +71,15 @@ static func _cartoon_rock(
 			var second := 1e9
 			var bid := 0
 			for k in range(pts.size()):
-				# Elliptical distance → irregular stones
 				var q: Vector2 = p - pts[k]
-				var stretch := 0.75 + _hash(ids[k], 3) * 0.55
-				var d := sqrt(q.x * q.x + (q.y * stretch) * (q.y * stretch))
+				# Faceted distance: mix Chebyshev + Manhattan → angular stones, not round pebbles
+				var ax := absf(q.x)
+				var ay := absf(q.y) * (0.7 + _hash(ids[k], 3) * 0.6)
+				var d_box := maxf(ax, ay)
+				var d_man := (ax + ay) * 0.55
+				var d := d_box * 0.62 + d_man * 0.38
+				# Slight euclidean to avoid pure diamonds
+				d = d * 0.78 + sqrt(ax * ax + ay * ay) * 0.22
 				if d < best:
 					second = best
 					best = d
@@ -83,56 +88,53 @@ static func _cartoon_rock(
 					second = d
 
 			var edge := second - best
-			var ink_w := 2.8 + _hash(bid, 5) * 2.2
-			# Thick ink border between stones
+			var ink_w := 3.2 + _hash(bid, 5) * 2.8  # thicker cracks
 			if edge < ink_w:
 				var t := edge / ink_w
-				var c_ink := ink.darkened(_hash(bid, 6) * 0.1)
-				# Soft outer ink, hard core
-				if t < 0.45:
+				var c_ink := ink.darkened(_hash(bid, 6) * 0.12)
+				if t < 0.4:
 					img.set_pixel(x, y, c_ink)
 					continue
-				# Blend into stone
 				var fill := _stone_fill(bid, best, size, deep, mid, lite, hi)
-				img.set_pixel(x, y, c_ink.lerp(fill, (t - 0.45) / 0.55))
+				img.set_pixel(x, y, c_ink.lerp(fill, (t - 0.4) / 0.6))
 				continue
 
 			var fill2 := _stone_fill(bid, best, size, deep, mid, lite, hi)
-			# Inner rim shadow (gives depth like paint)
-			if edge < ink_w + 3.5:
-				fill2 = fill2.darkened(0.1 * (1.0 - (edge - ink_w) / 3.5))
+			# Harder inner rim (faceted depth)
+			if edge < ink_w + 4.0:
+				fill2 = fill2.darkened(0.14 * (1.0 - (edge - ink_w) / 4.0))
+			# Extra crack lines across large faces
+			if _hash(bid, 9) > 0.82 and int(best * 0.35 + float(x + y) * 0.02) % 17 == 0:
+				fill2 = fill2.darkened(0.18)
 			img.set_pixel(x, y, fill2)
 
-	# Vertical drip stains (ceiling/wall)
 	if drips:
 		for x in range(size):
-			if _hash(x, 11) < 0.9:
+			if _hash(x, 11) < 0.88:
 				continue
-			var len := 10 + int(_hash(x, 12) * 55.0)
+			var len := 12 + int(_hash(x, 12) * 70.0)
 			var x0 := x
 			for y in range(mini(len, size)):
 				var c := img.get_pixel(x0, y)
-				img.set_pixel(x0, y, c.darkened(0.07 + float(y) / float(size) * 0.06))
-				if x0 + 1 < size and _hash(x, y) > 0.4:
-					img.set_pixel(x0 + 1, y, img.get_pixel(x0 + 1, y).darkened(0.04))
+				img.set_pixel(x0, y, c.darkened(0.1 + float(y) / float(size) * 0.08))
+				if x0 + 1 < size and _hash(x, y) > 0.35:
+					img.set_pixel(x0 + 1, y, img.get_pixel(x0 + 1, y).darkened(0.06))
 
-	# No baked skirting bands — contact shadow is mesh-side only at floor–wall joint.
 	return _tex_with_mips(img)
 
 
 static func _stone_fill(bid: int, best: float, size: int, deep: Color, mid: Color, lite: Color, hi: Color) -> Color:
 	var t := _hash(bid, 0)
 	var t2 := _hash(bid, 1)
-	var c := deep.lerp(mid, t).lerp(lite, t2 * 0.5)
-	# Soft radial shading inside stone
-	var shade := clampf(best / (float(size) * 0.12), 0.0, 1.0)
-	c = c.darkened(shade * 0.14)
-	# Specular-ish paint blob
-	if _hash(bid, 2) > 0.55 and shade < 0.35:
-		c = c.lerp(hi, 0.18)
-	# Micro variation
-	if _hash(bid * 3, int(best * 10.0)) > 0.92:
-		c = c.lightened(0.04)
+	# Prefer deeper fills — only rare stones get lite highlight
+	var c := deep.lerp(mid, t * 0.85).lerp(lite, t2 * 0.28)
+	var shade := clampf(best / (float(size) * 0.11), 0.0, 1.0)
+	c = c.darkened(shade * 0.2)
+	# Flat facet highlight (angular plane, not soft blob)
+	if _hash(bid, 2) > 0.62 and shade < 0.28:
+		c = c.lerp(hi, 0.12)
+	if _hash(bid * 3, int(best * 8.0)) > 0.94:
+		c = c.lightened(0.03)
 	return c
 
 

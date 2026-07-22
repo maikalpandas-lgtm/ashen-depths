@@ -6,7 +6,7 @@ extends Control
 @export var view_radius: int = 7
 @export var panel_size: int = 176
 
-var _dungeon: Node3D
+var _dungeon: DungeonGenerator
 var _player: Node3D
 var _texture_rect: TextureRect
 var _img: Image
@@ -25,8 +25,8 @@ const COL_FIGHT := Color(0.75, 0.75, 0.7, 1)
 const COL_DOOR := Color(0.55, 0.38, 0.25, 1)
 
 
-func setup(dungeon: Node3D, player: Node3D) -> void:
-	_dungeon = dungeon
+func setup(dungeon: Node, player: Node3D) -> void:
+	_dungeon = dungeon as DungeonGenerator
 	_player = player
 	custom_minimum_size = Vector2(panel_size, panel_size)
 	size = Vector2(panel_size, panel_size)

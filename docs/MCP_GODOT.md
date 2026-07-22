@@ -47,3 +47,21 @@ cp ~/.grok/mcp/godot-mcp/build/scripts/mcp_interaction_server.gd \
 
 Headless scene/project tools work without the autoload.  
 `game_*` tools need the game **running** with `McpInteractionServer` autoload.
+
+## Docs MCP (godot-mcp-docs)
+
+- Package: [Nihilantropy/godot-mcp-docs](https://github.com/Nihilantropy/godot-mcp-docs)
+- Path: `~/.grok/mcp/godot-mcp-docs`
+- Grok config: `[mcp_servers.godot_docs]`
+- Tools: documentation tree + file lookup (official Godot docs as markdown)
+
+### After install / update docs
+
+```bash
+cd ~/.grok/mcp/godot-mcp-docs
+source .venv/bin/activate
+cd docs_converter && python godot_docs_converter.py
+# ensure symlink: ln -sfn docs_converter/docs ../docs
+```
+
+Restart Grok session so `godot_docs` tools load.

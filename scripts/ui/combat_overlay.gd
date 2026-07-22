@@ -431,18 +431,18 @@ func _sync_world_sprites() -> void:
 		spr.modulate = Color(1.7, 1.55, 1.15) if i == hovered else Color.WHITE
 
 
-## Living enemy indices in left→right stage order.
+## Living enemy indices only (hp > 0). Dead never get bars or aim slots.
 func _living_indices() -> Array:
 	var out: Array = []
 	if _combat == null:
 		return out
 	for i in range(_combat.enemies.size()):
-		if int(_combat.enemies[i]["hp"]) > 0:
+		if int(_combat.enemies[i].get("hp", 0)) > 0:
 			out.append(i)
 	return out
 
 
-## After a kill, re-spread survivors so sprites + bars never stack on one column.
+## After a kill, re-spread survivors left→right. Dead stay hidden (no HP bar).
 func _reform_living() -> void:
 	if not is_instance_valid(_source) or _cam == null or not is_instance_valid(_cam):
 		return
@@ -482,9 +482,7 @@ func _reform_living() -> void:
 		node.scale = Vector3(combat_scale, combat_scale, combat_scale)
 
 
-## HP bars for every living foe — fixed screen slots (always readable, even
-## after kills). World unproject alone stacked bars on one pixel when sprites
-## overlapped; slots are assigned by living order left→right.
+## HP + intent only for LIVE foes. Killed mobs: no bar, no name, no intent.
 func _draw_world_overlay() -> void:
 	if _combat == null:
 		return
@@ -494,39 +492,39 @@ func _draw_world_overlay() -> void:
 	if living.is_empty():
 		return
 
+	var cam := get_viewport().get_camera_3d()
 	var vp := _world_layer.size
 	if vp.x < 8.0 or vp.y < 8.0:
 		vp = get_viewport().get_visible_rect().size
-	# Clear of left HUD (~200px) and hand strip
-	var left_m := 220.0
-	var right_m := 40.0
-	var top_y := 92.0
-	var usable: float = maxf(160.0, vp.x - left_m - right_m)
 	var n := living.size()
-	var bar_w: float = minf(120.0, usable / float(maxi(1, n)) - 12.0)
-	bar_w = maxf(88.0, bar_w)
 
 	for k in range(n):
 		var i: int = int(living[k])
 		var e: Dictionary = _combat.enemies[i]
-		# Evenly spaced centres across the combat strip
-		var t: float = 0.5 if n == 1 else float(k) / float(n - 1)
-		var cx: float = left_m + usable * t
-		var p := Vector2(cx, top_y)
+		# Belt-and-suspenders: never paint a corpse bar
+		if int(e.get("hp", 0)) <= 0:
+			continue
 
-		# Prefer anchoring above the 3D sprite when projection is sane
-		if i < _enemy_nodes.size():
+		var p := Vector2.ZERO
+		var have_proj := false
+		if cam and i < _enemy_nodes.size():
 			var node := _enemy_nodes[i] as Node3D
-			var cam := get_viewport().get_camera_3d()
-			if cam and is_instance_valid(node):
+			if is_instance_valid(node) and node.visible:
 				var head: Vector3 = node.global_position + Vector3.UP * _enemy_top(i)
 				if not cam.is_position_behind(head):
-					var proj := cam.unproject_position(head)
-					# Keep slot X (stable), only borrow Y from head if on-screen
-					if proj.y > 70.0 and proj.y < vp.y - 280.0:
-						p.y = proj.y
+					p = cam.unproject_position(head)
+					have_proj = true
+		if not have_proj:
+			# Fallback slot among living only (no space reserved for dead)
+			var left_m := 220.0
+			var usable: float = maxf(160.0, vp.x - left_m - 40.0)
+			var t: float = 0.5 if n == 1 else float(k) / float(n - 1)
+			p = Vector2(left_m + usable * t, 110.0)
+		p.y = clampf(p.y, 88.0, vp.y - 280.0)
+		p.x = clampf(p.x, 230.0, vp.x - 50.0)
 
-		var bar := Rect2(p.x - bar_w * 0.5, p.y - 8.0, bar_w, 14.0)
+		var bar_w := 112.0
+		var bar := Rect2(p.x - bar_w * 0.5, p.y - 10.0, bar_w, 14.0)
 		_world_layer.draw_rect(bar.grow(3.0), Color(0.02, 0.02, 0.04, 0.92))
 		_world_layer.draw_rect(bar, Color(0.18, 0.07, 0.08, 0.98))
 		var frac: float = clampf(float(e["hp"]) / maxf(1.0, float(e["max_hp"])), 0.0, 1.0)

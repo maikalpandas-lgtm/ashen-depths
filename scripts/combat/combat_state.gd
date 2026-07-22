@@ -267,7 +267,9 @@ func _hit_enemy(index: int, amount: int, ignore_block: bool) -> int:
 	_event("enemy_hit", index, left)
 	if was_alive and int(e["hp"]) <= 0:
 		_event("enemy_died", index)
-	_log("%s получает %d (%d/%d)" % [e["name"], left, e["hp"], e["max_hp"]])
+		_log("%s убит!" % e["name"])
+	else:
+		_log("%s получает %d (%d/%d)" % [e["name"], left, e["hp"], e["max_hp"]])
 	return left
 
 

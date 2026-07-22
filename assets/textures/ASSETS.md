@@ -89,6 +89,36 @@ python3 tools/sprite_cutter.py path/to/raw.jpg assets/textures/out.png \
 
 ---
 
+## Heroes (портреты, батч 1)
+
+| ID | Файл в игре | Master PNG | Source | Назначение |
+|----|-------------|------------|--------|------------|
+| **hero_kael** | `hero_kael.png` | `masters/hero_kael.png` | `masters/hero_kael_source.jpg` | Каэль, паладин / танк |
+| **hero_lyra** | `hero_lyra.png` | `masters/hero_lyra.png` | `masters/hero_lyra_source.jpg` | Лира, охотница / DPS |
+| **hero_sera** | `hero_sera.png` | `masters/hero_sera.png` | `masters/hero_sera_source.jpg` | Сера, огненный маг / AoE |
+
+Фон gen: `#FF00FF`. Cut: `--color FF00FF --ffmpeg --erode-light 2`.  
+Без рамок; круглый crop делает UI.
+
+---
+
+## Cards (иллюстрации, батч 1)
+
+**Только art.** Рамку, название, ⚡ cost рисует движок — в PNG нет цифр/рамки.
+
+| ID | Файл в игре | Master PNG | Source | Назначение |
+|----|-------------|------------|--------|------------|
+| **card_slice** | `card_slice.png` | `masters/card_slice.png` | `masters/card_slice_source.jpg` | Slice — удар кинжалом |
+| **card_block** | `card_block.png` | `masters/card_block.png` | `masters/card_block_source.jpg` | Block — щит + барьер |
+| **card_firebolt** | `card_firebolt.png` | `masters/card_firebolt.png` | `masters/card_firebolt_source.jpg` | Firebolt — огненная стрела |
+| **card_blood_lash** | `card_blood_lash.png` | `masters/card_blood_lash.png` | `masters/card_blood_lash_source.jpg` | Blood Lash — кровавый хлыст |
+| **card_bone_rattle** | `card_bone_rattle.png` | `masters/card_bone_rattle.png` | `masters/card_bone_rattle_source.jpg` | Bone Rattle — кость на шнуре |
+
+Промпты: `docs/ART_PROMPTS.md` §2.  
+Качество cut (bright edge): все **≤0.3%**.
+
+---
+
 ## Props (мир)
 
 | ID | Файл в игре | Master PNG | Source | Назначение |

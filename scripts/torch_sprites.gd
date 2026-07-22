@@ -13,6 +13,9 @@ const HAND_TORCH_PATH := "res://assets/textures/hand_torch.png"
 const HAND_KNIFE_PATH := "res://assets/textures/hand_knife.png"
 const GLOW_TEX_PATH := "res://assets/textures/torch_glow.png"
 const FLAME_SHADER_PATH := "res://shaders/flame_shimmer.gdshader"
+## Wall fire licks noticeably faster than the hand torch — it is further away,
+## so a slow shimmer reads as a still picture.
+const WALL_FLAME_SPEED := 2.1
 
 static var _torch_tex: Texture2D
 static var _hand_torch_tex: Texture2D
@@ -137,7 +140,7 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 	body.position = Vector3(0.0, 0.26, -0.06)
 	body.render_priority = 5
 	holder.add_child(body)
-	_apply_flame_shimmer(body, _torch_tex, 0.38, 0.65, 0.018, 0.009, 2.8, true)
+	_apply_flame_shimmer(body, _torch_tex, 0.38, WALL_FLAME_SPEED, 0.03, 0.012, 2.8, true)
 
 	var light := OmniLight3D.new()
 	light.name = "Light"

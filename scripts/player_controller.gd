@@ -7,6 +7,11 @@ extends CharacterBody3D
 @export var turn_time: float = 0.12
 @export var move_cooldown: float = 0.02
 @export var feet_y: float = 0.0
+## Walk sway — tune live in the inspector.
+@export var sway_shift: float = 0.085  ## sideways travel of the hands, metres
+@export var sway_lift: float = 0.03  ## vertical bob, metres
+@export var sway_roll: float = 15.0  ## hand roll, degrees
+@export var sway_time: float = 0.28  ## full sway cycle; kept longer than a step
 
 @onready var head: Node3D = $Head
 @onready var camera: Camera3D = $Head/Camera3D
@@ -208,9 +213,9 @@ func _play_step_sway(strength: float = 1.0) -> void:
 	_sway_side *= -1.0
 	var side := _sway_side * strength
 	# Clear L/R walk bob; stays in lower corners, doesn't cover corridor center
-	var amp_x := 0.038 * side
-	var amp_y := 0.014 * absf(strength)
-	var roll := 7.0 * side  # degrees
+	var amp_x := sway_shift * side
+	var amp_y := sway_lift * absf(strength)
+	var roll := sway_roll * side  # degrees
 
 	if _sway_tween and _sway_tween.is_valid():
 		_sway_tween.kill()
@@ -218,8 +223,11 @@ func _play_step_sway(strength: float = 1.0) -> void:
 	_sway_tween.set_parallel(true)
 	_sway_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
-	var half := step_time * 0.42
-	var rest := step_time * 0.58
+	# Deliberately NOT tied to step_time. A 0.16s step is too short for the eye
+	# to catch the swing, so the sway outlives the step: hold W and the hands
+	# never settle, which is what reads as walking.
+	var half := sway_time * 0.4
+	var rest := sway_time * 0.6
 
 	if _hand_left:
 		var l_peak := _left_base + Vector3(amp_x, amp_y, 0.0)

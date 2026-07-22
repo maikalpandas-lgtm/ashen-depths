@@ -1,5 +1,4 @@
 extends Node3D
-class_name DungeonGenerator
 ## Corridor-first cave labyrinth with props (Phase 1+ visuals).
 
 const TextureFactory = preload("res://scripts/texture_factory.gd")
@@ -739,16 +738,16 @@ func _wall_pt(
 	edge_w = edge_w * edge_w
 	var amp := lerpf(0.2, 1.0, edge_w)
 	# Mild tube + stronger angular rock facets (stepped noise = cave blocks)
-	var tube := sin(v * PI) * 0.18 + pow(v, 1.7) * 0.14
-	var n1 := _cave_noise(pos.x * 0.7 + pos.z * 0.7, h * 1.1, 3)
-	var n2 := _cave_noise(along * 1.1 + pos.x * 0.15, h * 1.7, 8)
-	var n3 := _cave_noise(along * 2.6, h * 3.2, 17)
+	var tube: float = sin(v * PI) * 0.18 + pow(v, 1.7) * 0.14
+	var n1: float = _cave_noise(pos.x * 0.7 + pos.z * 0.7, h * 1.1, 3)
+	var n2: float = _cave_noise(along * 1.1 + pos.x * 0.15, h * 1.7, 8)
+	var n3: float = _cave_noise(along * 2.6, h * 3.2, 17)
 	# Quantize mid frequencies → flatter angular planes instead of soft blobs
-	var facet := floor(n2 * 4.0) / 4.0
-	var rock := n1 * 0.1 + facet * 0.16 + n3 * 0.07
+	var facet: float = floorf(n2 * 4.0) / 4.0
+	var rock: float = n1 * 0.1 + facet * 0.16 + n3 * 0.07
 	# Occasional hard ledge shelf
-	var ledge := maxf(0.0, facet) * sin(v * PI) * 0.14
-	var push := (tube + rock + ledge) * amp
+	var ledge: float = maxf(0.0, facet) * sin(v * PI) * 0.14
+	var push: float = (tube + rock + ledge) * amp
 	return pos + face_into * (push - 0.015)
 
 

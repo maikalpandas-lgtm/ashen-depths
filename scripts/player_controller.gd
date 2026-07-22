@@ -18,8 +18,8 @@ const FACINGS: Array[Vector2i] = [
 	Vector2i(-1, 0),
 ]
 
-## Typed as DungeonGenerator so is_walkable_cell / cell_to_world resolve (not bare Node3D).
-var dungeon: DungeonGenerator = null
+## Dungeon generator node (has is_walkable_cell / cell_to_world). Untyped: no class_name dep.
+var dungeon: Node = null
 var cell: Vector2i = Vector2i.ZERO
 var facing_index: int = 0
 var _busy: bool = false
@@ -67,9 +67,9 @@ func _spawn_view_torch() -> void:
 
 
 func setup_dungeon(dungeon_ref: Node) -> void:
-	dungeon = dungeon_ref as DungeonGenerator
-	if dungeon == null and dungeon_ref != null:
-		push_warning("[Player] setup_dungeon: expected DungeonGenerator, got %s" % dungeon_ref)
+	dungeon = dungeon_ref
+	if dungeon != null and not dungeon.has_method("is_walkable_cell"):
+		push_warning("[Player] setup_dungeon: node missing is_walkable_cell: %s" % dungeon)
 
 
 func teleport_to(world_pos: Vector3) -> void:
@@ -78,10 +78,10 @@ func teleport_to(world_pos: Vector3) -> void:
 	_busy = false
 	_input_lock = 0.0
 	if dungeon and dungeon.has_method("world_to_cell"):
-		cell = dungeon.world_to_cell(world_pos)
+		cell = dungeon.call("world_to_cell", world_pos) as Vector2i
 		# Safety: if cell not walkable, snap to start
-		if not dungeon.is_walkable_cell(cell.x, cell.y) and dungeon.get("start_cell") != null:
-			cell = dungeon.start_cell
+		if not _cell_walkable(cell) and dungeon.get("start_cell") != null:
+			cell = dungeon.get("start_cell") as Vector2i
 		global_position = _cell_world_pos(cell)
 		facing_index = _pick_open_facing()
 		rotation.y = _yaw_for_facing(facing_index)
@@ -139,7 +139,7 @@ func _try_step(delta_cell: Vector2i) -> void:
 	if _busy or dungeon == null:
 		return
 	var next := cell + delta_cell
-	if not dungeon.is_walkable_cell(next.x, next.y):
+	if not _cell_walkable(next):
 		_bump()
 		return
 	cell = next
@@ -244,9 +244,15 @@ func _play_step_sway(strength: float = 1.0) -> void:
 		_sway_tween.tween_property(_hand_right, "rotation_degrees", _right_rot_base, rest)
 
 
+func _cell_walkable(c: Vector2i) -> bool:
+	if dungeon == null or not dungeon.has_method("is_walkable_cell"):
+		return false
+	return bool(dungeon.call("is_walkable_cell", c.x, c.y))
+
+
 func _cell_world_pos(c: Vector2i) -> Vector3:
 	if dungeon and dungeon.has_method("cell_to_world"):
-		var w: Vector3 = dungeon.cell_to_world(c)
+		var w: Vector3 = dungeon.call("cell_to_world", c) as Vector3
 		return Vector3(w.x, feet_y, w.z)
 	return Vector3(global_position.x, feet_y, global_position.z)
 
@@ -270,7 +276,7 @@ func _pick_open_facing() -> int:
 		return 0
 	for i in range(4):
 		var n: Vector2i = cell + FACINGS[i]
-		if dungeon.is_walkable_cell(n.x, n.y):
+		if _cell_walkable(n):
 			return i
 	return 0
 

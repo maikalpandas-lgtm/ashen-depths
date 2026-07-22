@@ -6,7 +6,7 @@ extends Control
 @export var view_radius: int = 7
 @export var panel_size: int = 176
 
-var _dungeon: DungeonGenerator
+var _dungeon: Node
 var _player: Node3D
 var _texture_rect: TextureRect
 var _img: Image
@@ -26,7 +26,7 @@ const COL_DOOR := Color(0.55, 0.38, 0.25, 1)
 
 
 func setup(dungeon: Node, player: Node3D) -> void:
-	_dungeon = dungeon as DungeonGenerator
+	_dungeon = dungeon
 	_player = player
 	custom_minimum_size = Vector2(panel_size, panel_size)
 	size = Vector2(panel_size, panel_size)
@@ -54,13 +54,19 @@ func _process(_delta: float) -> void:
 		return
 	if not _dungeon.has_method("world_to_cell"):
 		return
-	var cell: Vector2i = _dungeon.world_to_cell(_player.global_position)
+	var cell: Vector2i = _dungeon.call("world_to_cell", _player.global_position) as Vector2i
 	for dy in range(-2, 3):
 		for dx in range(-2, 3):
 			var c := Vector2i(cell.x + dx, cell.y + dy)
-			if _dungeon.is_walkable_cell(c.x, c.y):
+			if _dungeon_walkable(c.x, c.y):
 				_revealed[c] = true
 	_redraw()
+
+
+func _dungeon_walkable(x: int, y: int) -> bool:
+	if _dungeon == null or not _dungeon.has_method("is_walkable_cell"):
+		return false
+	return bool(_dungeon.call("is_walkable_cell", x, y))
 
 
 func _redraw() -> void:
@@ -79,7 +85,9 @@ func _redraw() -> void:
 				var t := float(edge - 6) / 8.0
 				_img.set_pixel(x, y, COL_BG.lerp(COL_PAPER, t * 0.5))
 
-	var pc: Vector2i = _dungeon.world_to_cell(_player.global_position)
+	if not _dungeon.has_method("world_to_cell"):
+		return
+	var pc: Vector2i = _dungeon.call("world_to_cell", _player.global_position) as Vector2i
 	var cells_side := view_radius * 2 + 1
 	var origin := Vector2i(pc.x - view_radius, pc.y - view_radius)
 
@@ -90,9 +98,11 @@ func _redraw() -> void:
 			var cell := Vector2i(gx, gy)
 			if not _revealed.has(cell):
 				continue
-			if not _dungeon.is_walkable_cell(gx, gy):
+			if not _dungeon_walkable(gx, gy):
 				continue
-			var kind: int = _dungeon.get_cell_type(gx, gy)
+			var kind: int = 0
+			if _dungeon.has_method("get_cell_type"):
+				kind = int(_dungeon.call("get_cell_type", gx, gy))
 			var col := COL_TILE
 			match kind:
 				2:

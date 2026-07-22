@@ -120,6 +120,14 @@ func get_cell_type(x: int, y: int) -> int:
 	return _get_cell(x, y)
 
 
+## A beaten pack must stop showing a skull on the minimap — the grid still said
+## ENCOUNTER after the node was freed.
+func clear_encounter_at(world: Vector3) -> void:
+	var c := world_to_cell(world)
+	if _get_cell(c.x, c.y) == Cell.ENCOUNTER:
+		_set_cell(c.x, c.y, Cell.FLOOR)
+
+
 func _build_materials() -> void:
 	# Rock is drawn per pixel by cave_rock.gdshader — no baked bitmap, so detail
 	# does not fall apart up close and generation costs nothing.

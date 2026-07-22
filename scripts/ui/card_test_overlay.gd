@@ -14,6 +14,7 @@ const CardDB = preload("res://scripts/cards/card_db.gd")
 const Party = preload("res://scripts/party.gd")
 const Deck = preload("res://scripts/cards/deck.gd")
 const CardView = preload("res://scripts/ui/card_view.gd")
+const UiTheme = preload("res://scripts/ui/ui_theme.gd")
 
 ## 5:7, the ratio card_frame.png is authored at
 const CARD_W := 150
@@ -90,8 +91,7 @@ func _build_ui() -> void:
 
 	var title := Label.new()
 	title.text = "PARTY & DECK  ·  Phase 2 test view  ·  C to close"
-	title.add_theme_font_size_override("font_size", 20)
-	title.add_theme_color_override("font_color", Color(1.0, 0.86, 0.6))
+	UiTheme.as_title(title, 20, Color(1.0, 0.86, 0.6))
 	col.add_child(title)
 
 	_party_row = HBoxContainer.new()
@@ -156,8 +156,7 @@ func _render_party() -> void:
 
 		var name_label := Label.new()
 		name_label.text = "%s — %s" % [m["name"], m["role"]]
-		name_label.add_theme_font_size_override("font_size", 13)
-		name_label.add_theme_color_override("font_color", m["colour"])
+		UiTheme.as_title(name_label, 13, m["colour"])
 		box.add_child(name_label)
 
 		var hp := ProgressBar.new()

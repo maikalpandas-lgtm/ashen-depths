@@ -4,6 +4,7 @@ extends RefCounted
 ## looks the same wherever it appears.
 
 const CardDB = preload("res://scripts/cards/card_db.gd")
+const UiTheme = preload("res://scripts/ui/ui_theme.gd")
 
 const ART_DIR := "res://assets/textures/"
 
@@ -79,9 +80,7 @@ static func build(card: Dictionary, owner_colour: Color, card_size: Vector2) -> 
 
 	var cost := Label.new()
 	cost.text = str(card["blood"]) if is_blood else str(card["energy"])
-	cost.add_theme_font_size_override("font_size", 17)
-	cost.add_theme_color_override("font_color",
-		Color(1.0, 0.72, 0.72) if is_blood else Color(0.86, 0.95, 1.0))
+	UiTheme.as_title(cost, 17, Color(1.0, 0.72, 0.72) if is_blood else Color(0.86, 0.95, 1.0))
 	cost.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1))
 	cost.add_theme_constant_override("outline_size", 5)
 	cost.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -91,8 +90,7 @@ static func build(card: Dictionary, owner_colour: Color, card_size: Vector2) -> 
 
 	var name_label := Label.new()
 	name_label.text = str(card["name"]).to_upper()
-	name_label.add_theme_font_size_override("font_size", 12)
-	name_label.add_theme_color_override("font_color", Color(0.16, 0.11, 0.07))
+	UiTheme.as_title(name_label, 12, Color(0.16, 0.11, 0.07))
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_place(name_label, NAME_RECT)

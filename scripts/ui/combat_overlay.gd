@@ -9,6 +9,7 @@ const CardDB = preload("res://scripts/cards/card_db.gd")
 const CardView = preload("res://scripts/ui/card_view.gd")
 const Combat = preload("res://scripts/combat/combat_state.gd")
 const Party = preload("res://scripts/party.gd")
+const UiTheme = preload("res://scripts/ui/ui_theme.gd")
 
 const CARD_W := 132
 const CARD_H := 185
@@ -81,8 +82,7 @@ func _build_ui() -> void:
 	_root.add_child(col)
 
 	_banner = Label.new()
-	_banner.add_theme_font_size_override("font_size", 22)
-	_banner.add_theme_color_override("font_color", Color(1.0, 0.86, 0.6))
+	UiTheme.as_title(_banner, 22, Color(1.0, 0.86, 0.6))
 	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(_banner)
 
@@ -99,8 +99,7 @@ func _build_ui() -> void:
 	col.add_child(_log)
 
 	_status = Label.new()
-	_status.add_theme_font_size_override("font_size", 17)
-	_status.add_theme_color_override("font_color", Color(0.9, 0.94, 1.0))
+	UiTheme.as_title(_status, 17, Color(0.9, 0.94, 1.0))
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(_status)
 
@@ -115,6 +114,7 @@ func _build_ui() -> void:
 
 	_end_button = Button.new()
 	_end_button.text = "END TURN"
+	UiTheme.style_button(_end_button, 18)
 	_end_button.custom_minimum_size = Vector2(150, 52)
 	_end_button.pressed.connect(_on_end_turn)
 	bottom.add_child(_end_button)
@@ -188,7 +188,7 @@ func _make_enemy(index: int) -> Control:
 
 	var name_label := Label.new()
 	name_label.text = str(e["name"])
-	name_label.add_theme_font_size_override("font_size", 13)
+	UiTheme.as_title(name_label, 13)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(name_label)
 
@@ -289,6 +289,11 @@ func _finish_victory() -> void:
 	if GameState:
 		GameState.gold += reward
 	if is_instance_valid(_source):
+		# Clear the grid cell too, or the minimap keeps its skull forever
+		var node := _source as Node3D
+		var dungeon := node.get_parent().get_parent() if node.get_parent() else null
+		if dungeon and dungeon.has_method("clear_encounter_at"):
+			dungeon.call("clear_encounter_at", node.global_position)
 		_source.queue_free()  # the pack is gone from the corridor for good
 	_close()
 

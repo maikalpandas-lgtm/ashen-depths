@@ -21,7 +21,11 @@ const COL_TILE_EDGE := Color(0.55, 0.48, 0.38, 1)
 const COL_PLAYER := Color(1.0, 0.88, 0.35, 1)
 const COL_EXIT := Color(0.95, 0.45, 0.2, 1)
 const COL_CHEST := Color(0.95, 0.8, 0.25, 1)
-const COL_FIGHT := Color(0.75, 0.75, 0.7, 1)
+## Skull bone, drawn ON a normal tile. It used to match the tile it sat on, so
+## the icon was invisible except for two eye pixels.
+const COL_FIGHT := Color(0.93, 0.92, 0.84, 1)
+const COL_FIGHT_INK := Color(0.12, 0.1, 0.08, 1)
+const COL_FIGHT_GLOW := Color(0.55, 0.95, 0.35, 1)
 const COL_DOOR := Color(0.55, 0.38, 0.25, 1)
 
 
@@ -113,8 +117,6 @@ func _redraw() -> void:
 					col = COL_EXIT
 				5:
 					col = COL_CHEST
-				6:
-					col = COL_FIGHT
 			_draw_rounded_tile(lx, ly, col)
 			# special icons
 			match kind:
@@ -180,21 +182,43 @@ func _draw_player(lx: int, ly: int) -> void:
 		_put(cx + fx * 4, cy + fy * 4, Color(1, 0.95, 0.5))
 
 
+## Skull marking a pack. Readable at 14px: dark outline first so the bone reads
+## against parchment, then eye sockets, jaw and a green witch-fire tuft.
 func _draw_skull_icon(lx: int, ly: int) -> void:
 	var o := _tile_origin(lx, ly)
 	var cx := o.x + tile / 2
-	var cy := o.y + tile / 2
-	# simple skull blob + eyes
-	for py in range(-3, 3):
-		for px in range(-3, 4):
-			if px * px + py * py < 10:
+	var cy := o.y + tile / 2 + 1
+
+	# outline
+	for py in range(-5, 5):
+		for px in range(-5, 6):
+			if px * px + py * py <= 20:
+				_put(cx + px, cy + py, COL_FIGHT_INK)
+	# cranium
+	for py in range(-4, 3):
+		for px in range(-4, 5):
+			if px * px + py * py <= 13:
 				_put(cx + px, cy + py, COL_FIGHT)
-	_put(cx - 1, cy - 1, Color(0.15, 0.12, 0.1))
-	_put(cx + 1, cy - 1, Color(0.15, 0.12, 0.1))
-	# green flame hint
-	_put(cx, cy - 4, Color(0.55, 0.9, 0.35))
-	_put(cx - 1, cy - 3, Color(0.4, 0.75, 0.25))
-	_put(cx + 1, cy - 3, Color(0.4, 0.75, 0.25))
+	# jaw
+	for px in range(-2, 3):
+		_put(cx + px, cy + 3, COL_FIGHT)
+	_put(cx - 3, cy + 2, COL_FIGHT)
+	_put(cx + 3, cy + 2, COL_FIGHT)
+	# eye sockets + nose
+	for py in range(-2, 0):
+		_put(cx - 2, cy + py, COL_FIGHT_INK)
+		_put(cx + 2, cy + py, COL_FIGHT_INK)
+	_put(cx - 3, cy - 1, COL_FIGHT_INK)
+	_put(cx + 3, cy - 1, COL_FIGHT_INK)
+	_put(cx, cy + 1, COL_FIGHT_INK)
+	# teeth
+	_put(cx - 1, cy + 3, COL_FIGHT_INK)
+	_put(cx + 1, cy + 3, COL_FIGHT_INK)
+	# witch-fire above
+	_put(cx, cy - 6, COL_FIGHT_GLOW)
+	_put(cx, cy - 7, COL_FIGHT_GLOW)
+	_put(cx - 1, cy - 5, COL_FIGHT_GLOW.darkened(0.2))
+	_put(cx + 1, cy - 5, COL_FIGHT_GLOW.darkened(0.2))
 
 
 func _draw_campfire_icon(lx: int, ly: int) -> void:

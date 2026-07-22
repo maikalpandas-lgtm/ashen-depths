@@ -127,6 +127,21 @@ python3 tools/sprite_cutter.py path/to/raw.jpg assets/textures/out.png \
 
 ---
 
+## Card UI (батч 3 — рамка / cost badge)
+
+**Без букв, цифр, рун.** Текст и cost рисует движок (`card_test_overlay.gd`).
+
+| ID | Файл в игре | Master PNG | Source | Назначение |
+|----|-------------|------------|--------|------------|
+| **card_frame** | `card_frame.png` | `masters/card_frame.png` | `masters/card_frame_source.jpg` | Подложка карты ~5:7 (755×1052) |
+| **card_cost_badge** | `card_cost_badge.png` | `masters/card_cost_badge.png` | `masters/card_cost_badge_source.jpg` | Кружок ⚡ (синяя эмаль) |
+| **card_cost_badge_blood** | `card_cost_badge_blood.png` | `masters/card_cost_badge_blood.png` | `masters/card_cost_badge_blood_source.jpg` | Кружок 🩸 HP-cost (красная) |
+
+Промпты: `docs/ART_PROMPTS.md` §3.5.  
+Первая gen-рамка с черепами отброшена; в игре — чистая v2.
+
+---
+
 ## Enemies (батч 2 — corridor billboards)
 
 Фронтальный full-body, ноги на земле. Фон gen `#FF00FF`.

@@ -47,7 +47,8 @@ var _rock_sprite_mat: StandardMaterial3D
 
 
 func _ready() -> void:
-	_build_materials()
+	# generate() builds materials itself — doing it here too paid for the whole
+	# procedural rock texture set twice on startup.
 	generate()
 
 
@@ -152,7 +153,7 @@ func _make_skirting_mat() -> StandardMaterial3D:
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.blend_mode = BaseMaterial3D.BLEND_MODE_MIX
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
-	m.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_ALWAYS
+	m.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED  # decal over the floor
 	m.no_depth_test = false
 	m.render_priority = 1
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
@@ -453,26 +454,20 @@ func _build_merged_floor() -> void:
 	var uv_s := _world_uv_scale()
 	for cell in floor_cells:
 		var world := cell_to_world(cell)
-		var x := cell.x
-		var y := cell.y
-		var wall_px := not _is_walkable(_get_cell(x + 1, y))
-		var wall_nx := not _is_walkable(_get_cell(x - 1, y))
-		var wall_pz := not _is_walkable(_get_cell(x, y + 1))
-		var wall_nz := not _is_walkable(_get_cell(x, y - 1))
 		for j in range(segs):
 			for i in range(segs):
 				var u0 := float(i) / float(segs)
 				var v0 := float(j) / float(segs)
 				var u1 := float(i + 1) / float(segs)
 				var v1 := float(j + 1) / float(segs)
-				var p00 := _floor_pt(world, u0, v0, half, wall_px, wall_nx, wall_pz, wall_nz)
-				var p10 := _floor_pt(world, u1, v0, half, wall_px, wall_nx, wall_pz, wall_nz)
-				var p11 := _floor_pt(world, u1, v1, half, wall_px, wall_nx, wall_pz, wall_nz)
-				var p01 := _floor_pt(world, u0, v1, half, wall_px, wall_nx, wall_pz, wall_nz)
-				var a00 := _floor_ao(u0, v0, wall_px, wall_nx, wall_pz, wall_nz)
-				var a10 := _floor_ao(u1, v0, wall_px, wall_nx, wall_pz, wall_nz)
-				var a11 := _floor_ao(u1, v1, wall_px, wall_nx, wall_pz, wall_nz)
-				var a01 := _floor_ao(u0, v1, wall_px, wall_nx, wall_pz, wall_nz)
+				var p00 := _floor_pt(world, u0, v0, half)
+				var p10 := _floor_pt(world, u1, v0, half)
+				var p11 := _floor_pt(world, u1, v1, half)
+				var p01 := _floor_pt(world, u0, v1, half)
+				var a00 := _floor_ao(world, u0, v0, half)
+				var a10 := _floor_ao(world, u1, v0, half)
+				var a11 := _floor_ao(world, u1, v1, half)
+				var a01 := _floor_ao(world, u0, v1, half)
 				_tri_ao(st, p00, p10, p11, Vector3.UP,
 					p00.x * uv_s, p00.z * uv_s, p10.x * uv_s, p10.z * uv_s, p11.x * uv_s, p11.z * uv_s,
 					a00, a10, a11)
@@ -486,49 +481,59 @@ func _build_merged_floor() -> void:
 	geometry_root.add_child(mi)
 
 
-func _floor_pt(
-	world: Vector3, u: float, v: float, half: float,
-	wall_px: bool, wall_nx: bool, wall_pz: bool, wall_nz: bool
-) -> Vector3:
-	var x := (u - 0.5) * 2.0 * half
-	var z := (v - 0.5) * 2.0 * half
-	var wx := world.x + x
-	var wz := world.z + z
-	# Uneven rocky floor (world-stable)
+## Floor surface height at a world point. Anything that has to sit ON the floor
+## (contact shadows, props) must read this — the floor is not flat at y=0.
+func _floor_height(wx: float, wz: float) -> float:
 	var h: float = _cave_noise(wx, wz, 0) * 0.1 + _cave_noise(wx * 2.2, wz * 2.1, 5) * 0.05
 	h += _cave_noise(wx * 4.0, wz * 3.8, 9) * 0.025
-	# Rise toward walls (trough in corridor center)
-	var rise := 0.0
-	if wall_px:
-		rise = maxf(rise, pow(u, 1.45) * 0.16)
-	if wall_nx:
-		rise = maxf(rise, pow(1.0 - u, 1.45) * 0.16)
-	if wall_pz:
-		rise = maxf(rise, pow(v, 1.45) * 0.16)
-	if wall_nz:
-		rise = maxf(rise, pow(1.0 - v, 1.45) * 0.16)
-	return world + Vector3(x, h + rise, z)
+	# Rise toward walls (trough in corridor centre) — world distance, not cell UV
+	return h + pow(_wall_near(wx, wz, cell_size * 0.5), 1.45) * 0.16
 
 
-func _floor_ao(u: float, v: float, wall_px: bool, wall_nx: bool, wall_pz: bool, wall_nz: bool) -> float:
-	var ao := 1.0
-	var fall := 0.55
-	if wall_px:
-		ao = minf(ao, _edge_ao(1.0 - u, fall))
-	if wall_nx:
-		ao = minf(ao, _edge_ao(u, fall))
-	if wall_pz:
-		ao = minf(ao, _edge_ao(1.0 - v, fall))
-	if wall_nz:
-		ao = minf(ao, _edge_ao(v, fall))
-	return ao
+func _floor_pt(world: Vector3, u: float, v: float, half: float) -> Vector3:
+	var x := (u - 0.5) * 2.0 * half
+	var z := (v - 0.5) * 2.0 * half
+	return world + Vector3(x, _floor_height(world.x + x, world.z + z), z)
 
 
-func _edge_ao(dist_from_wall: float, falloff: float) -> float:
-	var t := clampf(dist_from_wall / falloff, 0.0, 1.0)
+func _floor_ao(world: Vector3, u: float, v: float, half: float) -> float:
+	var wx := world.x + (u - 0.5) * 2.0 * half
+	var wz := world.z + (v - 0.5) * 2.0 * half
+	var t := 1.0 - _wall_near(wx, wz, cell_size * 0.55)
 	t = 1.0 - (1.0 - t) * (1.0 - t)
 	t = t * t * (3.0 - 2.0 * t)
 	return lerpf(0.14, 1.0, t)
+
+
+## Distance from a world point to the nearest solid cell, in world units.
+## Continuous everywhere — two cells meeting at a vertex get the SAME value, so
+## floor/ceiling panels can't disagree and split open along cell borders.
+func _wall_dist_world(wx: float, wz: float) -> float:
+	# Callers use a reach below one cell, so only the 3x3 block can matter.
+	# Kept allocation-free — this runs per floor/ceiling vertex.
+	var ox := -grid_width * cell_size * 0.5
+	var oz := -grid_height * cell_size * 0.5
+	var half := cell_size * 0.5
+	var cx := int(floor((wx - ox) / cell_size))
+	var cy := int(floor((wz - oz) / cell_size))
+	var best := cell_size
+	for j in range(-1, 2):
+		for i in range(-1, 2):
+			if _is_walkable(_get_cell(cx + i, cy + j)):
+				continue
+			var ccx := ox + float(cx + i) * cell_size + half
+			var ccz := oz + float(cy + j) * cell_size + half
+			var dx := maxf(0.0, absf(wx - ccx) - half)
+			var dz := maxf(0.0, absf(wz - ccz) - half)
+			var d := sqrt(dx * dx + dz * dz)
+			if d < best:
+				best = d
+	return best
+
+
+## 1 at the wall face → 0 at `reach` away. World-continuous.
+func _wall_near(wx: float, wz: float, reach: float) -> float:
+	return clampf(1.0 - _wall_dist_world(wx, wz) / reach, 0.0, 1.0)
 
 
 ## Multi-octave rock noise in ~[-1, 1], world-stable (seed only biases phase).
@@ -551,26 +556,20 @@ func _build_merged_ceiling() -> void:
 	var uv_s := _world_uv_scale()
 	for cell in floor_cells:
 		var world := cell_to_world(cell)
-		var cx := cell.x
-		var cy := cell.y
-		var wall_px := not _is_walkable(_get_cell(cx + 1, cy))
-		var wall_nx := not _is_walkable(_get_cell(cx - 1, cy))
-		var wall_pz := not _is_walkable(_get_cell(cx, cy + 1))
-		var wall_nz := not _is_walkable(_get_cell(cx, cy - 1))
 		for j in range(segs):
 			for i in range(segs):
 				var u0 := float(i) / float(segs)
 				var v0 := float(j) / float(segs)
 				var u1 := float(i + 1) / float(segs)
 				var v1 := float(j + 1) / float(segs)
-				var p00 := _ceil_pt(world, u0, v0, half, wall_px, wall_nx, wall_pz, wall_nz)
-				var p10 := _ceil_pt(world, u1, v0, half, wall_px, wall_nx, wall_pz, wall_nz)
-				var p11 := _ceil_pt(world, u1, v1, half, wall_px, wall_nx, wall_pz, wall_nz)
-				var p01 := _ceil_pt(world, u0, v1, half, wall_px, wall_nx, wall_pz, wall_nz)
-				var e00 := _ceil_ao(u0, v0, wall_px, wall_nx, wall_pz, wall_nz)
-				var e10 := _ceil_ao(u1, v0, wall_px, wall_nx, wall_pz, wall_nz)
-				var e11 := _ceil_ao(u1, v1, wall_px, wall_nx, wall_pz, wall_nz)
-				var e01 := _ceil_ao(u0, v1, wall_px, wall_nx, wall_pz, wall_nz)
+				var p00 := _ceil_pt(world, u0, v0, half)
+				var p10 := _ceil_pt(world, u1, v0, half)
+				var p11 := _ceil_pt(world, u1, v1, half)
+				var p01 := _ceil_pt(world, u0, v1, half)
+				var e00 := _ceil_ao(world, u0, v0, half)
+				var e10 := _ceil_ao(world, u1, v0, half)
+				var e11 := _ceil_ao(world, u1, v1, half)
+				var e01 := _ceil_ao(world, u0, v1, half)
 				_tri_ao(st, p00, p11, p10, Vector3.DOWN,
 					p00.x * uv_s, p00.z * uv_s, p11.x * uv_s, p11.z * uv_s, p10.x * uv_s, p10.z * uv_s,
 					e00, e11, e10)
@@ -584,10 +583,7 @@ func _build_merged_ceiling() -> void:
 	geometry_root.add_child(mi)
 
 
-func _ceil_pt(
-	world: Vector3, u: float, v: float, half: float,
-	wall_px: bool, wall_nx: bool, wall_pz: bool, wall_nz: bool
-) -> Vector3:
+func _ceil_pt(world: Vector3, u: float, v: float, half: float) -> Vector3:
 	var x := (u - 0.5) * 2.0 * half
 	var z := (v - 0.5) * 2.0 * half
 	var wx := world.x + x
@@ -597,31 +593,17 @@ func _ceil_pt(
 	var n2: float = _cave_noise(wx * 1.6 + 2.0, wz * 1.5, 19)
 	var n3: float = _cave_noise(wx * 3.0, wz * 2.8, 31)
 	var hang: float = maxf(0.0, n) * 0.32 + maxf(0.0, n2) * 0.18 + maxf(0.0, n3) * 0.1
-	var wall_t := 0.0
-	if wall_px:
-		wall_t = maxf(wall_t, u)
-	if wall_nx:
-		wall_t = maxf(wall_t, 1.0 - u)
-	if wall_pz:
-		wall_t = maxf(wall_t, v)
-	if wall_nz:
-		wall_t = maxf(wall_t, 1.0 - v)
+	# Vault drops toward the walls — world distance so neighbours agree exactly
+	var wall_t := _wall_near(wx, wz, cell_size * 0.5)
 	var vault: float = wall_t * wall_t * 0.48
 	var y: float = wall_height + 0.22 - vault - hang + n2 * 0.06
 	return world + Vector3(x, y, z)
 
 
-func _ceil_ao(u: float, v: float, wall_px: bool, wall_nx: bool, wall_pz: bool, wall_nz: bool) -> float:
-	var ao := 1.0
-	if wall_px:
-		ao = minf(ao, lerpf(0.75, 1.0, 1.0 - u))
-	if wall_nx:
-		ao = minf(ao, lerpf(0.75, 1.0, u))
-	if wall_pz:
-		ao = minf(ao, lerpf(0.75, 1.0, 1.0 - v))
-	if wall_nz:
-		ao = minf(ao, lerpf(0.75, 1.0, v))
-	return ao
+func _ceil_ao(world: Vector3, u: float, v: float, half: float) -> float:
+	var wx := world.x + (u - 0.5) * 2.0 * half
+	var wz := world.z + (v - 0.5) * 2.0 * half
+	return lerpf(1.0, 0.75, _wall_near(wx, wz, cell_size * 0.5))
 
 
 func _maybe_cave_wall(x: int, y: int, dx: int, dy: int, world: Vector3, skirt_mat: Material) -> void:
@@ -630,71 +612,68 @@ func _maybe_cave_wall(x: int, y: int, dx: int, dy: int, world: Vector3, skirt_ma
 	var into := Vector3(-float(dx), 0.0, -float(dy))
 	var edge := cell_size * 0.5
 	var base := world + Vector3(float(dx) * edge, 0.0, float(dy) * edge)
-	# Does the same wall face continue into the neighbour cell along the wall?
-	# If not, that panel edge is a corner and must sit flush in the grid plane,
-	# otherwise displaced panels leave a crack the void shines through.
 	var rx := dy
 	var ry := -dx
-	var cont_pos := _wall_face_continues(x + rx, y + ry, dx, dy)
-	var cont_neg := _wall_face_continues(x - rx, y - ry, dx, dy)
-	_add_cave_wall_mesh(base, into, cont_neg, cont_pos)
+	_add_cave_wall_mesh(base, into, _edge_mode(x - rx, y - ry, dx, dy), _edge_mode(x + rx, y + ry, dx, dy))
 	_add_floor_wall_skirting(base, into, skirt_mat)
 	var col_size := Vector3(cell_size * 1.12, wall_height + 0.35, 0.5) if absf(into.z) > 0.5 else Vector3(0.5, wall_height + 0.35, cell_size * 1.12)
 	_add_solid_box(base - into * 0.08 + Vector3(0, wall_height * 0.5, 0), col_size)
 
 
-## True when cell (x, y) is walkable and also has a wall in direction (dx, dy) —
-## i.e. the wall panel keeps going, so the shared edge must stay displaced.
-func _wall_face_continues(x: int, y: int, dx: int, dy: int) -> bool:
-	if not _is_walkable(_get_cell(x, y)):
-		return false
-	return not _is_walkable(_get_cell(x + dx, y + dy))
+enum WallEdge {
+	CONTINUES,  ## same face goes on — share vertices, full relief
+	INTO_ROCK,  ## wall turns here — run the panel past the corner, inside the rock
+	OPENING,    ## corridor branches — free edge, must sit flush to meet its neighbour
+}
+
+## How a wall panel over cell (x, y)+(dx, dy) should end on the side of `nx, ny`.
+func _edge_mode(nx: int, ny: int, dx: int, dy: int) -> WallEdge:
+	if not _is_walkable(_get_cell(nx, ny)):
+		return WallEdge.INTO_ROCK
+	if not _is_walkable(_get_cell(nx + dx, ny + dy)):
+		return WallEdge.CONTINUES
+	return WallEdge.OPENING
 
 
 func _add_floor_wall_skirting(base: Vector3, face_into: Vector3, mat: Material) -> void:
-	## Soft dark veil — 2-step falloff so the band reads bigger.
-	var width := cell_size  # exact cell — no corner overshoot on skirt
-	var depth := 0.95  # wide onto floor
-	var height := 0.55  # up the wall
+	## Dark contact band along the wall–floor joint (reference look).
+	## Built in WORLD space and draped over the real floor height — laid flat at
+	## y≈0 it sank under the floor, which rises ~0.16 next to a wall.
+	var right := Vector3(-face_into.z, 0.0, face_into.x)
+	var hw := cell_size * 0.5
+	var depth := 1.3
+	var steps := 6
+	# depth fraction → darkness
+	var bands := [
+		[0.0, 1.0], [0.35, 0.72], [0.68, 0.3], [1.0, 0.0],
+	]
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var hw := width * 0.5
-	var mid_d := depth * 0.4
-	var mid_h := height * 0.4
-	# Floor: wall → mid (strong) → outer (fade out)
-	var f0 := Vector3(-hw, 0.012, 0.0)
-	var f1 := Vector3(hw, 0.012, 0.0)
-	var f2 := Vector3(hw, 0.012, mid_d)
-	var f3 := Vector3(-hw, 0.012, mid_d)
-	var f4 := Vector3(hw, 0.012, depth)
-	var f5 := Vector3(-hw, 0.012, depth)
-	_tri_alpha(st, f0, f1, f2, Vector3.UP, 0.92, 0.92, 0.55)
-	_tri_alpha(st, f0, f2, f3, Vector3.UP, 0.92, 0.55, 0.55)
-	_tri_alpha(st, f3, f2, f4, Vector3.UP, 0.55, 0.55, 0.0)
-	_tri_alpha(st, f3, f4, f5, Vector3.UP, 0.55, 0.0, 0.0)
-	# Wall base: floor → mid → fade
-	var w0 := Vector3(-hw, 0.0, 0.01)
-	var w1 := Vector3(hw, 0.0, 0.01)
-	var w2 := Vector3(hw, mid_h, 0.01)
-	var w3 := Vector3(-hw, mid_h, 0.01)
-	var w4 := Vector3(hw, height, 0.01)
-	var w5 := Vector3(-hw, height, 0.01)
-	_tri_alpha(st, w0, w1, w2, Vector3(0, 0, 1), 0.9, 0.9, 0.5)
-	_tri_alpha(st, w0, w2, w3, Vector3(0, 0, 1), 0.9, 0.5, 0.5)
-	_tri_alpha(st, w3, w2, w4, Vector3(0, 0, 1), 0.5, 0.5, 0.0)
-	_tri_alpha(st, w3, w4, w5, Vector3(0, 0, 1), 0.5, 0.0, 0.0)
+	for b in range(bands.size() - 1):
+		var d0: float = bands[b][0] * depth
+		var d1: float = bands[b + 1][0] * depth
+		var a0: float = bands[b][1]
+		var a1: float = bands[b + 1][1]
+		for i in range(steps):
+			var s0: float = (float(i) / float(steps) - 0.5) * 2.0 * hw
+			var s1: float = (float(i + 1) / float(steps) - 0.5) * 2.0 * hw
+			var p00 := _skirt_pt(base, right, face_into, s0, d0)
+			var p10 := _skirt_pt(base, right, face_into, s1, d0)
+			var p11 := _skirt_pt(base, right, face_into, s1, d1)
+			var p01 := _skirt_pt(base, right, face_into, s0, d1)
+			_tri_alpha(st, p00, p10, p11, Vector3.UP, a0, a0, a1)
+			_tri_alpha(st, p00, p11, p01, Vector3.UP, a0, a1, a1)
 
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
 	mi.material_override = mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var yaw := 0.0
-	if absf(face_into.x) > 0.5:
-		yaw = -PI * 0.5 if face_into.x > 0.0 else PI * 0.5
-	else:
-		yaw = 0.0 if face_into.z < 0.0 else PI
-	mi.transform = Transform3D(Basis.from_euler(Vector3(0, yaw, 0)), base + face_into * 0.02)
 	geometry_root.add_child(mi)
+
+
+func _skirt_pt(base: Vector3, right: Vector3, face_into: Vector3, along: float, depth: float) -> Vector3:
+	var p := base + right * along + face_into * depth
+	return Vector3(p.x, _floor_height(p.x, p.z) + 0.015, p.z)
 
 
 func _tri_alpha(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, n: Vector3, aa: float, ab: float, ac: float) -> void:
@@ -709,17 +688,20 @@ func _tri_alpha(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, n: Vector3,
 	st.add_vertex(c)
 
 
-func _add_cave_wall_mesh(base: Vector3, face_into: Vector3, cont_neg: bool, cont_pos: bool) -> void:
-	## Rocky cave wall: strong faceted relief + world UV from displaced verts.
-	## Panel width is EXACTLY one cell and displacement is world-space only, so
-	## neighbouring panels share identical vertices — no cracks, no double-surface
-	## z-fighting stripes along the joins.
+func _add_cave_wall_mesh(base: Vector3, face_into: Vector3, edge_neg: WallEdge, edge_pos: WallEdge) -> void:
+	## Rocky cave wall: faceted relief + world UV from displaced verts.
+	## Displacement is world-space only, so a panel and its neighbour agree exactly
+	## on the shared edge — no cracks, and no overlapping coplanar z-fight stripes.
+	## Where the wall turns, the panel runs on past the corner INSIDE the rock, so
+	## the corner reads as a rough overlap instead of a flattened 90° crease.
 	var mi := MeshInstance3D.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var segs_w := 8
+	var segs_w := 9
 	var segs_h := 10
-	var width := cell_size
+	var half := cell_size * 0.5
+	var a_neg := -half - (0.5 if edge_neg == WallEdge.INTO_ROCK else 0.0)
+	var a_pos := half + (0.5 if edge_pos == WallEdge.INTO_ROCK else 0.0)
 	var right := Vector3(-face_into.z, 0.0, face_into.x)
 	var uv_s := _world_uv_scale()
 
@@ -729,10 +711,10 @@ func _add_cave_wall_mesh(base: Vector3, face_into: Vector3, cont_neg: bool, cont
 			var v0 := float(j) / float(segs_h)
 			var u1 := float(i + 1) / float(segs_w)
 			var v1 := float(j + 1) / float(segs_h)
-			var p00 := _wall_pt(base, face_into, right, u0, v0, width, cont_neg, cont_pos)
-			var p10 := _wall_pt(base, face_into, right, u1, v0, width, cont_neg, cont_pos)
-			var p11 := _wall_pt(base, face_into, right, u1, v1, width, cont_neg, cont_pos)
-			var p01 := _wall_pt(base, face_into, right, u0, v1, width, cont_neg, cont_pos)
+			var p00 := _wall_pt(base, face_into, right, u0, v0, a_neg, a_pos, edge_neg, edge_pos)
+			var p10 := _wall_pt(base, face_into, right, u1, v0, a_neg, a_pos, edge_neg, edge_pos)
+			var p11 := _wall_pt(base, face_into, right, u1, v1, a_neg, a_pos, edge_neg, edge_pos)
+			var p01 := _wall_pt(base, face_into, right, u0, v1, a_neg, a_pos, edge_neg, edge_pos)
 			var a00 := _wall_ao(u0, v0)
 			var a10 := _wall_ao(u1, v0)
 			var a11 := _wall_ao(u1, v1)
@@ -764,20 +746,22 @@ func _add_cave_wall_mesh(base: Vector3, face_into: Vector3, cont_neg: bool, cont
 
 func _wall_pt(
 	base: Vector3, face_into: Vector3, right: Vector3,
-	u: float, v: float, width: float,
-	cont_neg: bool, cont_pos: bool
+	u: float, v: float, a_neg: float, a_pos: float,
+	edge_neg: WallEdge, edge_pos: WallEdge
 ) -> Vector3:
-	var along := (u - 0.5) * width
+	var along: float = lerpf(a_neg, a_pos, u)
 	var h := -0.2 + v * (wall_height + 0.5)
 	var pos := base + right * along + Vector3.UP * h
-	# Taper to flush ONLY at corners (where no panel continues). On a continued
-	# join both panels use the same world-space push, so the edge matches exactly.
+	# Flatten to the grid plane ONLY at a branch opening, where the free edge has
+	# to meet the perpendicular panel. Corners that turn into rock keep full
+	# relief and simply overlap — a flat fade there is what read as a hard bevel.
 	var amp := 1.0
-	if not cont_neg:
-		amp = minf(amp, smoothstep(0.0, 0.28, u))
-	if not cont_pos:
-		amp = minf(amp, smoothstep(0.0, 0.28, 1.0 - u))
-	# Mild vault + strong rocky outcrops (competitor: rocky cave, not smooth tube).
+	var span: float = a_pos - a_neg
+	if edge_neg == WallEdge.OPENING:
+		amp = minf(amp, smoothstep(0.0, 0.42, (along - a_neg) / span))
+	if edge_pos == WallEdge.OPENING:
+		amp = minf(amp, smoothstep(0.0, 0.42, (a_pos - along) / span))
+	# Mild vault + rocky outcrops (rocky cave, not a smooth tube).
 	# All noise reads WORLD position — never panel-local `along`, which is what
 	# used to make the two sides of a join disagree and split open.
 	var tube: float = sin(v * PI) * 0.12 + pow(v, 1.55) * 0.1
@@ -785,8 +769,9 @@ func _wall_pt(
 	var n2: float = _cave_noise(pos.x * 1.2 + pos.z * 1.2, h * 1.5, 8)
 	var n3: float = _cave_noise(pos.x * 2.8 + pos.z * 2.8, h * 2.8, 17)
 	var n4: float = _cave_noise(pos.x * 3.5 + pos.z * 3.5, h * 4.0, 23)
-	# Faceted shelves + raw rock noise
-	var facet: float = floorf(n2 * 5.0) / 5.0
+	# Shelves: quantised steps read as machined prisms on their own, so keep them
+	# only half-strength and let the raw noise round them back off.
+	var facet: float = lerpf(n2, floorf(n2 * 4.0) / 4.0, 0.5)
 	var rock: float = n1 * 0.16 + facet * 0.28 + n3 * 0.12 + n4 * 0.08
 	var ledge: float = maxf(0.0, facet) * (0.08 + 0.12 * sin(v * PI))
 	# Occasional hard bulge into corridor

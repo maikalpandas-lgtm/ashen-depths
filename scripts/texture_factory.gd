@@ -75,27 +75,37 @@ static func _angular_rock(
 			pts.append(Vector2(px, py))
 			ids.append(i * 97 + j * 31)
 
+	# Per-lattice-cell lookup: a pixel can only be near points in the 5x5 block
+	# around it. Scanning all cols*rows points per pixel is what made the dungeon
+	# take seconds to load.
+	var cw := sf / float(cols)
+	var ch := sf / float(rows)
 	for y in range(size):
+		var cj := int(float(y) / ch)
 		for x in range(size):
-			var p := Vector2(float(x), float(y))
+			var ci := int(float(x) / cw)
+			var px := float(x)
+			var py := float(y)
 			var best := 1e9
 			var second := 1e9
 			var bid := 0
-			for k in range(pts.size()):
-				var qx := _wrap_d(p.x - pts[k].x, sf)
-				var qy := _wrap_d(p.y - pts[k].y, sf)
-				# Faceted rocky cells (not round pebbles)
-				var ax := absf(qx)
-				var ay := absf(qy) * (0.72 + _hash(ids[k], 3) * 0.55)
-				var d_box := maxf(ax, ay)
-				var d_man := (ax + ay) * 0.52
-				var d: float = d_box * 0.58 + d_man * 0.32 + sqrt(ax * ax + ay * ay) * 0.1
-				if d < best:
-					second = best
-					best = d
-					bid = ids[k]
-				elif d < second:
-					second = d
+			for dj in range(-2, 3):
+				for di in range(-2, 3):
+					var k := ((cj + dj + rows * 2) % rows) * cols + ((ci + di + cols * 2) % cols)
+					var qx := _wrap_d(px - pts[k].x, sf)
+					var qy := _wrap_d(py - pts[k].y, sf)
+					# Faceted rocky cells (not round pebbles)
+					var ax := absf(qx)
+					var ay := absf(qy) * (0.72 + _hash(ids[k], 3) * 0.55)
+					var d_box := maxf(ax, ay)
+					var d_man := (ax + ay) * 0.52
+					var d: float = d_box * 0.58 + d_man * 0.32 + sqrt(ax * ax + ay * ay) * 0.1
+					if d < best:
+						second = best
+						best = d
+						bid = ids[k]
+					elif d < second:
+						second = d
 
 			var edge := second - best
 			var ink_w := 3.4 + _hash(bid, 5) * 3.0

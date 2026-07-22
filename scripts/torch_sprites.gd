@@ -12,7 +12,6 @@ const TORCH_TEX_PATH := "res://assets/textures/torch.png"
 const HAND_TORCH_PATH := "res://assets/textures/hand_torch.png"
 const HAND_KNIFE_PATH := "res://assets/textures/hand_knife.png"
 const GLOW_TEX_PATH := "res://assets/textures/torch_glow.png"
-const FLAME_TEX_PATH := "res://assets/textures/flame_only.png"
 const FLAME_SHADER_PATH := "res://shaders/flame_shimmer.gdshader"
 
 static var _torch_tex: Texture2D
@@ -20,12 +19,8 @@ static var _hand_torch_tex: Texture2D
 static var _hand_knife_tex: Texture2D
 static var _glow_tex: Texture2D
 static var _glow_mat: StandardMaterial3D
-static var _glow_mat_fixed: StandardMaterial3D
 static var _flame_shader: Shader
-static var _flame_tex: Texture2D
 static var _soft_glow_tex: Texture2D
-static var _iron_mat: StandardMaterial3D
-static var _wood_mat: StandardMaterial3D
 
 
 static func _load_png(path: String) -> Texture2D:
@@ -78,23 +73,8 @@ static func _ensure_textures() -> void:
 		_glow_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 		_glow_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
 		_glow_mat.render_priority = 2
-	if _glow_mat_fixed == null and _glow_tex != null:
-		_glow_mat_fixed = _glow_mat.duplicate() as StandardMaterial3D
-		_glow_mat_fixed.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED
-	if _flame_tex == null:
-		_flame_tex = _load_png(FLAME_TEX_PATH)
 	if _soft_glow_tex == null:
 		_soft_glow_tex = _make_fallback_glow()
-	if _iron_mat == null:
-		_iron_mat = StandardMaterial3D.new()
-		_iron_mat.albedo_color = Color(0.17, 0.18, 0.21)
-		_iron_mat.metallic = 0.55
-		_iron_mat.roughness = 0.48
-	if _wood_mat == null:
-		_wood_mat = StandardMaterial3D.new()
-		_wood_mat.albedo_color = Color(0.34, 0.23, 0.14)
-		_wood_mat.metallic = 0.0
-		_wood_mat.roughness = 0.85
 	if _flame_shader == null and ResourceLoader.exists(FLAME_SHADER_PATH):
 		_flame_shader = load(FLAME_SHADER_PATH) as Shader
 
@@ -126,12 +106,15 @@ static func _apply_flame_shimmer(
 	spr.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
 
 
-## Wall torch = real 3D bracket bolted to the wall (backplate → arm → stick → cup)
-## + ONE flame sprite. Geometry is fixed to the wall; only the fire faces the player,
-## so the prop reads correct from every 90° crawler angle.
+## Wall torch = ONE 2D sprite (art concept: props are 2D, only the map is 3D).
+## Anchored to the wall cell, fixed-Y billboard so it never goes edge-on when the
+## crawler turns 90°. Depth comes from the halo + emission + real light on rock.
 ## Local space: +Y up, -Z out into the corridor, +Z into the rock.
 static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) -> Node3D:
 	_ensure_textures()
+	if _torch_tex == null:
+		push_warning("[TorchSprites] wall torch texture missing")
+		return Node3D.new()
 
 	var holder := Node3D.new()
 	holder.name = "WallTorch"
@@ -142,89 +125,39 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 		holder.rotation.y = 0.0 if wall_dir.y > 0.0 else PI
 	parent.add_child(holder)
 
-	# Backplate bolted to the rock
-	var plate := _mesh_node(holder, BoxMesh.new(), _iron_mat)
-	(plate.mesh as BoxMesh).size = Vector3(0.30, 0.30, 0.07)
-	plate.position = Vector3(0.0, 0.0, 0.035)
-
-	# Bolts — read as "screwed into the wall" at a glance
-	for s in [-1.0, 1.0]:
-		for t in [-1.0, 1.0]:
-			var bolt := _mesh_node(holder, SphereMesh.new(), _iron_mat)
-			var bm := bolt.mesh as SphereMesh
-			bm.radius = 0.022
-			bm.height = 0.044
-			bolt.position = Vector3(0.105 * s, 0.105 * t, -0.01)
-
-	# Arm out of the wall (45° up/out)
-	var arm := _mesh_node(holder, CylinderMesh.new(), _iron_mat)
-	var am := arm.mesh as CylinderMesh
-	am.top_radius = 0.033
-	am.bottom_radius = 0.038
-	am.height = 0.26
-	arm.position = Vector3(0.0, 0.09, -0.06)
-	arm.rotation_degrees = Vector3(-45.0, 0.0, 0.0)
-
-	# Wooden stick, slight lean into the corridor
-	var stick := _mesh_node(holder, CylinderMesh.new(), _wood_mat)
-	var sm := stick.mesh as CylinderMesh
-	sm.top_radius = 0.045
-	sm.bottom_radius = 0.055
-	sm.height = 0.50
-	stick.position = Vector3(0.0, 0.42, -0.23)
-	stick.rotation_degrees = Vector3(-18.0, 0.0, 0.0)
-
-	# Iron cup holding the fire
-	var cup := _mesh_node(holder, CylinderMesh.new(), _iron_mat)
-	var cm := cup.mesh as CylinderMesh
-	cm.top_radius = 0.105
-	cm.bottom_radius = 0.055
-	cm.height = 0.13
-	cup.position = Vector3(0.0, 0.69, -0.32)
-	cup.rotation_degrees = Vector3(-18.0, 0.0, 0.0)
-
-	# Soft radial halo — procedural, so no hard quad edge on the wall
-	var glow := _make_soft_glow(0.95)
-	glow.position = Vector3(0.0, 0.88, -0.34)
+	# Soft radial halo — procedural falloff, so no hard quad edge on the rock
+	var glow := _make_soft_glow(1.15)
+	glow.position = Vector3(0.0, 0.24, -0.1)
 	holder.add_child(glow)
 
-	# Fire: single sprite, fixed-Y billboard so it never goes edge-on
-	if _flame_tex:
-		var flame := _make_sprite(_flame_tex, 0.0021, true)
-		flame.name = "Flame"
-		flame.position = Vector3(0.0, 0.87, -0.33)
-		flame.render_priority = 5
-		holder.add_child(flame)
-		_apply_flame_shimmer(flame, _flame_tex, 1.0, 0.65, 0.020, 0.010, 2.6, true)
+	var body := _make_sprite(_torch_tex, 0.0033, false)
+	body.name = "TorchBody"
+	body.position = Vector3(0.0, 0.0, -0.06)
+	body.render_priority = 5
+	holder.add_child(body)
+	_apply_flame_shimmer(body, _torch_tex, 0.5, 0.65, 0.018, 0.009, 2.8, true)
 
 	var light := OmniLight3D.new()
 	light.name = "Light"
-	light.light_color = Color(1.0, 0.65, 0.32)
-	light.light_energy = 5.8
-	light.omni_range = 9.5
-	light.omni_attenuation = 0.9
+	light.light_color = Color(1.0, 0.66, 0.34)
+	# Tight warm pool: the rock must stay teal a couple of cells out, otherwise
+	# 400 torches wash the whole cave to yellow.
+	light.light_energy = 2.4
+	light.omni_range = 5.6
+	light.omni_attenuation = 1.5
 	light.shadow_enabled = false
-	light.position = Vector3(0.0, 0.88, -0.46)
+	light.position = Vector3(0.0, 0.3, -0.42)
 	holder.add_child(light)
 
 	var fill := OmniLight3D.new()
 	fill.name = "Fill"
 	fill.light_color = Color(1.0, 0.48, 0.2)
-	fill.light_energy = 1.55
-	fill.omni_range = 3.0
-	fill.position = Vector3(0.0, 0.55, -0.22)
+	fill.light_energy = 0.7
+	fill.omni_range = 2.0
+	fill.position = Vector3(0.0, 0.14, -0.18)
 	holder.add_child(fill)
 
 	return holder
-
-
-static func _mesh_node(parent: Node3D, mesh: Mesh, mat: Material) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	mi.material_override = mat
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	parent.add_child(mi)
-	return mi
 
 
 ## Radial falloff quad — alpha reaches 0 well before the quad edge (no visible rectangle).
@@ -282,9 +215,9 @@ static func make_hand_torch(camera: Camera3D) -> Node3D:
 	var light := OmniLight3D.new()
 	light.name = "HandTorchLight"
 	light.light_color = Color(1.0, 0.78, 0.45)
-	light.light_energy = 4.6
-	light.omni_range = 8.5
-	light.omni_attenuation = 0.9
+	light.light_energy = 2.6
+	light.omni_range = 6.2
+	light.omni_attenuation = 1.4
 	light.shadow_enabled = false
 	light.position = Vector3(0.06, 0.12, 0.28)
 	left.add_child(light)
@@ -292,7 +225,7 @@ static func make_hand_torch(camera: Camera3D) -> Node3D:
 	var kick := OmniLight3D.new()
 	kick.name = "Kick"
 	kick.light_color = Color(1.0, 0.65, 0.3)
-	kick.light_energy = 1.3
+	kick.light_energy = 0.75
 	kick.omni_range = 2.3
 	kick.position = Vector3(0.03, 0.08, 0.14)
 	left.add_child(kick)

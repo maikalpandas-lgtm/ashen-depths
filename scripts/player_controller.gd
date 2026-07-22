@@ -8,9 +8,9 @@ extends CharacterBody3D
 @export var move_cooldown: float = 0.02
 @export var feet_y: float = 0.0
 ## Walk sway — tune live in the inspector.
-@export var sway_shift: float = 0.085  ## sideways travel of the hands, metres
-@export var sway_lift: float = 0.03  ## vertical bob, metres
-@export var sway_roll: float = 15.0  ## hand roll, degrees
+@export var sway_shift: float = 0.038  ## sideways travel of the hands, metres
+@export var sway_lift: float = 0.016  ## vertical bob, metres
+@export var sway_roll: float = 6.5  ## hand roll, degrees
 @export var sway_period: float = 0.62  ## seconds per full left-right-left cycle
 @export var sway_ease_in: float = 0.14  ## seconds to spin up when you start walking
 @export var sway_ease_out: float = 0.3  ## seconds to settle when you stop

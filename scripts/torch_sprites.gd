@@ -16,6 +16,10 @@ const FLAME_SHADER_PATH := "res://shaders/flame_shimmer.gdshader"
 ## Wall fire licks noticeably faster than the hand torch — it is further away,
 ## so a slow shimmer reads as a still picture.
 const WALL_FLAME_SPEED := 2.1
+## Fire centroid inside each sprite, in local metres. Halo and lights hang off
+## these — eyeballed offsets put the glow beside the flame instead of on it.
+const HAND_FLAME_OFFSET := Vector2(0.129, 0.127)
+const WALL_FLAME_OFFSET := Vector2(-0.054, 0.526)
 
 static var _torch_tex: Texture2D
 static var _hand_torch_tex: Texture2D
@@ -130,7 +134,7 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 
 	# Soft radial halo — procedural falloff, so no hard quad edge on the rock
 	var glow := _make_soft_glow(1.1)
-	glow.position = Vector3(0.0, 0.62, -0.1)
+	glow.position = Vector3(WALL_FLAME_OFFSET.x, WALL_FLAME_OFFSET.y, -0.1)
 	holder.add_child(glow)
 
 	# Art has a single bracket on the right and sits ~0.26 above the mount point,
@@ -151,7 +155,7 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 	light.omni_range = 6.4
 	light.omni_attenuation = 1.35
 	light.shadow_enabled = false
-	light.position = Vector3(0.0, 0.66, -0.42)
+	light.position = Vector3(WALL_FLAME_OFFSET.x, WALL_FLAME_OFFSET.y, -0.42)
 	holder.add_child(light)
 
 	var fill := OmniLight3D.new()
@@ -201,10 +205,13 @@ static func make_hand_torch(camera: Camera3D) -> Node3D:
 	left.rotation_degrees = Vector3(6, 12, -6)
 	root.add_child(left)
 
+	# Flame sits high and to the RIGHT in hand_torch.png — centroid of its fire
+	# pixels is local (0.129, 0.127). The halo used to be authored by eye at
+	# x = 0.04, which parked it 9cm to the left of the fire.
 	if _glow_mat:
-		var glow := _make_glow_quad(Vector2(0.22, 0.22))
+		var glow := _make_glow_quad(Vector2(0.3, 0.3))
 		glow.name = "Glow"
-		glow.position = Vector3(0.04, 0.12, 0.02)
+		glow.position = Vector3(HAND_FLAME_OFFSET.x, HAND_FLAME_OFFSET.y, 0.02)
 		left.add_child(glow)
 
 	if _hand_torch_tex:
@@ -224,7 +231,7 @@ static func make_hand_torch(camera: Camera3D) -> Node3D:
 	light.omni_range = 6.8
 	light.omni_attenuation = 1.3
 	light.shadow_enabled = false
-	light.position = Vector3(0.06, 0.12, 0.28)
+	light.position = Vector3(HAND_FLAME_OFFSET.x, HAND_FLAME_OFFSET.y, 0.28)
 	left.add_child(light)
 
 	var kick := OmniLight3D.new()
@@ -232,7 +239,7 @@ static func make_hand_torch(camera: Camera3D) -> Node3D:
 	kick.light_color = Color(1.0, 0.65, 0.3)
 	kick.light_energy = 0.75
 	kick.omni_range = 2.3
-	kick.position = Vector3(0.03, 0.08, 0.14)
+	kick.position = Vector3(HAND_FLAME_OFFSET.x, HAND_FLAME_OFFSET.y, 0.14)
 	left.add_child(kick)
 
 	# RIGHT knife — low right edge, not raised mid-screen

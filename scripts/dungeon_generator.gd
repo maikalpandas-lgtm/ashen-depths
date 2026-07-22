@@ -1150,7 +1150,10 @@ func _spawn_encounter(world: Vector3, pack_name: String) -> void:
 
 	var col := CollisionShape3D.new()
 	var shape := SphereShape3D.new()
-	shape.radius = 1.5
+	# Fires from the NEIGHBOURING cell (centres are cell_size apart), so the
+	# fight opens with the pack standing one tile ahead instead of on top of
+	# the player. Combat happens in place now, so the framing matters.
+	shape.radius = cell_size - 0.25
 	col.shape = shape
 	area.add_child(col)
 

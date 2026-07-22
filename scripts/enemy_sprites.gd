@@ -84,15 +84,16 @@ static func make_enemy(parent: Node3D, pos: Vector3, enemy_id: String, ground_y:
 	# Contact shadow first, so the sprite is never a sticker floating on the rock
 	var shadow := MeshInstance3D.new()
 	var quad := QuadMesh.new()
-	quad.size = Vector2(height * 0.62, height * 0.34)
+	quad.size = Vector2(height * 0.9, height * 0.5)
 	shadow.mesh = quad
 	shadow.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
-	shadow.position = Vector3(0.0, 0.03, 0.0)
+	# The cave floor is uneven; too low and parts of the quad sink into rock
+	shadow.position = Vector3(0.0, 0.07, 0.0)
 	var smat := StandardMaterial3D.new()
 	smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	smat.albedo_texture = _shadow()
-	smat.albedo_color = Color(0.0, 0.0, 0.0, 0.55)
+	smat.albedo_color = Color(0.0, 0.0, 0.0, 0.78)
 	smat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	smat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
 	smat.render_priority = 1

@@ -1,30 +1,41 @@
 extends CanvasLayer
-## Card combat screen. Opens when the crawler walks into a pack.
+## Card combat, fought IN PLACE. The corridor stays on screen and the pack keeps
+## standing where it stood — this is a HUD over the 3D view, not a separate
+## scene that re-draws the enemies in a row.
 ##
-## No board (DESIGN §7.0): pick a card, pick a target, it resolves from hand.
-## All rules live in combat_state.gd — this file only draws and forwards clicks,
-## so the maths stays testable without a window.
+## Targeting is a drag: press a card, a line follows the cursor, release over an
+## enemy to play it there. HP bars and intents are projected onto the world
+## sprites with Camera3D.unproject_position, so the numbers sit on the actual
+## monster rather than on a UI copy of it.
+##
+## No board (DESIGN §7.0). Rules live in combat_state.gd, which has no idea any
+## of this exists.
 
 const CardDB = preload("res://scripts/cards/card_db.gd")
 const CardView = preload("res://scripts/ui/card_view.gd")
 const Combat = preload("res://scripts/combat/combat_state.gd")
 const Party = preload("res://scripts/party.gd")
 const UiTheme = preload("res://scripts/ui/ui_theme.gd")
+const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 
-const CARD_W := 132
-const CARD_H := 185
+const CARD_W := 124
+const CARD_H := 174
+const DRAG_LIFT := 26.0  ## how far a held card rises out of the hand
 
 var _combat: Combat = null
-var _source: Node = null  ## the pack node in the world, freed on victory
-var _selected: int = -1  ## index into the hand, -1 = nothing picked
+var _source: Node3D = null  ## pack node in the world, freed on victory
+var _enemy_nodes: Array = []  ## world node per combat.enemies index
+var _dragging: int = -1  ## hand index being dragged, -1 = none
+var _drag_from := Vector2.ZERO
 
 var _root: Control = null
-var _enemy_row: HBoxContainer = null
+var _world_layer: Control = null  ## HP bars drawn over the 3D view
+var _line_layer: Control = null  ## the targeting line
 var _hand_row: HBoxContainer = null
 var _status: Label = null
+var _banner: Label = null
 var _log: Label = null
 var _end_button: Button = null
-var _banner: Label = null
 
 
 func _ready() -> void:
@@ -38,16 +49,46 @@ func _ready() -> void:
 
 func _on_combat_requested(pack: Array, source: Node) -> void:
 	if _root.visible:
-		return  # already fighting
-	_source = source
+		return
+	_source = source as Node3D
+	_collect_enemy_nodes()
 	var party: Party = GameState.party if GameState and GameState.party else Party.new()
 	var fight_seed: int = (GameState.current_seed if GameState else 1) + Time.get_ticks_msec()
 	_combat = Combat.new(party, pack, fight_seed)
-	_selected = -1
+	_dragging = -1
+	_face_the_pack()
 	_root.visible = true
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_refresh()
+
+
+## The pack node holds one Enemy_* child per member, in pack order.
+func _collect_enemy_nodes() -> void:
+	_enemy_nodes.clear()
+	if not is_instance_valid(_source):
+		return
+	for child in _source.get_children():
+		if child is Node3D and str(child.name).begins_with("Enemy_"):
+			_enemy_nodes.append(child)
+
+
+## Turn the crawler to look at the pack. The trigger fires from the neighbouring
+## tile, so they stand one cell ahead — but the player may have arrived sideways.
+func _face_the_pack() -> void:
+	if not is_instance_valid(_source):
+		return
+	var players := get_tree().get_nodes_in_group("player")
+	if players.is_empty():
+		return
+	var player := players[0] as Node3D
+	var to_pack := _source.global_position - player.global_position
+	to_pack.y = 0.0
+	if to_pack.length() < 0.01:
+		return
+	# Grid crawler: snap to the nearest 90°, never a loose angle
+	var yaw := atan2(-to_pack.x, -to_pack.z)
+	player.rotation.y = round(yaw / (PI * 0.5)) * (PI * 0.5)
 
 
 func _close() -> void:
@@ -56,6 +97,15 @@ func _close() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_combat = null
 	_source = null
+	_enemy_nodes.clear()
+
+
+func _process(_delta: float) -> void:
+	if not _root.visible:
+		return
+	_world_layer.queue_redraw()
+	if _dragging >= 0:
+		_line_layer.queue_redraw()
 
 
 # ---------------------------------------------------------------- construction
@@ -66,58 +116,73 @@ func _build_ui() -> void:
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
 
-	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.03, 0.05, 0.82)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(dim)
+	# Only a soft floor gradient — the corridor must stay visible
+	var shade := ColorRect.new()
+	shade.color = Color(0.02, 0.03, 0.05, 0.5)
+	shade.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	shade.offset_top = -230
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(shade)
 
-	var col := VBoxContainer.new()
-	col.set_anchors_preset(Control.PRESET_FULL_RECT)
-	col.offset_left = 30
-	col.offset_right = -30
-	col.offset_top = 20
-	col.offset_bottom = -18
-	col.add_theme_constant_override("separation", 10)
-	_root.add_child(col)
+	_world_layer = Control.new()
+	_world_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_world_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_world_layer.draw.connect(_draw_world_overlay)
+	_root.add_child(_world_layer)
+
+	_line_layer = Control.new()
+	_line_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_line_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_line_layer.draw.connect(_draw_target_line)
+	_root.add_child(_line_layer)
 
 	_banner = Label.new()
-	UiTheme.as_title(_banner, 22, Color(1.0, 0.86, 0.6))
+	_banner.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_banner.offset_top = 16
+	_banner.offset_bottom = 60
+	_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(_banner)
-
-	_enemy_row = HBoxContainer.new()
-	_enemy_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	_enemy_row.add_theme_constant_override("separation", 26)
-	_enemy_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_child(_enemy_row)
+	UiTheme.as_display(_banner, 26, Color(1.0, 0.86, 0.6))
+	_root.add_child(_banner)
 
 	_log = Label.new()
-	_log.add_theme_font_size_override("font_size", 12)
-	_log.add_theme_color_override("font_color", Color(0.68, 0.76, 0.82))
+	_log.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_log.offset_top = 58
+	_log.offset_bottom = 86
+	_log.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_log.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(_log)
+	UiTheme.as_title(_log, 13, Color(0.72, 0.8, 0.86))
+	_root.add_child(_log)
 
 	_status = Label.new()
-	UiTheme.as_title(_status, 17, Color(0.9, 0.94, 1.0))
-	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(_status)
-
-	var bottom := HBoxContainer.new()
-	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
-	bottom.add_theme_constant_override("separation", 12)
-	col.add_child(bottom)
+	_status.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_status.offset_left = 26
+	_status.offset_top = -212
+	_status.offset_right = 470
+	_status.offset_bottom = -178
+	_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UiTheme.as_title(_status, 19, Color(0.95, 0.96, 1.0))
+	_root.add_child(_status)
 
 	_hand_row = HBoxContainer.new()
-	_hand_row.add_theme_constant_override("separation", 8)
-	bottom.add_child(_hand_row)
+	_hand_row.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_hand_row.offset_left = 200
+	_hand_row.offset_right = -210
+	_hand_row.offset_top = -CARD_H - 30
+	_hand_row.offset_bottom = -14
+	_hand_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_hand_row.add_theme_constant_override("separation", 6)
+	_root.add_child(_hand_row)
 
 	_end_button = Button.new()
-	_end_button.text = "КОНЕЦ ХОДА"
+	_end_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_end_button.offset_left = -190
+	_end_button.offset_top = -120
+	_end_button.offset_right = -26
+	_end_button.offset_bottom = -62
 	UiTheme.style_button(_end_button, 18)
-	_end_button.custom_minimum_size = Vector2(150, 52)
 	_end_button.pressed.connect(_on_end_turn)
-	bottom.add_child(_end_button)
+	_root.add_child(_end_button)
 
 
 # ------------------------------------------------------------------- rendering
@@ -125,14 +190,14 @@ func _build_ui() -> void:
 func _refresh() -> void:
 	if _combat == null:
 		return
-	_render_enemies()
 	_render_hand()
+	_sync_world_sprites()
 
-	_status.text = "⚡ %d / %d      🛡 броня %d      🦴 кости %d      🗡 шипы %d      ❤ %d" % [
+	_status.text = "⚡ %d/%d    🛡 %d    🦴 %d    ❤ %d" % [
 		_combat.energy, Combat.START_ENERGY, _combat.party_block,
-		_combat.bones, _combat.thorns, _party_hp(),
+		_combat.bones, _party_hp(),
 	]
-	_log.text = "   ".join(_combat.log_lines.slice(maxi(0, _combat.log_lines.size() - 3)))
+	_log.text = "   ·   ".join(_combat.log_lines.slice(maxi(0, _combat.log_lines.size() - 2)))
 
 	match _combat.phase:
 		Combat.Phase.WON:
@@ -142,71 +207,89 @@ func _refresh() -> void:
 			_banner.text = "ДРУЖИНА ПАЛА"
 			_end_button.text = "ДАЛЬШЕ"
 		_:
-			_banner.text = "ХОД %d  —  выбери карту, затем цель" % _combat.turn
+			_banner.text = "ХОД %d" % _combat.turn
 			_end_button.text = "КОНЕЦ ХОДА"
 
 
-func _render_enemies() -> void:
-	for c in _enemy_row.get_children():
-		c.queue_free()
-	for i in range(_combat.enemies.size()):
-		_enemy_row.add_child(_make_enemy(i))
+## Fade the corpse in the corridor instead of leaving it standing.
+func _sync_world_sprites() -> void:
+	for i in range(mini(_enemy_nodes.size(), _combat.enemies.size())):
+		var node := _enemy_nodes[i] as Node3D
+		if not is_instance_valid(node):
+			continue
+		var spr := node.get_node_or_null("Sprite")
+		if spr and spr is GeometryInstance3D:
+			(spr as GeometryInstance3D).transparency = (
+				0.75 if int(_combat.enemies[i]["hp"]) <= 0 else 0.0)
 
 
-func _make_enemy(index: int) -> Control:
-	var e: Dictionary = _combat.enemies[index]
-	var dead := int(e["hp"]) <= 0
+## HP bar + intent, drawn over each monster where it actually stands.
+func _draw_world_overlay() -> void:
+	if _combat == null:
+		return
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var font := UiTheme.title_font()
+	var hovered := _hover_enemy() if _dragging >= 0 else -1
+	for i in range(mini(_enemy_nodes.size(), _combat.enemies.size())):
+		var node := _enemy_nodes[i] as Node3D
+		var e: Dictionary = _combat.enemies[i]
+		if not is_instance_valid(node) or int(e["hp"]) <= 0:
+			continue
+		var head: Vector3 = node.global_position + Vector3.UP * _enemy_top(i)
+		if cam.is_position_behind(head):
+			continue
+		var p := cam.unproject_position(head)
 
-	var box := VBoxContainer.new()
-	box.custom_minimum_size = Vector2(190, 0)
-	box.alignment = BoxContainer.ALIGNMENT_END
+		var w := 108.0
+		var bar := Rect2(p.x - w * 0.5, p.y - 6.0, w, 12.0)
+		_world_layer.draw_rect(bar.grow(2.0), Color(0.05, 0.04, 0.06, 0.85))
+		_world_layer.draw_rect(bar, Color(0.22, 0.09, 0.1, 0.95))
+		var frac: float = clampf(float(e["hp"]) / maxf(1.0, float(e["max_hp"])), 0.0, 1.0)
+		_world_layer.draw_rect(Rect2(bar.position, Vector2(bar.size.x * frac, bar.size.y)),
+			Color(0.78, 0.26, 0.28))
+		if i == hovered:
+			_world_layer.draw_rect(bar.grow(5.0), Color(1.0, 0.85, 0.4), false, 2.0)
 
-	var intent := Label.new()
-	var it: Dictionary = e["intent"]
-	if dead:
-		intent.text = ""
-	elif it.get("type", "attack") == "block":
-		intent.text = "🛡 %d" % it.get("value", 0)
-		intent.add_theme_color_override("font_color", Color(0.6, 0.85, 1.0))
-	else:
-		intent.text = "🗡 %d" % it.get("value", 0)
-		intent.add_theme_color_override("font_color", Color(1.0, 0.6, 0.45))
-	intent.add_theme_font_size_override("font_size", 20)
-	intent.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(intent)
+		if font == null:
+			continue
+		_world_layer.draw_string(font, p + Vector2(-w * 0.5, 26.0),
+			"%d/%d" % [e["hp"], e["max_hp"]],
+			HORIZONTAL_ALIGNMENT_CENTER, w, 14, Color(0.95, 0.9, 0.88))
+		var it: Dictionary = e["intent"]
+		var is_block: bool = it.get("type", "attack") == "block"
+		_world_layer.draw_string(font, p + Vector2(-w * 0.5, -16.0),
+			("🛡 %d" if is_block else "🗡 %d") % it.get("value", 0),
+			HORIZONTAL_ALIGNMENT_CENTER, w, 20,
+			Color(0.6, 0.85, 1.0) if is_block else Color(1.0, 0.62, 0.42))
+		_world_layer.draw_string(font, p + Vector2(-w * 0.5, 44.0), str(e["name"]),
+			HORIZONTAL_ALIGNMENT_CENTER, w, 13, Color(0.86, 0.83, 0.79))
+		if int(e["block"]) > 0:
+			_world_layer.draw_string(font, p + Vector2(w * 0.5 + 6.0, 8.0),
+				"🛡%d" % e["block"], HORIZONTAL_ALIGNMENT_LEFT, -1, 14,
+				Color(0.7, 0.88, 1.0))
 
-	# The enemy is a button so the whole sprite is the target hitbox
-	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(180, 190)
-	btn.flat = true
-	btn.icon = CardView.load_art("enemy_%s" % e["id"])
-	btn.expand_icon = true
-	btn.disabled = dead or _selected < 0 or _combat.phase != Combat.Phase.PLAYER
-	btn.modulate = Color(0.35, 0.3, 0.3, 0.55) if dead else Color.WHITE
-	btn.pressed.connect(func(): _on_enemy_clicked(index))
-	box.add_child(btn)
 
-	var name_label := Label.new()
-	name_label.text = str(e["name"])
-	UiTheme.as_title(name_label, 13)
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(name_label)
+## Arc from the held card to the cursor, like the reference.
+func _draw_target_line() -> void:
+	if _dragging < 0:
+		return
+	var mouse := _line_layer.get_local_mouse_position()
+	var target := _hover_enemy()
+	var colour := Color(0.55, 0.95, 0.5) if target >= 0 else Color(0.78, 0.8, 0.82, 0.75)
 
-	var bar := ProgressBar.new()
-	bar.max_value = e["max_hp"]
-	bar.value = e["hp"]
-	bar.show_percentage = false
-	bar.custom_minimum_size = Vector2(170, 16)
-	box.add_child(bar)
-
-	var hp_label := Label.new()
-	hp_label.text = "%d / %d%s" % [e["hp"], e["max_hp"],
-		("   🛡 %d" % e["block"]) if int(e["block"]) > 0 else ""]
-	hp_label.add_theme_font_size_override("font_size", 12)
-	hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(hp_label)
-
-	return box
+	# Quadratic bend so the line arcs up out of the hand instead of cutting
+	# straight across the board
+	var lift: float = minf(190.0, _drag_from.distance_to(mouse) * 0.45)
+	var mid := _drag_from.lerp(mouse, 0.5) - Vector2(0.0, lift)
+	var points := PackedVector2Array()
+	for i in range(21):
+		var t := float(i) / 20.0
+		points.append(_drag_from.lerp(mid, t).lerp(mid.lerp(mouse, t), t))
+	_line_layer.draw_polyline(points, Color(0.05, 0.06, 0.08, 0.75), 9.0, true)
+	_line_layer.draw_polyline(points, colour, 5.0, true)
+	_line_layer.draw_circle(mouse, 9.0, colour)
 
 
 func _render_hand() -> void:
@@ -226,20 +309,20 @@ func _make_hand_card(index: int) -> Control:
 
 	var playable := _combat.can_play(index)
 	var holder := Control.new()
-	holder.custom_minimum_size = Vector2(CARD_W, CARD_H + 18)
+	holder.custom_minimum_size = Vector2(CARD_W, CARD_H + DRAG_LIFT)
 
 	var view := CardView.build(card, owner_colour, Vector2(CARD_W, CARD_H))
-	# Unplayable cards grey out rather than disappear (§7.4)
+	# Unplayable cards grey out rather than vanish (§7.4); the held one lifts
 	view.modulate = Color.WHITE if playable else Color(0.5, 0.5, 0.55, 0.8)
-	# Selected card lifts, the way it reads in the reference
-	view.position = Vector2(0, 0 if index != _selected else -16)
+	view.position = Vector2(0.0, 0.0 if index == _dragging else DRAG_LIFT)
 	holder.add_child(view)
 
 	var hit := Button.new()
 	hit.flat = true
 	hit.set_anchors_preset(Control.PRESET_FULL_RECT)
-	hit.disabled = not playable
-	hit.pressed.connect(func(): _on_card_clicked(index))
+	hit.disabled = not playable or _combat.phase != Combat.Phase.PLAYER
+	hit.button_down.connect(func(): _start_drag(index, holder))
+	hit.button_up.connect(_finish_drag)
 	holder.add_child(hit)
 
 	return holder
@@ -247,27 +330,62 @@ func _make_hand_card(index: int) -> Control:
 
 # ---------------------------------------------------------------- interaction
 
-func _on_card_clicked(index: int) -> void:
+func _start_drag(index: int, holder: Control) -> void:
 	if _combat == null or _combat.phase != Combat.Phase.PLAYER:
 		return
+	_dragging = index
+	_drag_from = holder.global_position + holder.size * 0.5
+	_render_hand()
+
+
+## Released: over an enemy it resolves there; a card that needs no target
+## resolves anywhere; otherwise it simply drops back into the hand.
+func _finish_drag() -> void:
+	if _combat == null or _dragging < 0:
+		return
+	var index := _dragging
+	_dragging = -1
+	if index >= _combat.deck.hand.size():
+		_refresh()
+		return
 	var card := CardDB.get_card(_combat.deck.hand[index]["card"])
-	# Guards and utility have no target — no reason to make the player pick one
 	if int(card["damage"]) <= 0:
 		_combat.play_card(index, 0)
-		_selected = -1
 	else:
-		_selected = -1 if _selected == index else index
+		var target := _hover_enemy()
+		if target >= 0:
+			_combat.play_card(index, target)
 	_refresh()
 
 
-func _on_enemy_clicked(index: int) -> void:
-	if _combat == null or _selected < 0:
-		return
-	if int(_combat.enemies[index]["hp"]) <= 0:
-		return
-	_combat.play_card(_selected, index)
-	_selected = -1
-	_refresh()
+## Which living enemy the cursor is over, by screen distance to its sprite.
+func _hover_enemy() -> int:
+	if _combat == null:
+		return -1
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return -1
+	var mouse := _root.get_local_mouse_position()
+	var best := -1
+	var best_d := 140.0
+	for i in range(mini(_enemy_nodes.size(), _combat.enemies.size())):
+		var node := _enemy_nodes[i] as Node3D
+		if not is_instance_valid(node) or int(_combat.enemies[i]["hp"]) <= 0:
+			continue
+		var mid: Vector3 = node.global_position + Vector3.UP * (_enemy_top(i) * 0.5)
+		if cam.is_position_behind(mid):
+			continue
+		var d := cam.unproject_position(mid).distance_to(mouse)
+		if d < best_d:
+			best_d = d
+			best = i
+	return best
+
+
+func _enemy_top(index: int) -> float:
+	var id: String = _combat.enemies[index]["id"]
+	var def: Dictionary = EnemySprites.ENEMIES.get(id, {})
+	return float(def.get("height", 1.6)) + 0.35
 
 
 func _on_end_turn() -> void:
@@ -279,7 +397,7 @@ func _on_end_turn() -> void:
 		Combat.Phase.LOST:
 			_finish_defeat()
 		_:
-			_selected = -1
+			_dragging = -1
 			_combat.end_turn()
 			_refresh()
 
@@ -290,17 +408,16 @@ func _finish_victory() -> void:
 		GameState.gold += reward
 	if is_instance_valid(_source):
 		# Clear the grid cell too, or the minimap keeps its skull forever
-		var node := _source as Node3D
-		var dungeon := node.get_parent().get_parent() if node.get_parent() else null
+		var dungeon := _source.get_parent().get_parent() if _source.get_parent() else null
 		if dungeon and dungeon.has_method("clear_encounter_at"):
-			dungeon.call("clear_encounter_at", node.global_position)
-		_source.queue_free()  # the pack is gone from the corridor for good
+			dungeon.call("clear_encounter_at", _source.global_position)
+		_source.queue_free()
 	_close()
 
 
 func _finish_defeat() -> void:
-	# No death screen yet: leave the party on its feet with 1 HP each so the
-	# run can continue while the meta layer does not exist.
+	# No death screen yet: leave the party standing on 1 HP so the run can
+	# continue while the meta layer does not exist.
 	if GameState and GameState.party:
 		for m in GameState.party.members:
 			m["hp"] = maxi(1, int(m["hp"]))

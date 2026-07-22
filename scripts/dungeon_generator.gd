@@ -614,25 +614,30 @@ func _maybe_cave_wall(x: int, y: int, dx: int, dy: int, world: Vector3, skirt_ma
 	var base := world + Vector3(float(dx) * edge, 0.0, float(dy) * edge)
 	var rx := dy
 	var ry := -dx
-	_add_cave_wall_mesh(base, into, _edge_mode(x - rx, y - ry, dx, dy), _edge_mode(x + rx, y + ry, dx, dy))
+	_add_cave_wall_mesh(
+		base, into,
+		_edge_overshoot(x - rx, y - ry, dx, dy),
+		_edge_overshoot(x + rx, y + ry, dx, dy)
+	)
 	_add_floor_wall_skirting(base, into, skirt_mat)
 	var col_size := Vector3(cell_size * 1.12, wall_height + 0.35, 0.5) if absf(into.z) > 0.5 else Vector3(0.5, wall_height + 0.35, cell_size * 1.12)
 	_add_solid_box(base - into * 0.08 + Vector3(0, wall_height * 0.5, 0), col_size)
 
 
-enum WallEdge {
-	CONTINUES,  ## same face goes on — share vertices, full relief
-	INTO_ROCK,  ## wall turns here — run the panel past the corner, inside the rock
-	OPENING,    ## corridor branches — free edge, must sit flush to meet its neighbour
-}
-
-## How a wall panel over cell (x, y)+(dx, dy) should end on the side of `nx, ny`.
-func _edge_mode(nx: int, ny: int, dx: int, dy: int) -> WallEdge:
+## How far a wall panel over cell (x, y)+(dx, dy) runs PAST its cell on the side
+## of `nx, ny`, in world units.
+##
+## 0 where the same face continues (neighbours must share vertices exactly).
+## Otherwise the panel overshoots the corner so it crosses the perpendicular
+## panel — the two surfaces intersect into a rough rock elbow. Fading the relief
+## flat at corners instead is what turned dead ends into flat boxes: a one-cell
+## alcove is tapered from BOTH sides, so nothing was left displaced.
+func _edge_overshoot(nx: int, ny: int, dx: int, dy: int) -> float:
 	if not _is_walkable(_get_cell(nx, ny)):
-		return WallEdge.INTO_ROCK
+		return 0.55  # wall turns — overshoot hides inside the rock
 	if not _is_walkable(_get_cell(nx + dx, ny + dy)):
-		return WallEdge.CONTINUES
-	return WallEdge.OPENING
+		return 0.0  # face continues
+	return 0.4  # corridor branches — reads as an outcrop at the junction
 
 
 func _add_floor_wall_skirting(base: Vector3, face_into: Vector3, mat: Material) -> void:
@@ -688,20 +693,20 @@ func _tri_alpha(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, n: Vector3,
 	st.add_vertex(c)
 
 
-func _add_cave_wall_mesh(base: Vector3, face_into: Vector3, edge_neg: WallEdge, edge_pos: WallEdge) -> void:
+func _add_cave_wall_mesh(base: Vector3, face_into: Vector3, over_neg: float, over_pos: float) -> void:
 	## Rocky cave wall: faceted relief + world UV from displaced verts.
 	## Displacement is world-space only, so a panel and its neighbour agree exactly
 	## on the shared edge — no cracks, and no overlapping coplanar z-fight stripes.
-	## Where the wall turns, the panel runs on past the corner INSIDE the rock, so
-	## the corner reads as a rough overlap instead of a flattened 90° crease.
+	## Relief is never faded out: corners are made by panels overshooting and
+	## crossing each other, which is what keeps a cave from looking like a box.
 	var mi := MeshInstance3D.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var segs_w := 9
 	var segs_h := 10
 	var half := cell_size * 0.5
-	var a_neg := -half - (0.5 if edge_neg == WallEdge.INTO_ROCK else 0.0)
-	var a_pos := half + (0.5 if edge_pos == WallEdge.INTO_ROCK else 0.0)
+	var a_neg := -half - over_neg
+	var a_pos := half + over_pos
 	var right := Vector3(-face_into.z, 0.0, face_into.x)
 	var uv_s := _world_uv_scale()
 
@@ -711,10 +716,10 @@ func _add_cave_wall_mesh(base: Vector3, face_into: Vector3, edge_neg: WallEdge, 
 			var v0 := float(j) / float(segs_h)
 			var u1 := float(i + 1) / float(segs_w)
 			var v1 := float(j + 1) / float(segs_h)
-			var p00 := _wall_pt(base, face_into, right, u0, v0, a_neg, a_pos, edge_neg, edge_pos)
-			var p10 := _wall_pt(base, face_into, right, u1, v0, a_neg, a_pos, edge_neg, edge_pos)
-			var p11 := _wall_pt(base, face_into, right, u1, v1, a_neg, a_pos, edge_neg, edge_pos)
-			var p01 := _wall_pt(base, face_into, right, u0, v1, a_neg, a_pos, edge_neg, edge_pos)
+			var p00 := _wall_pt(base, face_into, right, u0, v0, a_neg, a_pos)
+			var p10 := _wall_pt(base, face_into, right, u1, v0, a_neg, a_pos)
+			var p11 := _wall_pt(base, face_into, right, u1, v1, a_neg, a_pos)
+			var p01 := _wall_pt(base, face_into, right, u0, v1, a_neg, a_pos)
 			var a00 := _wall_ao(u0, v0)
 			var a10 := _wall_ao(u1, v0)
 			var a11 := _wall_ao(u1, v1)
@@ -746,21 +751,11 @@ func _add_cave_wall_mesh(base: Vector3, face_into: Vector3, edge_neg: WallEdge, 
 
 func _wall_pt(
 	base: Vector3, face_into: Vector3, right: Vector3,
-	u: float, v: float, a_neg: float, a_pos: float,
-	edge_neg: WallEdge, edge_pos: WallEdge
+	u: float, v: float, a_neg: float, a_pos: float
 ) -> Vector3:
 	var along: float = lerpf(a_neg, a_pos, u)
 	var h := -0.2 + v * (wall_height + 0.5)
 	var pos := base + right * along + Vector3.UP * h
-	# Flatten to the grid plane ONLY at a branch opening, where the free edge has
-	# to meet the perpendicular panel. Corners that turn into rock keep full
-	# relief and simply overlap — a flat fade there is what read as a hard bevel.
-	var amp := 1.0
-	var span: float = a_pos - a_neg
-	if edge_neg == WallEdge.OPENING:
-		amp = minf(amp, smoothstep(0.0, 0.42, (along - a_neg) / span))
-	if edge_pos == WallEdge.OPENING:
-		amp = minf(amp, smoothstep(0.0, 0.42, (a_pos - along) / span))
 	# Mild vault + rocky outcrops (rocky cave, not a smooth tube).
 	# All noise reads WORLD position — never panel-local `along`, which is what
 	# used to make the two sides of a join disagree and split open.
@@ -776,8 +771,9 @@ func _wall_pt(
 	var ledge: float = maxf(0.0, facet) * (0.08 + 0.12 * sin(v * PI))
 	# Occasional hard bulge into corridor
 	var spike: float = maxf(0.0, n1 - 0.35) * 0.35
-	var push: float = (tube + rock + ledge + spike) * amp
-	return pos + face_into * push
+	# Slow lateral wander so a straight corridor never reads as a rectangular box
+	var sway: float = _cave_noise(pos.x * 0.22 + pos.z * 0.22, h * 0.28, 41) * 0.22
+	return pos + face_into * (tube + rock + ledge + spike + sway)
 
 
 ## Wall base + roof darkening (no vertical edge dark bands that look like seams).
@@ -905,8 +901,8 @@ func _spawn_torches() -> void:
 			# Cave walls bulge ~0.35–0.55 into corridor mid-height (_wall_pt tube+rock).
 			# Backplate sits ~0.03 behind the holder, so this keeps it on the rock
 			# face rather than floating in the corridor.
-			var wall_dist := cell_size * 0.5 - 0.5
-			var pos := world + Vector3(d.x * wall_dist, 1.35, d.y * wall_dist)
+			var wall_dist := cell_size * 0.5 - 0.65
+			var pos := world + Vector3(d.x * wall_dist, 1.3, d.y * wall_dist)
 			_add_torch(pos, d)
 			placed += 1
 	print("[Dungeon] torches=%d" % placed)

@@ -126,16 +126,18 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 	parent.add_child(holder)
 
 	# Soft radial halo — procedural falloff, so no hard quad edge on the rock
-	var glow := _make_soft_glow(1.15)
-	glow.position = Vector3(0.0, 0.24, -0.1)
+	var glow := _make_soft_glow(1.1)
+	glow.position = Vector3(0.0, 0.62, -0.1)
 	holder.add_child(glow)
 
-	var body := _make_sprite(_torch_tex, 0.0033, false)
+	# Art has a single bracket on the right and sits ~0.26 above the mount point,
+	# so the sprite is lifted to put that bracket on the holder origin.
+	var body := _make_sprite(_torch_tex, 0.00122, false)
 	body.name = "TorchBody"
-	body.position = Vector3(0.0, 0.0, -0.06)
+	body.position = Vector3(0.0, 0.26, -0.06)
 	body.render_priority = 5
 	holder.add_child(body)
-	_apply_flame_shimmer(body, _torch_tex, 0.5, 0.65, 0.018, 0.009, 2.8, true)
+	_apply_flame_shimmer(body, _torch_tex, 0.38, 0.65, 0.018, 0.009, 2.8, true)
 
 	var light := OmniLight3D.new()
 	light.name = "Light"
@@ -146,7 +148,7 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 	light.omni_range = 5.6
 	light.omni_attenuation = 1.5
 	light.shadow_enabled = false
-	light.position = Vector3(0.0, 0.3, -0.42)
+	light.position = Vector3(0.0, 0.66, -0.42)
 	holder.add_child(light)
 
 	var fill := OmniLight3D.new()
@@ -154,7 +156,7 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 	fill.light_color = Color(1.0, 0.48, 0.2)
 	fill.light_energy = 0.7
 	fill.omni_range = 2.0
-	fill.position = Vector3(0.0, 0.14, -0.18)
+	fill.position = Vector3(0.0, 0.45, -0.18)
 	holder.add_child(fill)
 
 	return holder

@@ -60,11 +60,22 @@ python3 tools/sprite_cutter.py path/to/raw.jpg assets/textures/out.png \
 
 | ID | Файл в игре | Master PNG | Source | Назначение |
 |----|-------------|------------|--------|------------|
-| **prop_wall_torch** | `torch.png` | `masters/prop_wall_torch.png` | `masters/prop_wall_torch_source.jpg` | Факел на стене + крепёж |
+| **prop_wall_torch** | `torch.png` | `masters/prop_wall_torch.png` | `masters/prop_wall_torch_source.jpg` | Факел на стене + крепёж (**одно ухо справа**) |
 | **fx_flame** | `flame_only.png` | `masters/fx_flame.png` | `masters/fx_flame_source.jpg` | Только пламя (анимация tip) |
 | **fx_torch_glow** | `torch_glow.png` | `masters/fx_torch_glow.png` | procedural | Soft radial glow |
 
 Код: `scripts/torch_sprites.gd` → `make_wall_torch()`.
+
+⚠️ **prop_wall_torch:** в игре должен быть вариант с **одним** креплением справа
+(режется из `masters/prop_wall_torch_source.jpg`, белый фон):
+
+```bash
+python3 tools/sprite_cutter.py assets/textures/masters/prop_wall_torch_source.jpg \
+  assets/textures/torch.png --color FFFFFF --tolerance 40 --pad 4
+```
+
+Магента-вариант из `raw/torch_raw.jpg` — это симметричная «H»-скоба с **двумя**
+ушами, на стене читается неправильно. Не возвращать.
 
 ---
 

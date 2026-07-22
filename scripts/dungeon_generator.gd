@@ -32,9 +32,8 @@ signal generation_finished(start_world: Vector3)
 @export var room_max_size: int = 3
 @export var cell_size: float = 3.0
 @export var wall_height: float = 3.2
-## Packs per floor. 4 on ~820 corridor tiles meant you could wander the
-## whole dungeon without meeting anything.
-@export var encounter_rooms: int = 22
+## Packs per floor. Doubled for denser runs (~44 on a full maze).
+@export var encounter_rooms: int = 44
 ## Lower = denser wall torches (1 = every walkable cell with a wall).
 @export var torch_spacing: int = 2
 @export var extra_loops: int = 10
@@ -481,11 +480,11 @@ func _place_encounters() -> void:
 	while placed.size() < n and i < candidates.size():
 		var c: Vector2i = candidates[i]
 		i += 1
-		# keep encounters spaced
+		# keep encounters spaced (2 cells — denser after double count)
 		var ok := true
 		for other in floor_cells:
 			if _get_cell(other.x, other.y) == Cell.ENCOUNTER:
-				if absi(other.x - c.x) + absi(other.y - c.y) < 3:
+				if absi(other.x - c.x) + absi(other.y - c.y) < 2:
 					ok = false
 					break
 		if not ok:

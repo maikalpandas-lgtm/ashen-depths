@@ -122,10 +122,11 @@ func end_turn() -> Array:
 
 func _roll_intent(e: Dictionary) -> Dictionary:
 	# Brutes hit hard and rarely guard; grubs chip; shades are in between
-	var base: int = maxi(2, int(e["max_hp"]) / 4)
-	if _rng.randf() < 0.2:
+	# Floor: ~max_hp/3 so a pack of 3 grubs can actually chip through block
+	var base: int = maxi(3, int(e["max_hp"]) / 3)
+	if _rng.randf() < 0.15:
 		return {"type": "block", "value": base}
-	return {"type": "attack", "value": base + _rng.randi_range(0, 2)}
+	return {"type": "attack", "value": base + _rng.randi_range(0, 3)}
 
 
 # --------------------------------------------------------------------- cards
@@ -279,7 +280,12 @@ func _hit_party(amount: int, source: Dictionary) -> void:
 	left -= absorbed
 	if left > 0:
 		_damage_party(left)
-	_log("%s бьёт на %d" % [source["name"], left])
+	if absorbed > 0 and left > 0:
+		_log("%s бьёт: 🛡−%d, ❤−%d" % [source["name"], absorbed, left])
+	elif absorbed > 0:
+		_log("%s бьёт: всё в броню (🛡−%d)" % [source["name"], absorbed])
+	else:
+		_log("%s бьёт: ❤−%d" % [source["name"], left])
 	if thorns > 0 and int(source["hp"]) > 0:
 		source["hp"] = maxi(0, int(source["hp"]) - thorns)
 		_log("шипы ранят %s на %d" % [source["name"], thorns])

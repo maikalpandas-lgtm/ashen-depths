@@ -386,11 +386,15 @@ func _refresh() -> void:
 	_hand_dirty = true
 	_sync_world_sprites()
 
-	_status.text = "⚡ %d/%d    🛡 %d    🦴 %d    ❤ %d" % [
+	var hp_now := _party_hp()
+	var hp_max := _party_max_hp()
+	_status.text = "⚡ %d/%d    🛡 %d    🦴 %d    ❤ %d/%d" % [
 		_combat.energy, Combat.START_ENERGY, _combat.party_block,
-		_combat.bones, _party_hp(),
+		_combat.bones, hp_now, hp_max,
 	]
 	_log.text = "   ·   ".join(_combat.log_lines.slice(maxi(0, _combat.log_lines.size() - 2)))
+	# Keep left HUD in sync — party HP lives on GameState.party (same ref)
+	_sync_left_hud()
 
 	match _combat.phase:
 		Combat.Phase.WON:
@@ -992,3 +996,19 @@ func _party_hp() -> int:
 	for m in _combat.party.members:
 		sum += maxi(0, int(m["hp"]))
 	return sum
+
+
+func _party_max_hp() -> int:
+	var sum := 0
+	for m in _combat.party.members:
+		sum += maxi(0, int(m["max_hp"]))
+	return sum
+
+
+func _sync_left_hud() -> void:
+	var main := get_tree().current_scene
+	if main == null:
+		return
+	var panel = main.get_node_or_null("UI/LeftPanel")
+	if panel and panel.has_method("refresh"):
+		panel.call("refresh")

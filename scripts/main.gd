@@ -13,6 +13,7 @@ extends Node3D
 
 const MAX_HP := 88
 const SHOT_DIR := "res://shots"
+const UiTheme = preload("res://scripts/ui/ui_theme.gd")
 
 
 func _ready() -> void:
@@ -31,7 +32,9 @@ func _ready() -> void:
 	hp_bar.max_value = MAX_HP
 	hp_bar.value = MAX_HP
 	_update_hud()
-	hud_hint.text = "W/S step · A/D turn 90° · R new dungeon · C cards · F9 shot · Esc menu  |  camera locked forward"
+	UiTheme.as_display(hud_title, 20, Color(0.95, 0.88, 0.7))
+	UiTheme.as_title(hud_floor, 12, Color(0.7, 0.65, 0.78))
+	hud_hint.text = "W/S шаг · A/D поворот 90° · R новый данж · C колода · F9 снимок · Esc меню"
 
 	if dungeon.get("start_cell") != null:
 		var start: Vector2i = dungeon.start_cell
@@ -84,7 +87,7 @@ func _on_dungeon_ready(start_world: Vector3) -> void:
 	if minimap and minimap.has_method("clear_fog"):
 		minimap.clear_fog()
 	_update_hud()
-	hud_hint.text = "W/S step · A/D turn 90° · R new dungeon · C cards · F9 shot · Esc menu"
+	hud_hint.text = "W/S шаг · A/D поворот 90° · R новый данж · C колода · F9 снимок · Esc меню"
 
 
 func _place_player(pos: Vector3) -> void:
@@ -96,11 +99,11 @@ func _place_player(pos: Vector3) -> void:
 
 func _on_chest_opened(amount: int) -> void:
 	_update_hud()
-	hud_hint.text = "Chest +%d gold" % amount
+	hud_hint.text = "Сундук: +%d золота" % amount
 
 
 func _on_encounter(encounter_id: String) -> void:
-	hud_hint.text = "⚔ Encounter: %s  — card combat in Phase 3" % encounter_id
+	hud_hint.text = "⚔ Стая: %s" % encounter_id
 
 
 func _update_hud() -> void:
@@ -111,7 +114,7 @@ func _update_hud() -> void:
 		seed_val = GameState.current_seed
 		floor_i = GameState.floor_index
 		gold = GameState.gold
-	hud_title.text = "Ashen Depths"
-	hud_floor.text = "Root Labyrinth  ·  F%d" % floor_i
+	hud_title.text = "Навьи Копи"
+	hud_floor.text = "Лабиринты Корня  ·  этаж %d" % floor_i
 	hud_gold.text = "🪙  %d" % gold
 	hud_hp.text = "❤  %d/%d" % [int(hp_bar.value), MAX_HP]

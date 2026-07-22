@@ -8,13 +8,29 @@ extends RefCounted
 
 const ART_DIR := "res://assets/textures/"
 
+## Floor at which the Root Labyrinth breaks through into Навь
+const NAV_FROM_FLOOR := 3
+
 ## Height in metres, so a rodent and a stone brute are not the same size on
 ## screen just because their PNGs happen to be similar.
+## Two roster halves. The upper floors keep the cave bestiary; the deeper ones
+## are Навь, where Slavic folklore lives. Kept as ONE table so a pack can mix
+## when a floor sits on the boundary.
 const ENEMIES := {
-	"grub": {"art": "enemy_grub", "height": 0.95, "hp": 8, "name": "Cave grub"},
-	"brute": {"art": "enemy_brute", "height": 2.25, "hp": 26, "name": "Stone brute"},
-	"shade": {"art": "enemy_shade", "height": 1.7, "hp": 14, "name": "Miner's shade"},
+	# --- копи (верхние этажи) ---
+	"grub": {"art": "enemy_grub", "height": 0.95, "hp": 8, "name": "Пещерный грызун", "realm": "mine"},
+	"brute": {"art": "enemy_brute", "height": 2.25, "hp": 26, "name": "Каменный дед", "realm": "mine"},
+	"shade": {"art": "enemy_shade", "height": 1.7, "hp": 14, "name": "Тень рудокопа", "realm": "mine"},
+	# --- навь (нижние этажи) ---
+	"anchutka": {"art": "enemy_anchutka", "height": 0.8, "hp": 7, "name": "Анчутка", "realm": "nav"},
+	"likho": {"art": "enemy_likho", "height": 2.1, "hp": 30, "name": "Лихо Одноглазое", "realm": "nav"},
+	"mavka": {"art": "enemy_mavka", "height": 1.65, "hp": 15, "name": "Мавка", "realm": "nav"},
+	"poludnitsa": {"art": "enemy_poludnitsa", "height": 1.75, "hp": 20, "name": "Полудница", "realm": "nav"},
 }
+
+
+static func ids_of_realm(realm: String) -> Array:
+	return ENEMIES.keys().filter(func(k): return ENEMIES[k]["realm"] == realm)
 
 static var _tex_cache: Dictionary = {}
 static var _shadow_tex: Texture2D = null
@@ -26,7 +42,19 @@ static func ids() -> Array:
 
 ## Which enemies stand in a pack. Kept deterministic per cell so a dungeon
 ## looks the same when regenerated from its seed.
-static func pack_for(cell_hash: int) -> Array:
+## `floor_index` decides the realm: the mines on top, Навь below. Packs never
+## mix realms, so a paladin-era grub does not stand beside a mavka by accident.
+static func pack_for(cell_hash: int, floor_index: int = 1) -> Array:
+	if floor_index >= NAV_FROM_FLOOR:
+		match cell_hash % 4:
+			0:
+				return ["anchutka", "anchutka", "anchutka"]
+			1:
+				return ["likho"]
+			2:
+				return ["mavka", "anchutka"]
+			_:
+				return ["poludnitsa", "mavka"]
 	match cell_hash % 4:
 		0:
 			return ["grub", "grub", "grub"]

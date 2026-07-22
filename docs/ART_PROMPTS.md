@@ -275,6 +275,86 @@ and dissolving into embers, thin gold sparks rising from it
 
 ---
 
+## 3.7. Батч 5 — славянский набор (Навь)
+
+Сеттинг сместился в славянскую мифологию. Старые герои и монстры **остаются**
+(верхние этажи — копи), новые живут в **Нави** с 3-го этажа.
+
+Стилевой префикс §0 — без изменений. Дополнительно ко всем промптам этого батча:
+
+```
+Slavic folklore aesthetic, birch-bark and rushnik red embroidery accents,
+old-Russian ornament, bone charms and red thread, nothing generic-medieval,
+no plate armour, no western knight iconography
+```
+
+### Герои (бюст, как в §1)
+
+| Файл | Кто |
+|---|---|
+| `hero_vityaz` | Витязь — богатырь, танк |
+| `hero_polyanitsa` | Поляница — женщина-богатырь, урон |
+| `hero_volhv` | Волхв — ведун, чары |
+
+**`hero_vityaz`**
+```
+a broad-shouldered Slavic bogatyr warrior, thick dark beard, conical nasal helm
+over a chainmail coif, red kaftan under scale armour, calm heavy stare,
+an embroidered red band at the collar
+```
+
+**`hero_polyanitsa`**
+```
+a Slavic warrior woman, one long dark braid over the shoulder, a red embroidered
+sarafan under light lamellar armour, bow string across her chest, sharp confident
+half-smile, small bone charms in her braid
+```
+
+**`hero_volhv`**
+```
+an old Slavic pagan sorcerer, long grey beard and unbound hair, wolf pelt over a
+linen shirt with red hem embroidery, carved wooden staff top visible at the
+shoulder, one milky blind eye, faint cold blue light on his face
+```
+
+### Враги Нави (фронтально, в полный рост, как в §3)
+
+| Файл | Кто | Роль |
+|---|---|---|
+| `enemy_anchutka` | Анчутка | Мелочь, лезет толпой |
+| `enemy_likho` | Лихо Одноглазое | Танк |
+| `enemy_mavka` | Мавка | Быстрая, дебафф |
+| `enemy_poludnitsa` | Полудница | Урон по площади |
+
+**`enemy_anchutka`**
+```
+a small black bog imp the size of a child, no heels on its backwards feet,
+duck-like bill, wet matted fur, tiny horns, mischievous grin, hunched and eager
+```
+
+**`enemy_likho`**
+```
+a gaunt towering hag-like figure of misfortune, ONE huge eye in the middle of the
+forehead, tattered black shroud, impossibly long thin arms, dry white hair,
+a heavy iron chain dragging from one wrist
+```
+
+**`enemy_mavka`**
+```
+the ghost of a drowned girl, pale green-tinged skin, long wet dark hair with
+water weeds in it, a faded embroidered shift, no back visible only hollow ribs,
+a wreath of dead flowers, bare feet not quite touching the ground
+```
+
+**`enemy_poludnitsa`**
+```
+the noon spirit, a tall pale woman in a bleached white sarafan, wheat stalks
+braided into her hair, holding a large rusty sickle, blank white eyes,
+harsh midday light on her despite the dark
+```
+
+---
+
 ## 4. Куда класть готовое
 
 1. Исходник (что отдал Grok) → `assets/textures/masters/<id>_source.jpg`

@@ -10,7 +10,7 @@ const Deck = preload("res://scripts/cards/deck.gd")
 
 const HEROES := {
 	"kael": {
-		"name": "Kael", "archetype": "Paladin", "role": "Tank / Block",
+		"name": "Каэль", "archetype": "Паладин", "role": "Танк / броня",
 		"hp": 34, "portrait": "hero_kael", "colour": Color(0.85, 0.72, 0.35),
 		"deck": [
 			"slice", "slice", "slice",
@@ -20,7 +20,7 @@ const HEROES := {
 		],
 	},
 	"lyra": {
-		"name": "Lyra", "archetype": "Huntress", "role": "DPS / Secrets",
+		"name": "Лира", "archetype": "Охотница", "role": "Урон / ловушки",
 		"hp": 30, "portrait": "hero_lyra", "colour": Color(0.45, 0.78, 0.5),
 		"deck": [
 			"slice", "slice", "slice",
@@ -31,8 +31,41 @@ const HEROES := {
 		],
 	},
 	"sera": {
-		"name": "Sera", "archetype": "Fire mage", "role": "AoE",
+		"name": "Сера", "archetype": "Огненный маг", "role": "По площади",
 		"hp": 24, "portrait": "hero_sera", "colour": Color(0.9, 0.45, 0.3),
+		"deck": [
+			"firebolt", "firebolt", "firebolt",
+			"slice", "slice",
+			"block", "block",
+			"blood_lash",
+			"bone_rattle",
+		],
+	},
+	# --- славянский набор (добавлен, не замена) ---
+	"vityaz": {
+		"name": "Витязь", "archetype": "Богатырь", "role": "Танк / броня",
+		"hp": 36, "portrait": "hero_vityaz", "colour": Color(0.86, 0.3, 0.26),
+		"deck": [
+			"slice", "slice", "slice",
+			"block", "block", "block",
+			"ward", "ward",
+			"hack",
+		],
+	},
+	"polyanitsa": {
+		"name": "Поляница", "archetype": "Поляница", "role": "Урон / ловушки",
+		"hp": 28, "portrait": "hero_polyanitsa", "colour": Color(0.55, 0.72, 0.35),
+		"deck": [
+			"slice", "slice", "slice",
+			"cleave_cut", "cleave_cut",
+			"block", "block",
+			"echo_strike",
+			"offering",
+		],
+	},
+	"volhv": {
+		"name": "Волхв", "archetype": "Ведун", "role": "Чары",
+		"hp": 24, "portrait": "hero_volhv", "colour": Color(0.45, 0.6, 0.95),
 		"deck": [
 			"firebolt", "firebolt", "firebolt",
 			"slice", "slice",
@@ -43,7 +76,10 @@ const HEROES := {
 	},
 }
 
-const MVP_PARTY := ["kael", "lyra", "sera"]
+## Славянская тройка — основная. Старая (kael/lyra/sera) осталась в пуле:
+## драфт 3 из пула появится позже, DESIGN §5.
+const MVP_PARTY := ["vityaz", "polyanitsa", "volhv"]
+const OLD_PARTY := ["kael", "lyra", "sera"]
 
 var members: Array = []  ## [{id, name, hp, max_hp, ...}]
 

@@ -90,7 +90,7 @@ func _build_ui() -> void:
 	_root.add_child(col)
 
 	var title := Label.new()
-	title.text = "PARTY & DECK  ·  Phase 2 test view  ·  C to close"
+	title.text = "ДРУЖИНА И КОЛОДА  ·  C — закрыть"
 	UiTheme.as_title(title, 20, Color(1.0, 0.86, 0.6))
 	col.add_child(title)
 
@@ -114,10 +114,10 @@ func _build_ui() -> void:
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 10)
 	col.add_child(buttons)
-	_add_button(buttons, "Draw 1", func(): _deck.draw(1); _refresh())
-	_add_button(buttons, "Draw 5", func(): _deck.draw(5); _refresh())
-	_add_button(buttons, "Discard hand", func(): _deck.discard_hand(); _refresh())
-	_add_button(buttons, "New combat", func(): _reset())
+	_add_button(buttons, "Взять 1", func(): _deck.draw(1); _refresh())
+	_add_button(buttons, "Взять 5", func(): _deck.draw(5); _refresh())
+	_add_button(buttons, "Сбросить руку", func(): _deck.discard_hand(); _refresh())
+	_add_button(buttons, "Новый бой", func(): _reset())
 
 
 func _add_button(parent: Node, text: String, on_press: Callable) -> void:
@@ -133,7 +133,7 @@ func _add_button(parent: Node, text: String, on_press: Callable) -> void:
 func _refresh() -> void:
 	_render_party()
 	_render_hand()
-	_pile_label.text = "draw %d   ·   hand %d / %d   ·   discard %d   ·   total %d" % [
+	_pile_label.text = "колода %d   ·   рука %d / %d   ·   сброс %d   ·   всего %d" % [
 		_deck.draw_pile.size(), _deck.hand.size(), Deck.HAND_CAP,
 		_deck.discard_pile.size(), _deck.total(),
 	]
@@ -167,7 +167,7 @@ func _render_party() -> void:
 		box.add_child(hp)
 
 		var hp_label := Label.new()
-		hp_label.text = "%d / %d HP   ·   %d cards" % [m["hp"], m["max_hp"], (m["deck"] as Array).size()]
+		hp_label.text = "%d / %d HP   ·   карт: %d" % [m["hp"], m["max_hp"], (m["deck"] as Array).size()]
 		hp_label.add_theme_font_size_override("font_size", 12)
 		box.add_child(hp_label)
 

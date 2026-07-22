@@ -1139,7 +1139,8 @@ func _spawn_encounter(world: Vector3, pack_name: String) -> void:
 	# Real enemy sprites instead of glowing spheres. Which enemies stand here is
 	# derived from the cell, so a seed always rebuilds the same pack.
 	var cell := world_to_cell(world)
-	var pack: Array = EnemySprites.pack_for(absi(cell.x * 31 + cell.y * 17))
+	var floor_i: int = GameState.floor_index if GameState else 1
+	var pack: Array = EnemySprites.pack_for(absi(cell.x * 31 + cell.y * 17), floor_i)
 	var n := pack.size()
 	for i in range(n):
 		var side: float = 0.0 if n == 1 else (float(i) / float(n - 1) - 0.5) * 1.7

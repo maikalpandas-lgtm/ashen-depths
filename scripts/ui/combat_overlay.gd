@@ -113,7 +113,7 @@ func _build_ui() -> void:
 	bottom.add_child(_hand_row)
 
 	_end_button = Button.new()
-	_end_button.text = "END TURN"
+	_end_button.text = "КОНЕЦ ХОДА"
 	UiTheme.style_button(_end_button, 18)
 	_end_button.custom_minimum_size = Vector2(150, 52)
 	_end_button.pressed.connect(_on_end_turn)
@@ -128,7 +128,7 @@ func _refresh() -> void:
 	_render_enemies()
 	_render_hand()
 
-	_status.text = "⚡ %d / %d      🛡 %d block      🦴 %d bone      🗡 %d thorns      ❤ %d" % [
+	_status.text = "⚡ %d / %d      🛡 броня %d      🦴 кости %d      🗡 шипы %d      ❤ %d" % [
 		_combat.energy, Combat.START_ENERGY, _combat.party_block,
 		_combat.bones, _combat.thorns, _party_hp(),
 	]
@@ -136,14 +136,14 @@ func _refresh() -> void:
 
 	match _combat.phase:
 		Combat.Phase.WON:
-			_banner.text = "PACK CLEARED — click to continue"
-			_end_button.text = "CONTINUE"
+			_banner.text = "СТАЯ ПОБИТА"
+			_end_button.text = "ДАЛЬШЕ"
 		Combat.Phase.LOST:
-			_banner.text = "THE PARTY FALLS — click to continue"
-			_end_button.text = "CONTINUE"
+			_banner.text = "ДРУЖИНА ПАЛА"
+			_end_button.text = "ДАЛЬШЕ"
 		_:
-			_banner.text = "TURN %d — pick a card, then a target" % _combat.turn
-			_end_button.text = "END TURN"
+			_banner.text = "ХОД %d  —  выбери карту, затем цель" % _combat.turn
+			_end_button.text = "КОНЕЦ ХОДА"
 
 
 func _render_enemies() -> void:

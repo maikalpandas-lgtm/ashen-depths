@@ -10,13 +10,14 @@
 - [x] Dungeon mesh / generator hook
 - [x] `docs/DESIGN.md`
 
-## Фаза 1 — Лабиринт MVP ✅
+## Фаза 1 — Лабиринт MVP ✅ (закрыта 22.07.2026)
 - [x] Corridor-first generator
 - [x] Dead ends, doors, chest, encounters
 - [x] Torches, cave props, fog, HUD
 - [x] Minimap (parchment tiles)
-- [ ] Grid-move + fixed-forward camera (реф-feel)
-- [ ] Art-first painted textures
+- [x] Grid-move + fixed-forward camera (реф-feel) — W/S шаг, A/D 90°, hold-to-walk, качание рук
+- [x] Art-first look — порода в шейдере (`cave_rock.gdshader`), 2D-пропсы, свет/туман под референс
+- [x] F9 → `shots/` для ревью визуала
 
 ## Фаза 2 — Партия + колоды
 - [ ] 3 hero stubs (HP, portrait)
@@ -44,6 +45,16 @@
 
 ## Фаза 5 — Полиш + demo
 - [ ] Art pipeline, audio, balance, export
+
+---
+
+## Долги (не блокируют фазы)
+
+- Сундук / энкаунтеры / жаровни — до сих пор 3D-меши-заглушки (кубы и сферы).
+  По концепту все объекты должны быть 2D-спрайтами — см. `AGENTS.md`.
+- Спрайт в руке глушит `no_depth_test` через `material_override`; сейчас спасает
+  ограничение выпирания скалы (`PUSH_LIMIT`). Правильное решение — вариант
+  шейдера с `depth_test_disabled` через общий `.gdshaderinc`.
 
 ---
 

@@ -229,8 +229,9 @@ func _process(_delta: float) -> void:
 		_hand_dirty = false
 		_render_hand()
 	_world_layer.queue_redraw()
-	if _dragging >= 0:
-		_line_layer.queue_redraw()
+	# Always, not only while dragging: a canvas item keeps its last draw, so
+	# skipping this left the targeting line burned on screen after the hit.
+	_line_layer.queue_redraw()
 
 	if not _slashes.is_empty():
 		for f in _slashes:
@@ -279,8 +280,8 @@ func _build_ui() -> void:
 
 	_banner = Label.new()
 	_banner.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	_banner.offset_top = 16
-	_banner.offset_bottom = 60
+	_banner.offset_top = 10
+	_banner.offset_bottom = 48
 	_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	UiTheme.as_display(_banner, 26, Color(1.0, 0.86, 0.6))
@@ -288,8 +289,8 @@ func _build_ui() -> void:
 
 	_log = Label.new()
 	_log.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	_log.offset_top = 58
-	_log.offset_bottom = 86
+	_log.offset_top = 50
+	_log.offset_bottom = 74
 	_log.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_log.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	UiTheme.as_title(_log, 13, Color(0.72, 0.8, 0.86))
@@ -386,6 +387,9 @@ func _draw_world_overlay() -> void:
 		if cam.is_position_behind(head):
 			continue
 		var p := cam.unproject_position(head)
+		# A tall monster projects its bar up into the banner and log. Keep the
+		# readouts below them and clear of the hand at the bottom.
+		p.y = clampf(p.y, 100.0, _world_layer.size.y - 260.0)
 
 		var w := 108.0
 		var bar := Rect2(p.x - w * 0.5, p.y - 6.0, w, 12.0)
@@ -563,13 +567,21 @@ func _draw_target_line() -> void:
 	# straight across the board
 	var lift: float = minf(190.0, _drag_from.distance_to(mouse) * 0.45)
 	var mid := _drag_from.lerp(mouse, 0.5) - Vector2(0.0, lift)
-	var points := PackedVector2Array()
-	for i in range(21):
-		var t := float(i) / 20.0
-		points.append(_drag_from.lerp(mid, t).lerp(mid.lerp(mouse, t), t))
-	_line_layer.draw_polyline(points, Color(0.05, 0.06, 0.08, 0.75), 9.0, true)
-	_line_layer.draw_polyline(points, colour, 5.0, true)
-	_line_layer.draw_circle(mouse, 9.0, colour)
+
+	# A string of beads rather than a stroke — that is what the reference does,
+	# and it reads as an aimed throw instead of a drawn ruler line.
+	const BEADS := 16
+	for i in range(BEADS):
+		var t := float(i) / float(BEADS - 1)
+		var pos := _drag_from.lerp(mid, t).lerp(mid.lerp(mouse, t), t)
+		# grows toward the cursor, so the eye follows it to the target
+		var r: float = lerpf(3.0, 8.5, t)
+		_line_layer.draw_circle(pos, r + 2.0, Color(0.04, 0.05, 0.07, 0.65))
+		_line_layer.draw_circle(pos, r, colour)
+	# Head of the throw
+	_line_layer.draw_circle(mouse, 16.0, Color(colour, 0.28))
+	_line_layer.draw_circle(mouse, 10.0, Color(0.04, 0.05, 0.07, 0.7))
+	_line_layer.draw_circle(mouse, 7.5, colour)
 
 
 func _render_hand() -> void:
@@ -592,6 +604,25 @@ func _make_hand_card(index: int) -> Control:
 	var playable := _combat.can_play(index)
 	var holder := Control.new()
 	holder.custom_minimum_size = Vector2(CARD_W, CARD_H + DRAG_LIFT)
+
+	# Aura behind the held card, so it is obvious which one is in the air
+	if index == _dragging:
+		var aura := Panel.new()
+		aura.set_anchors_preset(Control.PRESET_FULL_RECT)
+		aura.offset_left = -14
+		aura.offset_top = -14
+		aura.offset_right = 14
+		aura.offset_bottom = 14 - DRAG_LIFT
+		var glow := StyleBoxFlat.new()
+		glow.bg_color = Color(1.0, 0.88, 0.45, 0.22)
+		glow.border_color = Color(1.0, 0.9, 0.55, 0.9)
+		glow.set_border_width_all(3)
+		glow.set_corner_radius_all(14)
+		glow.shadow_color = Color(1.0, 0.82, 0.35, 0.55)
+		glow.shadow_size = 16
+		aura.add_theme_stylebox_override("panel", glow)
+		aura.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(aura)
 
 	var view := CardView.build(card, owner_colour, Vector2(CARD_W, CARD_H))
 	# Unplayable cards grey out rather than vanish (§7.4); the held one lifts

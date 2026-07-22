@@ -65,7 +65,7 @@ func begin_player_turn() -> void:
 	for e in enemies:
 		e["block"] = 0
 		e["intent"] = _roll_intent(e)
-	_log("— turn %d —" % turn)
+	_log("ход %d" % turn)
 
 
 ## Enemies act, then the next player turn starts. Returns the lines logged.
@@ -83,13 +83,13 @@ func end_turn() -> Array:
 			"block":
 				e["block"] = int(e["block"]) + int(intent["value"])
 				_event("enemy_block", enemies.find(e))
-				_log("%s braces (+%d block)" % [e["name"], intent["value"]])
+				_log("%s закрывается (+%d брони)" % [e["name"], intent["value"]])
 			_:
 				_event("enemy_attack", enemies.find(e), int(intent["value"]))
 				_hit_party(int(intent["value"]), e)
 	if _party_alive_hp() <= 0:
 		phase = Phase.LOST
-		_log("party is down")
+		_log("дружина пала")
 		return log_lines.slice(before)
 	begin_player_turn()
 	return log_lines.slice(before)
@@ -138,26 +138,26 @@ func play_card(hand_index: int, target: int) -> bool:
 	_discount = 0
 	if int(card["blood"]) > 0:
 		_damage_party(int(card["blood"]))
-		_log("paid %d HP" % int(card["blood"]))
+		_log("отдано %d HP" % int(card["blood"]))
 
 	if int(card["block"]) > 0:
 		party_block += int(card["block"])
-		_log("+%d block" % int(card["block"]))
+		_log("+%d брони" % int(card["block"]))
 		if sigils.has(CardDB.Sigil.WARD):
 			thorns += 1
-			_log("+1 thorns")
+			_log("+1 шип")
 
 	if int(card["damage"]) > 0:
 		_resolve_damage(card, target)
 		# Echo repeats for free while a Bone is available (§7.3)
 		if sigils.has(CardDB.Sigil.ECHO) and bones > 0:
 			bones -= 1
-			_log("echo (−1 bone)")
+			_log("эхо (−1 кость)")
 			_resolve_damage(card, target)
 
 	if card["name"] == "Offering":
 		_discount = 1
-		_log("next card costs 1 less")
+		_log("следующая карта дешевле на 1")
 
 	deck.discard_at(hand_index)
 	_check_victory()
@@ -185,7 +185,7 @@ func _resolve_damage(card: Dictionary, target: int) -> void:
 		_heal_party(int(dealt * 0.5))
 	if sigils.has(CardDB.Sigil.BONE) and int(e["hp"]) <= 0:
 		bones += 1
-		_log("+1 bone")
+		_log("+1 кость")
 
 
 func _hit_enemy(index: int, amount: int, ignore_block: bool) -> int:
@@ -209,7 +209,7 @@ func _hit_enemy(index: int, amount: int, ignore_block: bool) -> int:
 	_event("enemy_hit", index, left)
 	if was_alive and int(e["hp"]) <= 0:
 		_event("enemy_died", index)
-	_log("%s takes %d (%d/%d)" % [e["name"], left, e["hp"], e["max_hp"]])
+	_log("%s получает %d (%d/%d)" % [e["name"], left, e["hp"], e["max_hp"]])
 	return left
 
 
@@ -222,10 +222,10 @@ func _hit_party(amount: int, source: Dictionary) -> void:
 	left -= absorbed
 	if left > 0:
 		_damage_party(left)
-	_log("%s hits for %d" % [source["name"], left])
+	_log("%s бьёт на %d" % [source["name"], left])
 	if thorns > 0 and int(source["hp"]) > 0:
 		source["hp"] = maxi(0, int(source["hp"]) - thorns)
-		_log("thorns bite %s for %d" % [source["name"], thorns])
+		_log("шипы ранят %s на %d" % [source["name"], thorns])
 		_check_victory()
 
 
@@ -254,7 +254,7 @@ func _heal_party(amount: int) -> void:
 		var given: int = mini(room, left)
 		m["hp"] = int(m["hp"]) + given
 		left -= given
-	_log("party heals %d" % (amount - left))
+	_log("дружина лечится на %d" % (amount - left))
 
 
 func _party_alive_hp() -> int:
@@ -273,7 +273,7 @@ func alive_enemies() -> Array:
 func _check_victory() -> void:
 	if alive_enemies().is_empty() and phase != Phase.LOST:
 		phase = Phase.WON
-		_log("pack cleared")
+		_log("стая побита")
 
 
 func _card_at(hand_index: int) -> Dictionary:

@@ -82,6 +82,8 @@ func _on_combat_requested(pack: Array, source: Node) -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if Sfx:
 		Sfx.play("combat_start", -2.0)
+		if _pack_kind() == "floor_boss":
+			Sfx.play("hit_heavy", -6.0)
 	_refresh()
 
 
@@ -360,7 +362,13 @@ func _refresh() -> void:
 			_banner.text = "ДРУЖИНА ПАЛА"
 			_end_button.text = "ДАЛЬШЕ"
 		_:
-			_banner.text = "ХОД %d" % _combat.turn
+			match _pack_kind():
+				"floor_boss":
+					_banner.text = "СТРАЖ ЭТАЖА  ·  ход %d" % _combat.turn
+				"mini_boss":
+					_banner.text = "ЭЛИТА  ·  ход %d" % _combat.turn
+				_:
+					_banner.text = "ХОД %d" % _combat.turn
 			_end_button.text = "КОНЕЦ ХОДА"
 
 
@@ -616,7 +624,7 @@ func _render_hand() -> void:
 
 func _make_hand_card(index: int) -> Control:
 	var entry: Dictionary = _combat.deck.hand[index]
-	var card: Dictionary = CardDB.get_card(entry["card"])
+	var card: Dictionary = CardDB.resolve_entry(entry)
 	var owner_colour := Color(0.7, 0.7, 0.7)
 	for m in _combat.party.members:
 		if m["id"] == entry["owner"]:
@@ -706,7 +714,7 @@ func _finish_drag() -> void:
 	if not _combat.can_play(index):
 		_refresh()
 		return
-	var card := CardDB.get_card(_combat.deck.hand[index]["card"])
+	var card := CardDB.resolve_entry(_combat.deck.hand[index])
 	var played := false
 	if int(card["damage"]) <= 0:
 		played = _combat.play_card(index, 0)
@@ -858,10 +866,26 @@ func _on_end_turn() -> void:
 			_refresh()
 
 
+func _pack_kind() -> String:
+	if is_instance_valid(_source) and _source.get("pack_kind") != null:
+		return str(_source.get("pack_kind"))
+	return "normal"
+
+
 func _finish_victory() -> void:
+	var kind := _pack_kind()
 	var reward := 10 + _combat.turn * 2
+	var xp_gain := 16
+	match kind:
+		"mini_boss":
+			reward = int(float(reward) * 1.6) + 10
+			xp_gain = 30
+		"floor_boss":
+			reward = int(float(reward) * 2.4) + 20
+			xp_gain = 55
 	if GameState:
 		GameState.gold += reward
+		GameState.grant_combat_xp(xp_gain)
 	if Sfx:
 		Sfx.play("victory", -1.0)
 		Sfx.play("gold", -6.0)
@@ -873,6 +897,7 @@ func _finish_victory() -> void:
 		_source.queue_free()
 	_close()
 	# Layer 1 draft — pick a card or skip for gold (DESIGN §7.6)
+	# Layer 2 (level-up) chains from draft_overlay when pending_level_ups > 0
 	if GameState and GameState.has_signal("draft_requested"):
 		GameState.draft_requested.emit(reward)
 

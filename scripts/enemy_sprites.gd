@@ -26,6 +26,15 @@ const ENEMIES := {
 	"likho": {"art": "enemy_likho", "height": 2.1, "hp": 30, "name": "Лихо Одноглазое", "realm": "nav"},
 	"mavka": {"art": "enemy_mavka", "height": 1.75, "hp": 15, "name": "Мавка", "realm": "nav"},
 	"poludnitsa": {"art": "enemy_poludnitsa", "height": 1.75, "hp": 20, "name": "Полудница", "realm": "nav"},
+	# --- боссы (те же спрайты, жирнее статы) ---
+	"cave_warden": {
+		"art": "enemy_brute", "height": 2.45, "hp": 48, "name": "Хранитель копи",
+		"realm": "mine", "boss": true,
+	},
+	"nav_host": {
+		"art": "enemy_likho", "height": 2.35, "hp": 58, "name": "Воевода Нави",
+		"realm": "nav", "boss": true,
+	},
 }
 
 
@@ -64,6 +73,20 @@ static func pack_for(cell_hash: int, floor_index: int = 1) -> Array:
 			return ["shade", "grub"]
 		_:
 			return ["shade", "shade"]
+
+
+## Elite mid-floor pack — one fat body, more XP/gold than a normal pack.
+static func mini_boss_pack(floor_index: int = 1) -> Array:
+	if floor_index >= NAV_FROM_FLOOR:
+		return ["likho", "anchutka"]
+	return ["brute", "grub"]
+
+
+## Floor boss near the EXIT campfire — DESIGN Phase 3 mini/floor boss.
+static func floor_boss_pack(floor_index: int = 1) -> Array:
+	if floor_index >= NAV_FROM_FLOOR:
+		return ["nav_host", "mavka"]
+	return ["cave_warden", "shade"]
 
 
 ## `ground_y` must be the real floor height at that spot — the cave floor is not

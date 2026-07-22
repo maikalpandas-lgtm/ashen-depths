@@ -12,6 +12,11 @@ var gold: int = 0
 ## The three heroes of this run. Combat (Phase 3) draws its deck from here.
 var party: Party = null
 
+## XP / levels — DESIGN §7.6 Layer 2 fires when pending_level_ups > 0
+var xp: int = 0
+var level: int = 1
+var pending_level_ups: int = 0
+
 signal dungeon_ready(start_position: Vector3)
 signal encounter_started(encounter_id: String)
 ## Carries WHICH enemies stand there and the node to remove once they are beaten
@@ -20,6 +25,9 @@ signal chest_opened(gold_amount: int)
 ## Post-combat draft layer 1 (kill gold already banked)
 signal draft_requested(kill_gold: int)
 signal draft_finished(hint: String)
+## Layer 2: upgrade a owned card OR take a rare (after layer 1 if leveled)
+signal level_up_requested()
+signal level_up_finished(hint: String)
 ## After EXIT step — main regenerates dungeon for the new floor
 signal floor_changed(new_floor: int)
 ## Combat wipe — defeat overlay; payload "continue" | "restart"
@@ -38,7 +46,40 @@ func new_run(seed_value: int = 0) -> void:
 	current_seed = seed_value
 	floor_index = 1
 	gold = 0
+	xp = 0
+	level = 1
+	pending_level_ups = 0
 	party = Party.new()
+
+
+## XP needed to leave the current level (15, 25, 35, …).
+func xp_to_next_level() -> int:
+	return 15 + (level - 1) * 10
+
+
+## Bank combat XP. May queue multiple level-ups (pending_level_ups).
+func grant_combat_xp(amount: int) -> int:
+	if amount <= 0:
+		return 0
+	xp += amount
+	var gained := 0
+	# Cap multi-level spikes so one boss can't skip three screens
+	while xp >= xp_to_next_level() and gained < 3:
+		xp -= xp_to_next_level()
+		level += 1
+		pending_level_ups += 1
+		gained += 1
+	if gained > 0:
+		print("[Run] level → %d (pending picks %d, xp %d/%d)" % [
+			level, pending_level_ups, xp, xp_to_next_level()])
+	return gained
+
+
+func consume_level_up() -> bool:
+	if pending_level_ups <= 0:
+		return false
+	pending_level_ups -= 1
+	return true
 
 
 ## Descend one floor. Layout seed = run_seed xor floor mix so seeds stay stable.

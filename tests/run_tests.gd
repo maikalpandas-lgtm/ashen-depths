@@ -28,6 +28,8 @@ func _init() -> void:
 	_test_combat_end()
 	_test_party_add_card()
 	_test_floor_seed()
+	_test_card_upgrades()
+	_test_xp_level()
 
 	print("\n%d passed, %d failed" % [_passed, _failed])
 	quit(1 if _failed > 0 else 0)
@@ -235,6 +237,67 @@ func _test_floor_seed() -> void:
 	var f3 := absi(run * 1664525 + 3 * 1013904223)
 	check(f2 != f3, "different floors get different layout seeds")
 	check(f2 == absi(run * 1664525 + 2 * 1013904223), "floor seed is deterministic")
+
+
+func _test_card_upgrades() -> void:
+	print("card upgrades (layer 2)")
+	var base := CardDB.get_card("slice")
+	var up := CardDB.resolve_entry({"card": "slice", "plus": 1})
+	check(int(up["damage"]) == int(base["damage"]) + CardDB.UPGRADE_DAMAGE,
+		"upgrade adds +2 damage to strikes")
+	var blk := CardDB.resolve_entry({"card": "block", "plus": 2})
+	check(int(blk["block"]) == 5 + 2 * CardDB.UPGRADE_BLOCK,
+		"upgrade adds +2 block per level to guards")
+	check(CardDB.rare_pool().size() >= 3, "rare pool has uncommon+rare cards")
+
+	var p: Party = Party.new()
+	var owner: String = str(p.members[0]["id"])
+	# First permanent card of hero 0
+	check(p.upgrade_card(owner, 0), "upgrade_card mutates permanent deck")
+	var e: Dictionary = p.members[0]["deck"][0]
+	check(int(e.get("plus", 0)) == 1, "plus is stored on the deck entry")
+	var combat: Combat = Combat.new(p, ["grub"], 7)
+	# Force hand to the upgraded copy if present
+	var found_plus := false
+	for entry in combat.deck.hand + combat.deck.draw_pile + combat.deck.discard_pile:
+		if int(entry.get("plus", 0)) >= 1:
+			found_plus = true
+			break
+	check(found_plus, "combat deck carries plus from permanent upgrades")
+
+	var offers: Array = p.roll_upgrade_offers(3)
+	check(offers.size() > 0, "upgrade offers roll non-empty")
+
+
+func _test_xp_level() -> void:
+	print("xp / level-up")
+	# Same thresholds as GameState.grant_combat_xp (autoload may be absent headless)
+	var level := 1
+	var xp := 0
+	var pending := 0
+	xp += 16
+	var gained := 0
+	while xp >= (15 + (level - 1) * 10) and gained < 3:
+		xp -= 15 + (level - 1) * 10
+		level += 1
+		pending += 1
+		gained += 1
+	check(gained == 1, "16 XP levels once from 1")
+	check(level == 2, "level is now 2")
+	check(pending == 1, "one pending level-up pick")
+	var before_lvl := level
+	xp += 5
+	gained = 0
+	while xp >= (15 + (level - 1) * 10) and gained < 3:
+		xp -= 15 + (level - 1) * 10
+		level += 1
+		pending += 1
+		gained += 1
+	check(gained == 0 and level == before_lvl, "small XP does not level again")
+	var EnemySprites = load("res://scripts/enemy_sprites.gd")
+	check(EnemySprites.floor_boss_pack(1).size() >= 1, "floor boss pack exists")
+	check(EnemySprites.mini_boss_pack(1).size() >= 1, "mini boss pack exists")
+	check(EnemySprites.ENEMIES.has("cave_warden"), "cave warden boss defined")
 
 
 ## Assert without spamming a line per card

@@ -36,10 +36,10 @@
 - [x] Прицеливание перетаскиванием, линия из шариков, аура выбранной карты
 - [x] Фидбэк: подсветка цели, вспышка от удара, разрыв надвое при смерти, выпад + следы когтей + тряска
 - [x] Sigils + blood cost — Sharp/Pierce/Cleave/Drain/Bone/Echo/Sanguine/Ward
-- [x] Тесты боя — 77 проверок headless
+- [x] Тесты боя — headless suite
 - [x] **Layer 1:** post-combat 1 of 3 **or** skip→gold — `draft_overlay.gd`
-- [ ] **Layer 2:** level-up → upgrade **or** rare
-- [ ] Mini-boss + floor boss (simple rewards)
+- [x] **Layer 2:** level-up → upgrade **or** rare — `level_up_overlay.gd` + XP
+- [x] Mini-boss + floor boss (simple rewards) — pack_kind, cave_warden / nav_host
 - [x] Переход между этажами — EXIT → `GameState.advance_floor` + generate
 - [x] Экран поражения — `defeat_overlay.gd` (встать 1 HP / новый забег)
 

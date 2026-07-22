@@ -61,7 +61,12 @@ func refresh() -> void:
 		_title.text = "Навьи Копи"
 	if _floor:
 		var realm := "Рудники" if floor_i < 3 else "Навь"
-		_floor.text = "%s  ·  этаж %d" % [realm, floor_i]
+		var lvl := 1
+		var xp_s := ""
+		if GameState:
+			lvl = GameState.level
+			xp_s = "  ·  ур.%d" % lvl
+		_floor.text = "%s  ·  этаж %d%s" % [realm, floor_i, xp_s]
 	if _hp_bar:
 		_hp_bar.max_value = party_max
 		_hp_bar.value = party_hp

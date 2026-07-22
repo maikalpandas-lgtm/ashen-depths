@@ -42,6 +42,8 @@ var rooms: Array[Rect2i] = []
 var start_cell: Vector2i = Vector2i.ZERO
 var exit_cell: Vector2i = Vector2i.ZERO
 var floor_cells: Array[Vector2i] = []
+## Cell → "normal" | "mini_boss" | "floor_boss"
+var encounter_kinds: Dictionary = {}
 
 var _floor_mat: ShaderMaterial
 var _wall_mat: ShaderMaterial
@@ -455,6 +457,7 @@ func _place_chest_in_dead_end() -> void:
 
 
 func _place_encounters() -> void:
+	encounter_kinds.clear()
 	var candidates: Array[Vector2i] = []
 	for c in floor_cells if not floor_cells.is_empty() else _temp_collect():
 		if c == start_cell or c == exit_cell:
@@ -471,9 +474,9 @@ func _place_encounters() -> void:
 				candidates.append(c)
 	candidates.shuffle()
 	var n := mini(encounter_rooms, candidates.size())
-	var placed := 0
+	var placed: Array[Vector2i] = []
 	var i := 0
-	while placed < n and i < candidates.size():
+	while placed.size() < n and i < candidates.size():
 		var c: Vector2i = candidates[i]
 		i += 1
 		# keep encounters spaced
@@ -486,8 +489,72 @@ func _place_encounters() -> void:
 		if not ok:
 			continue
 		_set_cell(c.x, c.y, Cell.ENCOUNTER)
-		placed += 1
-	print("[Dungeon] encounters=%d (asked %d)" % [placed, encounter_rooms])
+		encounter_kinds[c] = "normal"
+		placed.append(c)
+
+	# Mini-boss: promote one normal pack (prefer mid-distance from start)
+	if placed.size() >= 2:
+		var mini: Vector2i = placed[0]
+		var best_mid := -99999
+		for c in placed:
+			var d: int = absi(c.x - start_cell.x) + absi(c.y - start_cell.y)
+			var score: int = -absi(d - 12)  # sweet spot ~12 steps from start
+			if score > best_mid:
+				best_mid = score
+				mini = c
+		encounter_kinds[mini] = "mini_boss"
+
+	# Floor boss: cell near EXIT so descent always has a gatekeeper
+	var boss := _pick_floor_boss_cell(candidates, placed)
+	if boss.x >= 0:
+		_set_cell(boss.x, boss.y, Cell.ENCOUNTER)
+		encounter_kinds[boss] = "floor_boss"
+		placed.append(boss)
+
+	print("[Dungeon] encounters=%d (asked %d) mini+floor boss tagged" % [
+		placed.size(), encounter_rooms])
+
+
+## Closest free corridor cell to EXIT that isn't already an encounter/start.
+func _pick_floor_boss_cell(candidates: Array[Vector2i], taken: Array[Vector2i]) -> Vector2i:
+	var best := Vector2i(-1, -1)
+	var best_d := 99999
+	for c in candidates:
+		if c == start_cell or c == exit_cell:
+			continue
+		if _get_cell(c.x, c.y) == Cell.ENCOUNTER:
+			continue
+		var blocked := false
+		for t in taken:
+			if absi(t.x - c.x) + absi(t.y - c.y) < 2:
+				blocked = true
+				break
+		if blocked:
+			continue
+		var d: int = absi(c.x - exit_cell.x) + absi(c.y - exit_cell.y)
+		if d < 2:
+			continue  # not on top of the campfire
+		if d < best_d:
+			best_d = d
+			best = c
+	# Fallback: re-tag the farthest normal pack as floor boss
+	if best.x < 0 and not taken.is_empty():
+		var far: Vector2i = taken[0]
+		var far_d := -1
+		for c in taken:
+			var d2: int = absi(c.x - exit_cell.x) + absi(c.y - exit_cell.y)
+			if d2 > far_d:
+				far_d = d2
+				far = c
+		# Don't steal the mini if it's the only elite-ish one we can move
+		if encounter_kinds.get(far, "") == "mini_boss" and taken.size() > 1:
+			for c in taken:
+				if encounter_kinds.get(c, "") == "normal":
+					far = c
+					break
+		encounter_kinds[far] = "floor_boss"
+		return Vector2i(-1, -1)  # already an ENCOUNTER cell
+	return best
 
 
 func _temp_collect() -> Array[Vector2i]:
@@ -1165,7 +1232,17 @@ func _spawn_encounter(world: Vector3, pack_name: String) -> void:
 	# derived from the cell, so a seed always rebuilds the same pack.
 	var cell := world_to_cell(world)
 	var floor_i: int = GameState.floor_index if GameState else 1
-	var pack: Array = EnemySprites.pack_for(absi(cell.x * 31 + cell.y * 17), floor_i)
+	var kind: String = str(encounter_kinds.get(cell, "normal"))
+	var pack: Array
+	match kind:
+		"mini_boss":
+			pack = EnemySprites.mini_boss_pack(floor_i)
+			pack_name = "Элита"
+		"floor_boss":
+			pack = EnemySprites.floor_boss_pack(floor_i)
+			pack_name = "Страж этажа"
+		_:
+			pack = EnemySprites.pack_for(absi(cell.x * 31 + cell.y * 17), floor_i)
 	var n := pack.size()
 	for i in range(n):
 		var side: float = 0.0 if n == 1 else (float(i) / float(n - 1) - 0.5) * 1.7
@@ -1184,9 +1261,19 @@ func _spawn_encounter(world: Vector3, pack_name: String) -> void:
 
 	# Cold underlight so a pack reads as a threat from down the corridor
 	var light := OmniLight3D.new()
-	light.light_color = Color(0.55, 0.85, 0.95)
-	light.light_energy = 1.5
-	light.omni_range = 4.5
+	match kind:
+		"floor_boss":
+			light.light_color = Color(0.95, 0.35, 0.2)
+			light.light_energy = 2.2
+			light.omni_range = 5.5
+		"mini_boss":
+			light.light_color = Color(1.0, 0.7, 0.35)
+			light.light_energy = 1.9
+			light.omni_range = 5.0
+		_:
+			light.light_color = Color(0.55, 0.85, 0.95)
+			light.light_energy = 1.5
+			light.omni_range = 4.5
 	light.position = Vector3(0, 0.5, 0)
 	area.add_child(light)
 
@@ -1194,6 +1281,7 @@ func _spawn_encounter(world: Vector3, pack_name: String) -> void:
 	area.set("pack_name", pack_name)
 	area.set("enemy_count", n)
 	area.set("pack_ids", pack)
+	area.set("pack_kind", kind)
 	entities_root.add_child(area)
 
 

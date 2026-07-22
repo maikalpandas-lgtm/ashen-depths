@@ -281,7 +281,8 @@ func _check_victory() -> void:
 func _card_at(hand_index: int) -> Dictionary:
 	if hand_index < 0 or hand_index >= deck.hand.size():
 		return {}
-	return CardDB.get_card(deck.hand[hand_index]["card"])
+	# Honour permanent upgrades (Layer 2) carried on the combat deck entry
+	return CardDB.resolve_entry(deck.hand[hand_index])
 
 
 func _enemy_at(index: int) -> Dictionary:

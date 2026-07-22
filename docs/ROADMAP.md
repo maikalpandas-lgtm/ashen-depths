@@ -44,14 +44,15 @@
 - [x] Экран поражения — `defeat_overlay.gd` (встать 1 HP / новый забег)
 
 ## Фаза 4 — Босс-слой + Backpack + Shop + хаб
-- [ ] **Layer 3:** relic pick + shard + optional curse altar
-- [ ] **4b:** backpack grid **5×4**, items **1×1 / 2×1**, adjacency
-- [ ] Post-combat **item loot** (take / sell)
-- [ ] **4c:** floor shop (buy / sell / reroll)
-- [ ] **4d:** map **merchant** (0–1 / floor) + minimap icon
-- [ ] Camp / shop: card **remove / upgrade** for gold
-- [ ] Item catalog, more heroes, biomes
-- [ ] Trailer floor
+- [x] **Layer 3 light:** floor boss loot pick + seal_shard auto-offer
+- [x] **4b:** backpack grid **5×4**, items **1×1 / 2×1**, adjacency + combat mods
+- [x] Post-combat **item loot** (take / sell) — `loot_overlay.gd`
+- [x] **4c:** floor shop (buy / sell / reroll) — EXIT → shop → next floor
+- [x] **4d:** map **merchant** (0–1 / floor) + minimap icon
+- [x] Camp / shop: card **remove / upgrade** for gold
+- [x] Item catalog (12 items) — `item_db.gd`
+- [ ] More heroes, biomes
+- [ ] Trailer floor / curse altar full
 
 ## Фаза 5 — Полиш + demo
 - [x] Audio MVP — Kenney CC0 SFX + `Sfx` autoload (бой, шаги, draft, chest)

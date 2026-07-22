@@ -37,7 +37,7 @@ func _ready() -> void:
 		minimap.setup(dungeon, player)
 
 	_update_hud()
-	hud_hint.text = "W/S · A/D · R новый · C колода · 🎒 инвентарь · ⚙ · костёр → этаж"
+	hud_hint.text = "W/S · A/D · B рюкзак · C колода · костёр → лавка → этаж"
 
 	if dungeon.get("start_cell") != null:
 		var start: Vector2i = dungeon.start_cell
@@ -90,11 +90,11 @@ func _setup_left_hud() -> void:
 func _on_inventory() -> void:
 	if Sfx:
 		Sfx.play("ui_click")
-	var cards := get_node_or_null("CardTestOverlay")
-	if cards and cards.has_method("_toggle"):
-		cards.call("_toggle")
+	var pack := get_node_or_null("BackpackOverlay")
+	if pack and pack.has_method("toggle"):
+		pack.call("toggle")
 	else:
-		hud_hint.text = "Инвентарь · колода (C) — рюкзак в Phase 4"
+		hud_hint.text = "Рюкзак (B) · колода (C)"
 
 
 func _on_settings() -> void:

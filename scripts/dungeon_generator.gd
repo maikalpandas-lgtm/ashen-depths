@@ -18,6 +18,7 @@ enum Cell {
 	EXIT,
 	CHEST,
 	ENCOUNTER,
+	MERCHANT,  ## 0–1 wandering trader per floor (§8.3 C)
 }
 
 signal generation_finished(start_world: Vector3)
@@ -511,8 +512,45 @@ func _place_encounters() -> void:
 		encounter_kinds[boss] = "floor_boss"
 		placed.append(boss)
 
+	_place_merchant(candidates, placed)
+
 	print("[Dungeon] encounters=%d (asked %d) mini+floor boss tagged" % [
 		placed.size(), encounter_rooms])
+
+
+## 0–1 merchant on a corridor far from start (~70% of floors).
+func _place_merchant(candidates: Array[Vector2i], taken: Array[Vector2i]) -> void:
+	if candidates.is_empty():
+		return
+	if randf() > 0.72:
+		return
+	var best := Vector2i(-1, -1)
+	var best_score := -99999
+	for c in candidates:
+		if _get_cell(c.x, c.y) != Cell.FLOOR and _get_cell(c.x, c.y) != Cell.DOOR:
+			# only free walkable non-special
+			if _get_cell(c.x, c.y) != Cell.FLOOR:
+				continue
+		if c == start_cell or c == exit_cell:
+			continue
+		if _get_cell(c.x, c.y) == Cell.ENCOUNTER or _get_cell(c.x, c.y) == Cell.CHEST:
+			continue
+		var blocked := false
+		for t in taken:
+			if absi(t.x - c.x) + absi(t.y - c.y) < 3:
+				blocked = true
+				break
+		if blocked:
+			continue
+		# Prefer mid-distance side path
+		var d: int = absi(c.x - start_cell.x) + absi(c.y - start_cell.y)
+		var score: int = d - absi(d - 10)
+		if score > best_score:
+			best_score = score
+			best = c
+	if best.x >= 0:
+		_set_cell(best.x, best.y, Cell.MERCHANT)
+		print("[Dungeon] merchant @ %s" % best)
 
 
 ## Closest free corridor cell to EXIT that isn't already an encounter/start.
@@ -1174,6 +1212,8 @@ func _spawn_props_and_entities() -> void:
 					_spawn_chest(world)
 				Cell.ENCOUNTER:
 					_spawn_encounter(world, "Pack_%d_%d" % [x, y])
+				Cell.MERCHANT:
+					_spawn_merchant(world)
 				Cell.EXIT:
 					_spawn_exit_marker(world)
 				Cell.START:
@@ -1282,6 +1322,51 @@ func _spawn_encounter(world: Vector3, pack_name: String) -> void:
 	area.set("enemy_count", n)
 	area.set("pack_ids", pack)
 	area.set("pack_kind", kind)
+	entities_root.add_child(area)
+
+
+func _spawn_merchant(world: Vector3) -> void:
+	var area := Area3D.new()
+	area.position = world
+	area.collision_layer = 4
+	area.collision_mask = 2
+	area.monitoring = true
+
+	var mesh := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(0.7, 0.9, 0.7)
+	mesh.mesh = box
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.55, 0.4, 0.2)
+	mat.emission_enabled = true
+	mat.emission = Color(0.9, 0.7, 0.25)
+	mat.emission_energy_multiplier = 0.8
+	mesh.material_override = mat
+	mesh.position = Vector3(0, 0.55, 0)
+	area.add_child(mesh)
+
+	var col := CollisionShape3D.new()
+	var shape := SphereShape3D.new()
+	shape.radius = cell_size * 0.45
+	col.shape = shape
+	area.add_child(col)
+
+	var label := Label3D.new()
+	label.text = "Торговец"
+	label.position = Vector3(0, 1.35, 0)
+	label.font_size = 28
+	label.modulate = Color(1.0, 0.9, 0.5)
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	area.add_child(label)
+
+	var light := OmniLight3D.new()
+	light.light_color = Color(1.0, 0.85, 0.45)
+	light.light_energy = 1.6
+	light.omni_range = 4.0
+	light.position = Vector3(0, 1.0, 0)
+	area.add_child(light)
+
+	area.set_script(load("res://scripts/merchant.gd"))
 	entities_root.add_child(area)
 
 

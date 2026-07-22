@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3 uid="uid://bmain001ashen"]
+[gd_scene load_steps=17 format=3 uid="uid://bmain001ashen"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/dungeon_generator.gd" id="2_dungeon"]
@@ -9,6 +9,9 @@
 [ext_resource type="Script" path="res://scripts/ui/draft_overlay.gd" id="11_draft"]
 [ext_resource type="Script" path="res://scripts/ui/defeat_overlay.gd" id="12_defeat"]
 [ext_resource type="Script" path="res://scripts/ui/level_up_overlay.gd" id="13_levelup"]
+[ext_resource type="Script" path="res://scripts/ui/loot_overlay.gd" id="14_loot"]
+[ext_resource type="Script" path="res://scripts/ui/backpack_overlay.gd" id="15_backpack"]
+[ext_resource type="Script" path="res://scripts/ui/shop_overlay.gd" id="16_shop"]
 
 [sub_resource type="Environment" id="Environment_fog"]
 background_mode = 1
@@ -233,3 +236,12 @@ script = ExtResource("12_defeat")
 
 [node name="LevelUpOverlay" type="CanvasLayer" parent="."]
 script = ExtResource("13_levelup")
+
+[node name="LootOverlay" type="CanvasLayer" parent="."]
+script = ExtResource("14_loot")
+
+[node name="BackpackOverlay" type="CanvasLayer" parent="."]
+script = ExtResource("15_backpack")
+
+[node name="ShopOverlay" type="CanvasLayer" parent="."]
+script = ExtResource("16_shop")

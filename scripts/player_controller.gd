@@ -215,9 +215,12 @@ func _check_exit_cell() -> void:
 	# Cell.EXIT == 4 in dungeon_generator.gd enum
 	if int(dungeon.call("get_cell_type", cell.x, cell.y)) != 4:
 		return
-	if GameState and GameState.has_method("advance_floor"):
+	# Floor shop first (DESIGN §8.3), then advance_floor from shop leave
+	if GameState and GameState.has_method("request_exit_shop"):
 		if Sfx:
 			Sfx.play("floor_down", -2.0)
+		GameState.request_exit_shop()
+	elif GameState and GameState.has_method("advance_floor"):
 		GameState.advance_floor()
 
 

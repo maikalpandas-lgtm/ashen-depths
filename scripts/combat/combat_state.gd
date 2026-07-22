@@ -33,12 +33,17 @@ var events: Array = []
 
 var _rng := RandomNumberGenerator.new()
 var _discount: int = 0  ## Offering: next card costs 1 less
+## Backpack mods snapshot (DESIGN §8) — frozen at combat start
+var mods: Dictionary = {}
+var _first_strike_used: bool = false
+var _bones_from_items: int = 0  ## bone_charm cap 3/fight
 
 
 func _init(party_ref: RefCounted, pack: Array, seed_value: int) -> void:
 	party = party_ref
 	_rng.seed = seed_value
 	deck = party.build_combat_deck(seed_value)
+	mods = _read_backpack_mods()
 	for enemy_id in pack:
 		var def: Dictionary = EnemySprites.ENEMIES.get(enemy_id, EnemySprites.ENEMIES["grub"])
 		enemies.append({
@@ -52,13 +57,33 @@ func _init(party_ref: RefCounted, pack: Array, seed_value: int) -> void:
 	begin_player_turn()
 
 
+func _read_backpack_mods() -> Dictionary:
+	# GameState is an autoload in the real game; headless tests may lack it.
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree and tree.root:
+		var gs = tree.root.get_node_or_null("GameState")
+		if gs != null and gs.get("backpack") != null:
+			var bp = gs.backpack
+			if bp != null and bp.has_method("compute_mods"):
+				return bp.compute_mods()
+	return {}
+
+
 # --------------------------------------------------------------------- turns
 
 func begin_player_turn() -> void:
 	turn += 1
 	phase = Phase.PLAYER
-	energy = START_ENERGY
-	party_block = 0
+	energy = START_ENERGY + int(mods.get("energy_each_turn", 0))
+	if turn == 1:
+		energy += int(mods.get("energy_first_turn", 0))
+		party_block = int(mods.get("start_block", 0))
+		_first_strike_used = false
+		_bones_from_items = 0
+		if party_block > 0:
+			_log("рюкзак: +%d брони" % party_block)
+	else:
+		party_block = 0
 	_discount = 0
 	deck.discard_hand()
 	deck.draw(DRAW_PER_TURN)
@@ -121,9 +146,18 @@ func can_play(hand_index: int) -> bool:
 	if card_cost(hand_index) > energy:
 		return false
 	# Blood cards are paid in HP, and must not be able to kill the party (§7.4)
-	if int(card["blood"]) > 0 and _party_alive_hp() <= int(card["blood"]):
+	var blood_cost := _blood_cost(card)
+	if blood_cost > 0 and _party_alive_hp() <= blood_cost:
 		return false
 	return true
+
+
+func _blood_cost(card: Dictionary) -> int:
+	var b := int(card.get("blood", 0))
+	if b <= 0:
+		return 0
+	var disc: int = int(mods.get("blood_discount", 0))
+	return maxi(1, b - disc)
 
 
 ## Play hand[hand_index] at enemies[target]. Returns true if it resolved.
@@ -136,9 +170,10 @@ func play_card(hand_index: int, target: int) -> bool:
 
 	energy -= card_cost(hand_index)
 	_discount = 0
-	if int(card["blood"]) > 0:
-		_damage_party(int(card["blood"]))
-		_log("отдано %d HP" % int(card["blood"]))
+	var blood_cost := _blood_cost(card)
+	if blood_cost > 0:
+		_damage_party(blood_cost)
+		_log("отдано %d HP" % blood_cost)
 
 	if int(card["block"]) > 0:
 		party_block += int(card["block"])
@@ -148,6 +183,7 @@ func play_card(hand_index: int, target: int) -> bool:
 			_log("+1 шип")
 
 	if int(card["damage"]) > 0:
+		_apply_item_damage_mods(card)
 		_resolve_damage(card, target)
 		# Echo repeats for free while a Bone is available (§7.3)
 		if sigils.has(CardDB.Sigil.ECHO) and bones > 0:
@@ -164,6 +200,20 @@ func play_card(hand_index: int, target: int) -> bool:
 	deck.discard_at(hand_index)
 	_check_victory()
 	return true
+
+
+func _apply_item_damage_mods(card: Dictionary) -> void:
+	# Mutates the resolved copy only (not CardDB)
+	var dmg := int(card["damage"])
+	var ctype: int = int(card.get("type", -1))
+	if ctype == CardDB.Type.SPELL:
+		dmg += int(mods.get("spell_dmg", 0))
+	else:
+		dmg += int(mods.get("strike_dmg", 0))
+	if not _first_strike_used and int(mods.get("first_strike_bonus", 0)) > 0:
+		dmg += int(mods["first_strike_bonus"])
+		_first_strike_used = true
+	card["damage"] = dmg
 
 
 func _resolve_damage(card: Dictionary, target: int) -> void:
@@ -188,6 +238,11 @@ func _resolve_damage(card: Dictionary, target: int) -> void:
 	if sigils.has(CardDB.Sigil.BONE) and int(e["hp"]) <= 0:
 		bones += 1
 		_log("+1 кость")
+	# Bone charm — free bone on kill, cap 3 from items this fight
+	if int(e["hp"]) <= 0 and int(mods.get("bone_on_kill", 0)) > 0 and _bones_from_items < 3:
+		bones += int(mods["bone_on_kill"])
+		_bones_from_items += int(mods["bone_on_kill"])
+		_log("оберег: +кость")
 
 
 func _hit_enemy(index: int, amount: int, ignore_block: bool) -> int:

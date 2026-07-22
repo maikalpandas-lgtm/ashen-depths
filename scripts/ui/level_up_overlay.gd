@@ -170,12 +170,16 @@ func _consume_and_continue(hint: String) -> void:
 
 func _finish_chain(hint: String) -> void:
 	_root.visible = false
-	get_tree().paused = false
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if GameState and GameState.has_signal("level_up_finished"):
 		GameState.level_up_finished.emit(hint)
+	# Next: item loot if any, else explore
+	if GameState and not GameState.pending_loot.is_empty():
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		GameState.continue_reward_chain(hint)
+		return
+	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if GameState and GameState.has_signal("draft_finished"):
-		# Resume explore HUD path shared with layer 1
 		GameState.draft_finished.emit(hint if not hint.is_empty() else "Уровень получен")
 
 

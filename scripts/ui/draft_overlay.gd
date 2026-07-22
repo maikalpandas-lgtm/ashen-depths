@@ -128,11 +128,10 @@ func _skip() -> void:
 
 func _close(hint: String = "") -> void:
 	_root.visible = false
-	# Layer 2: if combat XP leveled the party, open upgrade/rare next
-	if GameState and GameState.pending_level_ups > 0 and GameState.has_signal("level_up_requested"):
-		# Stay paused; level-up overlay takes the screen
+	# Reward chain: level-up → item loot → explore (DESIGN §7.6 + §8.3)
+	if GameState and (GameState.pending_level_ups > 0 or not GameState.pending_loot.is_empty()):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		GameState.level_up_requested.emit()
+		GameState.continue_reward_chain(hint)
 		return
 	get_tree().paused = false
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED

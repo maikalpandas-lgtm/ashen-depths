@@ -883,9 +883,11 @@ func _finish_victory() -> void:
 		"floor_boss":
 			reward = int(float(reward) * 2.4) + 20
 			xp_gain = 55
+	var paid := reward
 	if GameState:
-		GameState.gold += reward
+		paid = GameState.award_combat_gold(reward)
 		GameState.grant_combat_xp(xp_gain)
+		GameState.queue_combat_loot(kind)
 	if Sfx:
 		Sfx.play("victory", -1.0)
 		Sfx.play("gold", -6.0)
@@ -896,10 +898,9 @@ func _finish_victory() -> void:
 			dungeon.call("clear_encounter_at", _source.global_position)
 		_source.queue_free()
 	_close()
-	# Layer 1 draft — pick a card or skip for gold (DESIGN §7.6)
-	# Layer 2 (level-up) chains from draft_overlay when pending_level_ups > 0
+	# Layer 1 draft → (level-up) → item loot (DESIGN §7.6 + §8.3)
 	if GameState and GameState.has_signal("draft_requested"):
-		GameState.draft_requested.emit(reward)
+		GameState.draft_requested.emit(paid)
 
 
 func _finish_defeat() -> void:

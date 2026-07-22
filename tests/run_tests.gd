@@ -30,6 +30,7 @@ func _init() -> void:
 	_test_floor_seed()
 	_test_card_upgrades()
 	_test_xp_level()
+	_test_backpack()
 
 	print("\n%d passed, %d failed" % [_passed, _failed])
 	quit(1 if _failed > 0 else 0)
@@ -298,6 +299,31 @@ func _test_xp_level() -> void:
 	check(EnemySprites.floor_boss_pack(1).size() >= 1, "floor boss pack exists")
 	check(EnemySprites.mini_boss_pack(1).size() >= 1, "mini boss pack exists")
 	check(EnemySprites.ENEMIES.has("cave_warden"), "cave warden boss defined")
+
+
+func _test_backpack() -> void:
+	print("backpack / items")
+	const ItemDB = preload("res://scripts/items/item_db.gd")
+	const Backpack = preload("res://scripts/items/backpack.gd")
+	check(ItemDB.ids().size() >= 8, "item catalog has a set of items")
+	var bp: Backpack = Backpack.new()
+	var u1: String = bp.place("rusty_blade", 0, 0, 0)
+	check(not u1.is_empty(), "place 1x1 blade")
+	var u2: String = bp.place("whetstone", 1, 0, 0)
+	check(not u2.is_empty(), "place whetstone beside blade")
+	var mods: Dictionary = bp.compute_mods()
+	check(int(mods.get("strike_dmg", 0)) >= 2, "adjacency grants blade+whetstone strike bonus")
+	var u3: String = bp.place("shield_shard", 0, 1, 0)
+	check(not u3.is_empty(), "place 2x1 shield shard")
+	check(not bp.can_place("shield_shard", 0, 0, 0), "cannot overlap occupied cells")
+	var auto: String = bp.auto_place("coin_pouch")
+	check(not auto.is_empty(), "auto_place finds a free cell")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 42
+	var loot: Array = ItemDB.roll_loot("floor_boss", rng)
+	check(loot.size() >= 1, "floor boss loot rolls offers")
+	var stock: Array = ItemDB.roll_shop_stock(5, rng, false)
+	check(stock.size() == 5, "shop stock rolls 5 items")
 
 
 ## Assert without spamming a line per card

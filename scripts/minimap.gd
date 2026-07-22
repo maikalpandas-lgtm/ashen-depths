@@ -118,6 +118,8 @@ func _redraw() -> void:
 					col = COL_EXIT
 				5:
 					col = COL_CHEST
+				7:
+					col = Color(0.55, 0.45, 0.22)  # merchant
 			_draw_rounded_tile(lx, ly, col)
 			# special icons
 			match kind:
@@ -127,6 +129,8 @@ func _redraw() -> void:
 					_draw_skull_icon(lx, ly)
 				5:
 					_draw_dot(lx, ly, Color(0.2, 0.15, 0.05), 0.28)
+				7:
+					_draw_merchant_icon(lx, ly)
 
 	# player (center of view)
 	var plx := view_radius
@@ -231,6 +235,22 @@ func _draw_campfire_icon(lx: int, ly: int) -> void:
 	_put(cx, cy, Color(1.0, 0.55, 0.15))
 	_put(cx, cy - 1, Color(1.0, 0.75, 0.25))
 	_put(cx, cy - 2, Color(1.0, 0.4, 0.1))
+
+
+## Coin pouch mark for map merchant (§8.3 C).
+func _draw_merchant_icon(lx: int, ly: int) -> void:
+	var o := _tile_origin(lx, ly)
+	var cx := o.x + tile / 2
+	var cy := o.y + tile / 2
+	var gold := Color(0.95, 0.78, 0.25)
+	var bag := Color(0.45, 0.32, 0.15)
+	for py in range(-2, 3):
+		for px in range(-3, 4):
+			if absi(px) + absi(py) <= 3:
+				_put(cx + px, cy + py, bag)
+	_put(cx, cy - 1, gold)
+	_put(cx - 1, cy, gold)
+	_put(cx + 1, cy, gold)
 
 
 func _draw_dot(lx: int, ly: int, col: Color, r: float) -> void:

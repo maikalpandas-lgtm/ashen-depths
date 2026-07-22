@@ -1,22 +1,23 @@
 extends Node3D
-## Main scene: fog world + dungeon + player + HUD / minimap.
+## Main scene: fog world + dungeon + player + left HUD / minimap.
 
 @onready var dungeon: Node3D = $Dungeon
 @onready var player: CharacterBody3D = $Player
-@onready var hud_title: Label = $UI/LeftPanel/Margin/VBox/TitleLabel
-@onready var hud_floor: Label = $UI/LeftPanel/Margin/VBox/FloorLabel
-@onready var hud_gold: Label = $UI/LeftPanel/Margin/VBox/StatsRow/GoldLabel
-@onready var hud_hp: Label = $UI/LeftPanel/Margin/VBox/StatsRow/HpLabel
+@onready var left_panel: PanelContainer = $UI/LeftPanel
 @onready var hud_hint: Label = $UI/BottomBar/Margin/HintLabel
-@onready var minimap: Control = $UI/LeftPanel/Margin/VBox/MinimapFrame/Minimap
-@onready var hp_bar: ProgressBar = $UI/LeftPanel/Margin/VBox/HpBar
+@onready var bottom_bar: PanelContainer = $UI/BottomBar
 
-const MAX_HP := 88
 const SHOT_DIR := "res://shots"
-const UiTheme = preload("res://scripts/ui/ui_theme.gd")
+const LeftPanelScript = preload("res://scripts/ui/left_panel.gd")
+
+var minimap: Control = null
 
 
 func _ready() -> void:
+	# Grab minimap before left panel rebuild destroys the old tree
+	minimap = get_node_or_null("UI/LeftPanel/Margin/VBox/MinimapFrame/Minimap") as Control
+	_setup_left_hud()
+
 	if player.has_method("setup_dungeon"):
 		player.setup_dungeon(dungeon)
 	if dungeon.has_signal("generation_finished"):
@@ -35,18 +36,66 @@ func _ready() -> void:
 	if minimap and minimap.has_method("setup"):
 		minimap.setup(dungeon, player)
 
-	hp_bar.max_value = MAX_HP
-	hp_bar.value = MAX_HP
 	_update_hud()
-	UiTheme.as_display(hud_title, 20, Color(0.95, 0.88, 0.7))
-	UiTheme.as_title(hud_floor, 12, Color(0.7, 0.65, 0.78))
-	hud_hint.text = "W/S · A/D · R новый · C колода · F9 · костёр EXIT → этаж"
+	hud_hint.text = "W/S · A/D · R новый · C колода · 🎒 инвентарь · ⚙ · костёр → этаж"
 
 	if dungeon.get("start_cell") != null:
 		var start: Vector2i = dungeon.start_cell
 		_place_player(dungeon.cell_to_world(start))
 		if minimap and minimap.has_method("clear_fog"):
 			minimap.clear_fog()
+
+
+## Rebuild left column like the competitor: big map, portrait, gold, inv, gear.
+func _setup_left_hud() -> void:
+	var held_map: Control = minimap
+	if held_map and held_map.get_parent():
+		held_map.get_parent().remove_child(held_map)
+
+	# Replace panel content with competitor-style layout
+	left_panel.set_script(LeftPanelScript)
+	# set_script does not re-call _ready if the node already entered the tree
+	if left_panel.has_method("_build"):
+		left_panel.call("_build")
+
+	left_panel.offset_left = 12.0
+	left_panel.offset_top = 12.0
+	left_panel.offset_right = 292.0
+	left_panel.offset_bottom = 720.0
+
+	if held_map:
+		var slot: Control = left_panel.call("take_minimap_slot") as Control
+		if slot:
+			slot.add_child(held_map)
+			held_map.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			held_map.offset_left = 0
+			held_map.offset_top = 0
+			held_map.offset_right = 0
+			held_map.offset_bottom = 0
+		minimap = held_map
+		if left_panel.has_method("bind_minimap"):
+			left_panel.call("bind_minimap", minimap)
+
+	if left_panel.has_signal("inventory_pressed"):
+		if not left_panel.inventory_pressed.is_connected(_on_inventory):
+			left_panel.inventory_pressed.connect(_on_inventory)
+	if left_panel.has_signal("settings_pressed"):
+		if not left_panel.settings_pressed.is_connected(_on_settings):
+			left_panel.settings_pressed.connect(_on_settings)
+
+	bottom_bar.offset_left = 304.0
+
+
+func _on_inventory() -> void:
+	var cards := get_node_or_null("CardTestOverlay")
+	if cards and cards.has_method("_toggle"):
+		cards.call("_toggle")
+	else:
+		hud_hint.text = "Инвентарь · колода (C) — рюкзак в Phase 4"
+
+
+func _on_settings() -> void:
+	hud_hint.text = "Настройки · скоро · Esc отпускает мышь"
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -60,9 +109,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			_save_shot()
 
 
-## F9 — dump the current frame to shots/. Lets the look be reviewed from the
-## actual screen instead of guessing at shading maths that only shows up when
-## it renders. Seed is in the name so a shot can be reproduced.
 func _save_shot() -> void:
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
@@ -93,7 +139,6 @@ func _on_dungeon_ready(start_world: Vector3) -> void:
 	if minimap and minimap.has_method("clear_fog"):
 		minimap.clear_fog()
 	_update_hud()
-	hud_hint.text = "W/S шаг · A/D поворот 90° · R новый данж · C колода · F9 снимок · Esc меню"
 
 
 func _place_player(pos: Vector3) -> void:
@@ -129,7 +174,6 @@ func _on_defeat_finished(choice: String) -> void:
 	_update_hud()
 
 
-## EXIT tile → new labyrinth for the next floor (Навь packs from floor 3).
 func _on_floor_changed(new_floor: int) -> void:
 	if minimap and minimap.has_method("clear_fog"):
 		minimap.clear_fog()
@@ -142,20 +186,5 @@ func _on_floor_changed(new_floor: int) -> void:
 
 
 func _update_hud() -> void:
-	var floor_i := 1
-	var gold := 0
-	var party_hp := int(hp_bar.value)
-	var party_max := MAX_HP
-	if GameState:
-		floor_i = GameState.floor_index
-		gold = GameState.gold
-		if GameState.party:
-			party_hp = GameState.party.total_hp()
-			party_max = GameState.party.total_max_hp()
-	hud_title.text = "Навьи Копи"
-	var realm := "Рудники" if floor_i < 3 else "Навь"
-	hud_floor.text = "%s  ·  этаж %d" % [realm, floor_i]
-	hud_gold.text = "🪙  %d" % gold
-	hp_bar.max_value = party_max
-	hp_bar.value = party_hp
-	hud_hp.text = "❤  %d/%d" % [party_hp, party_max]
+	if left_panel and left_panel.has_method("refresh"):
+		left_panel.call("refresh")

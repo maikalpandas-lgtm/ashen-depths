@@ -1,10 +1,11 @@
 extends Control
 ## Parchment-style corridor minimap (competitor-inspired).
 
-@export var tile: int = 14
-@export var gap: int = 2
-@export var view_radius: int = 7
-@export var panel_size: int = 176
+## Larger tiles + smaller radius = "zoomed in" like the competitor HUD.
+@export var tile: int = 24
+@export var gap: int = 3
+@export var view_radius: int = 5
+@export var panel_size: int = 240
 
 var _dungeon: Node
 var _player: Node3D

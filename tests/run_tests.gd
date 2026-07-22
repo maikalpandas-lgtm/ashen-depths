@@ -9,6 +9,7 @@ extends SceneTree
 const CardDB = preload("res://scripts/cards/card_db.gd")
 const Deck = preload("res://scripts/cards/deck.gd")
 const Party = preload("res://scripts/party.gd")
+const Combat = preload("res://scripts/combat/combat_state.gd")
 
 var _passed := 0
 var _failed := 0
@@ -22,6 +23,9 @@ func _init() -> void:
 	_test_seed_is_deterministic()
 	_test_party()
 	_test_combat_deck()
+	_test_combat_basics()
+	_test_combat_damage()
+	_test_combat_end()
 
 	print("\n%d passed, %d failed" % [_passed, _failed])
 	quit(1 if _failed > 0 else 0)
@@ -124,6 +128,74 @@ func _test_combat_deck() -> void:
 		owners[e["owner"]] = true
 		check_silent(CardDB.has_card(e["card"]), "every entry is a real card")
 	check(owners.size() == 3, "every card carries an owner tag, all 3 present")
+
+
+func _combat(pack: Array = ["grub"]) -> Combat:
+	return Combat.new(Party.new(), pack, 5)
+
+
+func _test_combat_basics() -> void:
+	print("combat setup")
+	var c := _combat(["grub", "brute"])
+	check(c.energy == Combat.START_ENERGY, "turn starts on 3 energy")
+	check(c.deck.hand.size() == Combat.DRAW_PER_TURN, "opening hand is 5")
+	check(c.enemies.size() == 2, "pack has 2 enemies")
+	check(c.enemies[1]["hp"] == 26, "brute HP comes from the enemy table")
+	check(c.phase == Combat.Phase.PLAYER, "player acts first")
+	for e in c.enemies:
+		check_silent(not (e["intent"] as Dictionary).is_empty(), "every enemy telegraphs an intent")
+
+
+func _test_combat_damage() -> void:
+	print("combat resolution")
+	var c := _combat(["grub"])
+	# Force a known hand so the test does not depend on the shuffle
+	c.deck.hand = [{"card": "slice", "owner": "kael"}, {"card": "block", "owner": "kael"}]
+	var hp_before: int = c.enemies[0]["hp"]
+	check(c.play_card(0, 0), "slice resolves")
+	check(c.enemies[0]["hp"] == hp_before - 6, "slice deals its 6")
+	check(c.energy == Combat.START_ENERGY - 1, "energy was spent")
+	check(c.deck.discard_pile.size() == 1, "played card went to the discard")
+
+	check(c.play_card(0, 0), "block resolves")
+	check(c.party_block == 5, "block guards the party")
+
+	# Cannot pay what you do not have
+	var poor := _combat(["grub"])
+	poor.deck.hand = [{"card": "hack", "owner": "kael"}]
+	poor.energy = 1
+	check(not poor.can_play(0), "a 2-cost card is unplayable on 1 energy")
+
+	# Blood must never be able to wipe the party
+	var bleed := _combat(["grub"])
+	bleed.deck.hand = [{"card": "blood_lash", "owner": "sera"}]
+	for m in bleed.party.members:
+		m["hp"] = 1
+	check(not bleed.can_play(0), "a blood card cannot kill the party to pay for itself")
+
+
+func _test_combat_end() -> void:
+	print("combat ends")
+	var c := _combat(["grub"])
+	c.enemies[0]["hp"] = 3
+	c.deck.hand = [{"card": "slice", "owner": "kael"}]
+	c.play_card(0, 0)
+	check(c.phase == Combat.Phase.WON, "killing the last enemy wins")
+	check(c.alive_enemies().is_empty(), "no enemies left standing")
+
+	var lose := _combat(["brute"])
+	for m in lose.party.members:
+		m["hp"] = 1
+	lose.enemies[0]["intent"] = {"type": "attack", "value": 99}
+	lose.end_turn()
+	check(lose.phase == Combat.Phase.LOST, "party wiped ends the fight")
+
+	var survive := _combat(["grub"])
+	var turn_before: int = survive.turn
+	survive.enemies[0]["intent"] = {"type": "attack", "value": 1}
+	survive.end_turn()
+	check(survive.turn == turn_before + 1, "surviving the enemy turn starts the next one")
+	check(survive.energy == Combat.START_ENERGY, "energy refills each turn")
 
 
 ## Assert without spamming a line per card

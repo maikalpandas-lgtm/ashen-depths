@@ -230,6 +230,51 @@ viewed straight on
 
 ---
 
+## 3.6. Батч 4 — недостающие иллюстрации карт
+
+Пять карт из MVP-колоды пока с пустым окном. Тот же хвост, что в §2.
+
+| Файл | Карта |
+|---|---|
+| `card_hack` | Hack — 10 урона, Sharp |
+| `card_cleave_cut` | Cleave Cut — 5 + 50% соседу |
+| `card_echo_strike` | Echo Strike — 7, повтор за 0 при кости |
+| `card_ward` | Ward — +4 брони и 1 шип |
+| `card_offering` | Offering — сброс карты, следующая дешевле |
+
+### 3.6.1 `card_hack`
+```
+a heavy notched cleaver biting deep into a cracked iron shield boss, the shield
+splitting apart, sparks and metal shards flying off the impact
+```
+
+### 3.6.2 `card_cleave_cut`
+```
+one wide horizontal axe sweep, two overlapping crescent slash arcs side by side,
+the second arc fainter than the first, dust kicked up along the path
+```
+
+### 3.6.3 `card_echo_strike`
+```
+a straight sword thrust with a translucent ghost duplicate of the same blade
+trailing half a step behind it, pale bone-white afterimage, small bone shard
+glowing at the hilt
+```
+
+### 3.6.4 `card_ward`
+```
+a rune-etched kite shield standing upright, a ring of short iron spikes bristling
+outward from its rim, a faint blue protective glow hugging the surface
+```
+
+### 3.6.5 `card_offering`
+```
+an open gauntleted palm holding a single burning playing card, the card curling
+and dissolving into embers, thin gold sparks rising from it
+```
+
+---
+
 ## 4. Куда класть готовое
 
 1. Исходник (что отдал Grok) → `assets/textures/masters/<id>_source.jpg`

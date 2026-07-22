@@ -32,7 +32,7 @@ signal generation_finished(start_world: Vector3)
 @export var wall_height: float = 3.2
 ## Packs per floor. 4 on ~820 corridor tiles meant you could wander the
 ## whole dungeon without meeting anything.
-@export var encounter_rooms: int = 12
+@export var encounter_rooms: int = 22
 ## Lower = denser wall torches (1 = every walkable cell with a wall).
 @export var torch_spacing: int = 2
 @export var extra_loops: int = 10
@@ -447,7 +447,7 @@ func _place_encounters() -> void:
 		var ok := true
 		for other in floor_cells:
 			if _get_cell(other.x, other.y) == Cell.ENCOUNTER:
-				if absi(other.x - c.x) + absi(other.y - c.y) < 4:
+				if absi(other.x - c.x) + absi(other.y - c.y) < 3:
 					ok = false
 					break
 		if not ok:
@@ -1156,6 +1156,7 @@ func _spawn_encounter(world: Vector3, pack_name: String) -> void:
 	area.set_script(load("res://scripts/encounter_placeholder.gd"))
 	area.set("pack_name", pack_name)
 	area.set("enemy_count", n)
+	area.set("pack_ids", pack)
 	entities_root.add_child(area)
 
 

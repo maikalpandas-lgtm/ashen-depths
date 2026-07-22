@@ -11,6 +11,8 @@ var party: Party = null
 
 signal dungeon_ready(start_position: Vector3)
 signal encounter_started(encounter_id: String)
+## Carries WHICH enemies stand there and the node to remove once they are beaten
+signal combat_requested(pack: Array, source: Node)
 signal chest_opened(gold_amount: int)
 
 

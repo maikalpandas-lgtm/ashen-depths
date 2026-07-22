@@ -18,8 +18,8 @@ const Party = preload("res://scripts/party.gd")
 const UiTheme = preload("res://scripts/ui/ui_theme.gd")
 const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 
-const CARD_W := 124
-const CARD_H := 174
+const CARD_W := 138
+const CARD_H := 193
 const DRAG_LIFT := 26.0  ## how far a held card rises out of the hand
 
 var _combat: Combat = null

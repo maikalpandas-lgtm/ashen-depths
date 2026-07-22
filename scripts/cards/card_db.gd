@@ -18,52 +18,52 @@ const CARDS := {
 	"slice": {
 		"name": "Сеча", "type": Type.STRIKE, "energy": 1, "blood": 0,
 		"damage": 6, "block": 0, "sigils": [],
-		"text": "Наносит 6 урона.", "art": "card_slice",
+		"text": "6 урона", "art": "card_slice",
 	},
 	"hack": {
 		"name": "Рубка", "type": Type.STRIKE, "energy": 2, "blood": 0,
 		"damage": 10, "block": 0, "sigils": [Sigil.SHARP],
-		"text": "Наносит 10 урона. Остриё: +2 по щиту.", "art": "card_hack",
+		"text": "10 урона. Остриё: +2 по щиту", "art": "card_hack",
 	},
 	"block": {
 		"name": "Заслон", "type": Type.GUARD, "energy": 1, "blood": 0,
 		"damage": 0, "block": 5, "sigils": [],
-		"text": "Даёт 5 брони.", "art": "card_block",
+		"text": "5 брони", "art": "card_block",
 	},
 	"cleave_cut": {
 		"name": "Размах", "type": Type.STRIKE, "energy": 1, "blood": 0,
 		"damage": 5, "block": 0, "sigils": [Sigil.CLEAVE],
-		"text": "Наносит 5 урона, 50% соседу.", "art": "card_cleave_cut",
+		"text": "5 урона, 50% соседу", "art": "card_cleave_cut",
 	},
 	"blood_lash": {
 		"name": "Навий хлыст", "type": Type.BLOOD, "energy": 0, "blood": 4,
 		"damage": 12, "block": 0, "sigils": [Sigil.SANGUINE, Sigil.DRAIN],
-		"text": "Отдай 4 HP. 12 урона, половину — в лечение.", "art": "card_blood_lash",
+		"text": "−4 HP → 12 урона, вампиризм", "art": "card_blood_lash",
 	},
 	"bone_rattle": {
 		"name": "Костогрем", "type": Type.STRIKE, "energy": 1, "blood": 0,
 		"damage": 4, "block": 0, "sigils": [Sigil.BONE],
-		"text": "Наносит 4. Добил — +1 кость.", "art": "card_bone_rattle",
+		"text": "4 урона. Добил — кость", "art": "card_bone_rattle",
 	},
 	"echo_strike": {
 		"name": "Отголосок", "type": Type.STRIKE, "energy": 1, "blood": 0,
 		"damage": 7, "block": 0, "sigils": [Sigil.ECHO],
-		"text": "Наносит 7. Эхо: повтор за 0 при кости.", "art": "card_echo_strike",
+		"text": "7 урона. Эхо при кости", "art": "card_echo_strike",
 	},
 	"ward": {
 		"name": "Оберег", "type": Type.GUARD, "energy": 1, "blood": 0,
 		"damage": 0, "block": 4, "sigils": [Sigil.WARD],
-		"text": "Даёт 4 брони и 1 шип.", "art": "card_ward",
+		"text": "4 брони и 1 шип", "art": "card_ward",
 	},
 	"offering": {
 		"name": "Треба", "type": Type.SKILL, "energy": 0, "blood": 0,
 		"damage": 0, "block": 0, "sigils": [],
-		"text": "Сбрось карту: следующая на 1 дешевле.", "art": "card_offering",
+		"text": "Сбрось карту: −1 к цене", "art": "card_offering",
 	},
 	"firebolt": {
 		"name": "Огнестрел", "type": Type.SPELL, "energy": 1, "blood": 0,
 		"damage": 5, "block": 0, "sigils": [Sigil.PIERCE],
-		"text": "Наносит 5. Пробой: половина брони не в счёт.", "art": "card_firebolt",
+		"text": "5 урона. Пробой брони", "art": "card_firebolt",
 	},
 }
 

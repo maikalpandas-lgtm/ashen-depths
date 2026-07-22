@@ -14,7 +14,9 @@ const ART_DIR := "res://assets/textures/"
 ## Same table is mirrored in docs/ART_PROMPTS.md §3.5 for the next frame.
 const COST_RECT := Rect2(0.126, 0.081, 0.238, 0.170)  ## medallion socket
 const ART_RECT := Rect2(0.210, 0.147, 0.570, 0.276)  ## inside the wooden window
-const NAME_RECT := Rect2(0.260, 0.487, 0.480, 0.069)  ## flat middle of the ribbon
+## Wider than the ribbon's flat middle: its curled ends are decorative, and a
+## long name reads fine sitting over them.
+const NAME_RECT := Rect2(0.180, 0.482, 0.640, 0.080)
 const TEXT_RECT := Rect2(0.160, 0.600, 0.680, 0.280)  ## empty parchment below
 
 static var _tex_cache: Dictionary = {}
@@ -90,7 +92,10 @@ static func build(card: Dictionary, owner_colour: Color, card_size: Vector2) -> 
 
 	var name_label := Label.new()
 	name_label.text = str(card["name"]).to_upper()
-	UiTheme.as_title(name_label, 12, Color(0.16, 0.11, 0.07))
+	var name_box := card_size * NAME_RECT.size
+	UiTheme.as_title(name_label, fit_font_size(
+		UiTheme.title_font(), name_label.text, name_box, 13, 7, false),
+		Color(0.16, 0.11, 0.07))
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_place(name_label, NAME_RECT)
@@ -98,7 +103,11 @@ static func build(card: Dictionary, owner_colour: Color, card_size: Vector2) -> 
 
 	var text := Label.new()
 	text.text = card["text"]
-	text.add_theme_font_size_override("font_size", 10)
+	var text_box := card_size * TEXT_RECT.size
+	text.add_theme_font_size_override("font_size", fit_font_size(
+		UiTheme.title_font(), text.text, text_box, 11, 7, true))
+	if UiTheme.title_font():
+		text.add_theme_font_override("font", UiTheme.title_font())
 	text.add_theme_color_override("font_color", Color(0.2, 0.16, 0.12))
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -110,6 +119,26 @@ static func build(card: Dictionary, owner_colour: Color, card_size: Vector2) -> 
 
 ## Anchor a child to a fractional rect of the card, so every element keeps its
 ## place on the frame at any card size.
+## Largest size at which `text` still fits `box`, measured with the real font
+## metrics. Card names range from "Сеча" to "Навий хлыст" — a fixed size either
+## clips the long ones or wastes the short ones.
+static func fit_font_size(font: Font, text: String, box: Vector2,
+		max_size: int, min_size: int, wrap: bool) -> int:
+	if font == null or text.is_empty():
+		return max_size
+	for size in range(max_size, min_size - 1, -1):
+		var used: Vector2
+		if wrap:
+			used = font.get_multiline_string_size(
+				text, HORIZONTAL_ALIGNMENT_CENTER, box.x, size)
+		else:
+			used = font.get_string_size(
+				text, HORIZONTAL_ALIGNMENT_CENTER, -1, size)
+		if used.x <= box.x and used.y <= box.y:
+			return size
+	return min_size
+
+
 static func _place(node: Control, r: Rect2) -> void:
 	node.anchor_left = r.position.x
 	node.anchor_top = r.position.y

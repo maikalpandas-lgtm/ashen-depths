@@ -11,7 +11,9 @@ extends CharacterBody3D
 @export var sway_shift: float = 0.085  ## sideways travel of the hands, metres
 @export var sway_lift: float = 0.03  ## vertical bob, metres
 @export var sway_roll: float = 15.0  ## hand roll, degrees
-@export var sway_time: float = 0.28  ## full sway cycle; kept longer than a step
+@export var sway_period: float = 0.62  ## seconds per full left-right-left cycle
+@export var sway_ease_in: float = 0.14  ## seconds to spin up when you start walking
+@export var sway_ease_out: float = 0.3  ## seconds to settle when you stop
 
 @onready var head: Node3D = $Head
 @onready var camera: Camera3D = $Head/Camera3D
@@ -40,8 +42,8 @@ var _left_base: Vector3 = Vector3.ZERO
 var _right_base: Vector3 = Vector3.ZERO
 var _left_rot_base: Vector3 = Vector3.ZERO
 var _right_rot_base: Vector3 = Vector3.ZERO
-var _sway_side: float = 1.0
-var _sway_tween: Tween = null
+var _walk_phase: float = 0.0
+var _walk_amount: float = 0.0  ## 0 = standing still, 1 = full stride
 
 
 func _ready() -> void:
@@ -125,11 +127,11 @@ func _process(delta: float) -> void:
 	if _input_lock > 0.0:
 		_input_lock -= delta
 	_auto_walk()
+	_update_sway(delta)
 
 
 ## Held key keeps walking. _unhandled_input only fires on the press edge, so on
-## its own it gave exactly one step per keypress. The hand sway rides on each
-## step, so this is also what makes the sway read as continuous walking.
+## its own it gave exactly one step per keypress.
 func _auto_walk() -> void:
 	if _busy or _input_lock > 0.0 or dungeon == null:
 		return
@@ -169,7 +171,6 @@ func _try_step(delta_cell: Vector2i) -> void:
 	_move_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	_move_tween.tween_property(self, "global_position", target, step_time)
 	_move_tween.finished.connect(_on_move_done)
-	_play_step_sway(1.0)  # walk sway L/R
 
 
 func _turn(dir: int) -> void:
@@ -184,7 +185,6 @@ func _turn(dir: int) -> void:
 	_move_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	_move_tween.tween_method(_set_yaw, rotation.y, _lerp_angle_to(rotation.y, target_yaw), turn_time)
 	_move_tween.finished.connect(_on_move_done)
-	_play_step_sway(0.65 * float(dir))  # milder sway when turning
 
 
 func _set_yaw(y: float) -> void:
@@ -219,53 +219,54 @@ func _bump() -> void:
 	var base := camera.position
 	tw.tween_property(camera, "position", base + Vector3(0.04, 0, 0), 0.04)
 	tw.tween_property(camera, "position", base, 0.06)
-	_play_step_sway(0.4)
 
 
-## Hands sway left/right while stepping — alternate side each step (readable, not wild).
-func _play_step_sway(strength: float = 1.0) -> void:
+## Continuous left/right walk sway, driven every frame off a running phase.
+##
+## This used to be a tween fired once per step. That could not read as walking:
+## a step is 0.16s, so the swing was over before the eye caught it, and every
+## new step killed the tween mid-flight. A free-running sine keeps the hands
+## moving for as long as you hold the key and settles smoothly when you stop.
+func _update_sway(delta: float) -> void:
 	if _hand_left == null and _hand_right == null:
 		return
-	_sway_side *= -1.0
-	var side := _sway_side * strength
-	# Clear L/R walk bob; stays in lower corners, doesn't cover corridor center
-	var amp_x := sway_shift * side
-	var amp_y := sway_lift * absf(strength)
-	var roll := sway_roll * side  # degrees
 
-	if _sway_tween and _sway_tween.is_valid():
-		_sway_tween.kill()
-	_sway_tween = create_tween()
-	_sway_tween.set_parallel(true)
-	_sway_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	var walking := _busy or _walk_key_held()
+	var ease_time := sway_ease_in if walking else sway_ease_out
+	var target := 1.0 if walking else 0.0
+	_walk_amount = move_toward(_walk_amount, target, delta / maxf(ease_time, 0.01))
 
-	# Deliberately NOT tied to step_time. A 0.16s step is too short for the eye
-	# to catch the swing, so the sway outlives the step: hold W and the hands
-	# never settle, which is what reads as walking.
-	var half := sway_time * 0.4
-	var rest := sway_time * 0.6
+	if _walk_amount <= 0.0005:
+		# Snap to rest so a stopped viewmodel is exactly where it was authored
+		if _hand_left:
+			_hand_left.position = _left_base
+			_hand_left.rotation_degrees = _left_rot_base
+		if _hand_right:
+			_hand_right.position = _right_base
+			_hand_right.rotation_degrees = _right_rot_base
+		return
+
+	_walk_phase = fposmod(_walk_phase + delta * TAU / maxf(sway_period, 0.05), TAU)
+	var side := sin(_walk_phase)
+	var bob := -absf(cos(_walk_phase))  # dips twice per cycle, like footfalls
+	var amt := _walk_amount
 
 	if _hand_left:
-		var l_peak := _left_base + Vector3(amp_x, amp_y, 0.0)
-		var l_rot_peak := _left_rot_base + Vector3(0.0, 0.0, roll * 0.7)
-		_sway_tween.tween_property(_hand_left, "position", l_peak, half)
-		_sway_tween.tween_property(_hand_left, "rotation_degrees", l_rot_peak, half)
+		_hand_left.position = _left_base + Vector3(
+			sway_shift * side, sway_lift * bob, 0.0) * amt
+		_hand_left.rotation_degrees = _left_rot_base + Vector3(
+			0.0, 0.0, sway_roll * side * 0.7) * amt
 	if _hand_right:
 		# Opposite phase — walking gait
-		var r_peak := _right_base + Vector3(-amp_x * 0.95, amp_y * 0.9, 0.0)
-		var r_rot_peak := _right_rot_base + Vector3(0.0, 0.0, -roll * 0.65)
-		_sway_tween.tween_property(_hand_right, "position", r_peak, half)
-		_sway_tween.tween_property(_hand_right, "rotation_degrees", r_rot_peak, half)
+		_hand_right.position = _right_base + Vector3(
+			-sway_shift * 0.95 * side, sway_lift * 0.9 * bob, 0.0) * amt
+		_hand_right.rotation_degrees = _right_rot_base + Vector3(
+			0.0, 0.0, -sway_roll * side * 0.65) * amt
 
-	# Return to rest
-	_sway_tween.chain().set_parallel(true)
-	_sway_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	if _hand_left:
-		_sway_tween.tween_property(_hand_left, "position", _left_base, rest)
-		_sway_tween.tween_property(_hand_left, "rotation_degrees", _left_rot_base, rest)
-	if _hand_right:
-		_sway_tween.tween_property(_hand_right, "position", _right_base, rest)
-		_sway_tween.tween_property(_hand_right, "rotation_degrees", _right_rot_base, rest)
+
+func _walk_key_held() -> bool:
+	return (Input.is_action_pressed("move_forward") or Input.is_action_pressed("ui_up")
+		or Input.is_action_pressed("move_back") or Input.is_action_pressed("ui_down"))
 
 
 func _cell_walkable(c: Vector2i) -> bool:

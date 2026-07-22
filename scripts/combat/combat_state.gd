@@ -155,7 +155,9 @@ func play_card(hand_index: int, target: int) -> bool:
 			_log("эхо (−1 кость)")
 			_resolve_damage(card, target)
 
-	if card["name"] == "Offering":
+	# Match by id — display name is localised (Треба), not "Offering"
+	var card_id: String = str(deck.hand[hand_index]["card"])
+	if card_id == "offering":
 		_discount = 1
 		_log("следующая карта дешевле на 1")
 

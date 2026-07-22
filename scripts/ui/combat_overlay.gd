@@ -673,15 +673,38 @@ func _finish_drag() -> void:
 	if index >= _combat.deck.hand.size():
 		_refresh()
 		return
+	if not _combat.can_play(index):
+		_refresh()
+		return
 	var card := CardDB.get_card(_combat.deck.hand[index]["card"])
 	if int(card["damage"]) <= 0:
 		_combat.play_card(index, 0)
 	else:
 		var target := _hover_enemy()
+		if target < 0:
+			target = _only_living_enemy()
 		if target >= 0:
 			_combat.play_card(index, target)
+		else:
+			# Missed the drop: give a short log so it doesn't feel broken
+			if _status:
+				_status.text = "наведи карту на врага"
 	_play_events()
 	_refresh()
+
+
+## One living foe left → always a valid target (solo packs / last standing).
+func _only_living_enemy() -> int:
+	if _combat == null:
+		return -1
+	var found := -1
+	for i in range(_combat.enemies.size()):
+		if int(_combat.enemies[i]["hp"]) <= 0:
+			continue
+		if found >= 0:
+			return -1  # more than one
+		found = i
+	return found
 
 
 ## Which living enemy the cursor is over, by screen distance to its sprite.
@@ -691,20 +714,28 @@ func _hover_enemy() -> int:
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
 		return -1
-	var mouse := _root.get_local_mouse_position()
+	# Viewport coords — matches Camera3D.unproject_position (not Control-local)
+	var mouse := get_viewport().get_mouse_position()
 	var best := -1
-	var best_d := 140.0
+	var best_d := 260.0  # generous — fat sprites + offset UI
 	for i in range(mini(_enemy_nodes.size(), _combat.enemies.size())):
 		var node := _enemy_nodes[i] as Node3D
 		if not is_instance_valid(node) or int(_combat.enemies[i]["hp"]) <= 0:
 			continue
-		var mid: Vector3 = node.global_position + Vector3.UP * (_enemy_top(i) * 0.5)
-		if cam.is_position_behind(mid):
-			continue
-		var d := cam.unproject_position(mid).distance_to(mouse)
-		if d < best_d:
-			best_d = d
-			best = i
+		var top_h := _enemy_top(i)
+		# Test mid + a few points on the silhouette so tall/short enemies all hit
+		var points: Array[Vector3] = [
+			node.global_position + Vector3.UP * (top_h * 0.55),
+			node.global_position + Vector3.UP * (top_h * 0.25),
+			node.global_position + Vector3.UP * (top_h * 0.85),
+		]
+		for mid in points:
+			if cam.is_position_behind(mid):
+				continue
+			var d := cam.unproject_position(mid).distance_to(mouse)
+			if d < best_d:
+				best_d = d
+				best = i
 	return best
 
 

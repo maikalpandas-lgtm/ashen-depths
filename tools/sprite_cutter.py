@@ -148,6 +148,51 @@ def cut_ffmpeg(src: Path, dst: Path, key_hex: str, similarity: float, blend: flo
     return r.returncode == 0 and dst.exists()
 
 
+def restore_interior(im: Image.Image) -> Image.Image:
+    """Make an ffmpeg colorkey pass edge-safe.
+
+    `colorkey` keys the WHOLE frame, so any key-coloured pixel INSIDE the
+    silhouette is punched out too — on a white key that eats the cream core of
+    a flame, highlights on steel, and so on. Here we flood the transparency
+    from the border: holes that are not connected to the outside get their
+    opacity back, so only real background is removed.
+    """
+    im = im.convert("RGBA")
+    w, h = im.size
+    px = im.load()
+
+    outside = [[False] * w for _ in range(h)]
+    q: deque[tuple[int, int]] = deque()
+    for x in range(w):
+        q.append((x, 0))
+        q.append((x, h - 1))
+    for y in range(h):
+        q.append((0, y))
+        q.append((w - 1, y))
+
+    while q:
+        x, y = q.popleft()
+        if not (0 <= x < w and 0 <= y < h) or outside[y][x]:
+            continue
+        if px[x, y][3] >= 128:
+            continue
+        outside[y][x] = True
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            q.append((x + dx, y + dy))
+
+    healed = 0
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a >= 128 or outside[y][x]:
+                continue
+            px[x, y] = (r, g, b, 255)
+            healed += 1
+    if healed:
+        print(f"    restored {healed} interior px keyed out by ffmpeg")
+    return im
+
+
 def process_file(
     src: Path,
     dst: Path,
@@ -156,12 +201,16 @@ def process_file(
     pad: int,
     use_ffmpeg: bool,
     key_hex: str,
+    ff_similarity: float,
+    ff_blend: float,
 ) -> None:
     if use_ffmpeg:
         tmp = dst.with_suffix(".fftmp.png")
-        if cut_ffmpeg(src, tmp, key_hex, 0.35, 0.12):
+        if cut_ffmpeg(src, tmp, key_hex, ff_similarity, ff_blend):
             im = Image.open(tmp).convert("RGBA")
-            # still run edge cleanup + crop
+            # colorkey is not edge-safe — put back anything it punched out of
+            # the interior, then run the usual edge cleanup + crop
+            im = restore_interior(im)
             im = cut_edge_flood(im, key, tol, pad)
             im.save(dst)
             tmp.unlink(missing_ok=True)
@@ -185,8 +234,12 @@ def main() -> None:
     ap.add_argument(
         "--ffmpeg",
         action="store_true",
-        help="Try ffmpeg colorkey first (not edge-safe; pure key only)",
+        help="Use ffmpeg colorkey as the alpha pass (interior holes are healed after)",
     )
+    ap.add_argument("--ff-similarity", type=float, default=0.20,
+                    help="ffmpeg colorkey similarity (lower = keys less)")
+    ap.add_argument("--ff-blend", type=float, default=0.05,
+                    help="ffmpeg colorkey blend (soft alpha ramp)")
     args = ap.parse_args()
 
     key = parse_color(args.color)
@@ -198,7 +251,8 @@ def main() -> None:
         dst.parent.mkdir(parents=True, exist_ok=True)
         if dst.is_dir():
             dst = dst / (src.stem + ".png")
-        process_file(src, dst, key, args.tolerance, args.pad, args.ffmpeg, key_hex)
+        process_file(src, dst, key, args.tolerance, args.pad, args.ffmpeg, key_hex,
+                     args.ff_similarity, args.ff_blend)
         return
 
     if not src.is_dir():
@@ -213,7 +267,8 @@ def main() -> None:
         return
     for f in files:
         process_file(
-            f, dst / f"{f.stem}.png", key, args.tolerance, args.pad, args.ffmpeg, key_hex
+            f, dst / f"{f.stem}.png", key, args.tolerance, args.pad, args.ffmpeg,
+            key_hex, args.ff_similarity, args.ff_blend
         )
 
 

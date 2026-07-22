@@ -16,7 +16,40 @@ Masters (исходники + готовые PNG): `assets/textures/masters/`.
 ### 1) Gen (только если попросили)
 В промпт: **`pure solid neon magenta background #FF00FF`** (или pure white), один объект, thick black outline в самом арте.
 
-### 2) Cut — `tools/sprite_cutter.py` (предпочтительно)
+### 2) Cut — `tools/sprite_cutter.py --ffmpeg` (предпочтительно)
+
+```bash
+python3 tools/sprite_cutter.py src.jpg out.png --color FFFFFF --tolerance 55 --pad 4 --ffmpeg
+```
+
+ffmpeg `colorkey` снимает альфу аккуратнее по сглаженному краю, чем flood.
+Раньше его было нельзя (он keyит **весь кадр** и выедал светлое ядро пламени /
+блики на стали), теперь дыры лечатся: `restore_interior()` заливает прозрачность
+от рамки, и всё, что не связано с фоном, получает непрозрачность обратно.
+
+Крутилки: `--ff-similarity` (по умолчанию 0.20, больше = агрессивнее),
+`--ff-blend` (0.05). При 0.35 на белом фоне выедало ~7000 px пламени.
+
+**Замер качества** (светлые пиксели по контуру — должно быть <2%):
+
+```bash
+python3 - <<'PY'
+from PIL import Image
+im=Image.open('assets/textures/torch.png').convert('RGBA'); w,h=im.size; px=im.load()
+b=e=0
+for y in range(h):
+    for x in range(w):
+        r,g,bl,a=px[x,y]
+        if a==0: continue
+        if any(not(0<=x+dx<w and 0<=y+dy<h) or px[x+dx,y+dy][3]==0
+               for dx,dy in((1,0),(-1,0),(0,1),(0,-1))):
+            e+=1
+            if min(r,g,bl)>190: b+=1
+print(f'{b}/{e} = {100*b/e:.1f}%')
+PY
+```
+
+### 2b) Cut — flood без ffmpeg (запасной)
 ```bash
 python3 tools/sprite_cutter.py path/to/raw.jpg assets/textures/out.png \
   --color FF00FF --tolerance 55 --pad 4
@@ -33,7 +66,7 @@ python3 tools/sprite_cutter.py path/to/raw.jpg assets/textures/out.png \
 - **Не** раздувать outline (`MaxFilter` / «толстая чёрная обводка поверх») — жирный ореол  
 - **Не** резать scissor > ~0.15 на стали (нож становится прозрачным)  
 - **Не** ffmpeg `colorkey` на оранжевом огне / сером клинке, если key не чистый `#FF00FF` — съедает объект  
-- ffmpeg ок **только** как pre-pass + потом тот же edge-flood cleanup (`--ffmpeg`)
+- **hand_torch / hand_knife / flame_only не перерезать из `masters/*_source.jpg`** — там фон не чистый белый (угол `(6,5,3)`), выйдет хуже. В игре они уже 0% каймы, резаны из магента-раёв.
 
 ### 4) В Godot
 - `Sprite3D`: `transparent`, mild `alpha_scissor` ≤ 0.15 **или** disabled для ножа  
@@ -71,7 +104,7 @@ python3 tools/sprite_cutter.py path/to/raw.jpg assets/textures/out.png \
 
 ```bash
 python3 tools/sprite_cutter.py assets/textures/masters/prop_wall_torch_source.jpg \
-  assets/textures/torch.png --color FFFFFF --tolerance 40 --pad 4
+  assets/textures/torch.png --color FFFFFF --tolerance 55 --pad 4 --ffmpeg
 ```
 
 Магента-вариант из `raw/torch_raw.jpg` — это симметричная «H»-скоба с **двумя**

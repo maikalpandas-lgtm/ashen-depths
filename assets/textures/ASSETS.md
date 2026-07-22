@@ -119,6 +119,20 @@ python3 tools/sprite_cutter.py path/to/raw.jpg assets/textures/out.png \
 
 ---
 
+## Enemies (батч 2 — corridor billboards)
+
+Фронтальный full-body, ноги на земле. Фон gen `#FF00FF`.
+
+| ID | Файл в игре | Master PNG | Source | Назначение |
+|----|-------------|------------|--------|------------|
+| **enemy_grub** | `enemy_grub.png` | `masters/enemy_grub.png` | `masters/enemy_grub_source.jpg` | Пещерный грызун (weak pack) |
+| **enemy_brute** | `enemy_brute.png` | `masters/enemy_brute.png` | `masters/enemy_brute_source.jpg` | Каменный громила (tank) |
+| **enemy_shade** | `enemy_shade.png` | `masters/enemy_shade.png` | `masters/enemy_shade_source.jpg` | Тень рудокопа (fast debuff) |
+
+Промпты: `docs/ART_PROMPTS.md` §3.
+
+---
+
 ## Props (мир)
 
 | ID | Файл в игре | Master PNG | Source | Назначение |

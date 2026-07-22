@@ -30,7 +30,8 @@
 - [ ] Hub stub
 
 ## Фаза 3 — Бой + draft слой 1–2
-- [ ] Enemies in corridor (billboard) + combat overlay
+- [x] Enemies in corridor (billboard) — `scripts/enemy_sprites.gd`, 3 типа, 12 пачек на этаж
+- [ ] Combat overlay (вход в бой по столкновению)
 - [ ] Hand / ⚡3 / END TURN / Block / intents (**no board**)
 - [ ] Sigils + blood cost (Inscryption-flavor cards)
 - [ ] **Layer 1:** post-combat 1 of 3 **or** skip→gold
@@ -54,8 +55,9 @@
 
 ## Долги (не блокируют фазы)
 
-- Сундук / энкаунтеры / жаровни — до сих пор 3D-меши-заглушки (кубы и сферы).
+- Сундук и жаровни — до сих пор 3D-меши-заглушки (куб и цилиндр).
   По концепту все объекты должны быть 2D-спрайтами — см. `AGENTS.md`.
+  Враги уже переведены на спрайты.
 - Спрайт в руке глушит `no_depth_test` через `material_override`; сейчас спасает
   ограничение выпирания скалы (`PUSH_LIMIT`). Правильное решение — вариант
   шейдера с `depth_test_disabled` через общий `.gdshaderinc`.

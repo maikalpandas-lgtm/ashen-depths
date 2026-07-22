@@ -1,0 +1,126 @@
+extends RefCounted
+## Corridor enemies as 2D sprites (art concept: only the map is 3D).
+##
+## Billboarded on Y — for a grid crawler that is the design, not a shortcut:
+## ROADMAP Phase 3 says "enemies in corridor (billboard)". Unlike the wall
+## torch these use Sprite3D's own billboard property, because no shader
+## overrides their material.
+
+const ART_DIR := "res://assets/textures/"
+
+## Height in metres, so a rodent and a stone brute are not the same size on
+## screen just because their PNGs happen to be similar.
+const ENEMIES := {
+	"grub": {"art": "enemy_grub", "height": 0.95, "hp": 8, "name": "Cave grub"},
+	"brute": {"art": "enemy_brute", "height": 2.25, "hp": 26, "name": "Stone brute"},
+	"shade": {"art": "enemy_shade", "height": 1.7, "hp": 14, "name": "Miner's shade"},
+}
+
+static var _tex_cache: Dictionary = {}
+static var _shadow_tex: Texture2D = null
+
+
+static func ids() -> Array:
+	return ENEMIES.keys()
+
+
+## Which enemies stand in a pack. Kept deterministic per cell so a dungeon
+## looks the same when regenerated from its seed.
+static func pack_for(cell_hash: int) -> Array:
+	match cell_hash % 4:
+		0:
+			return ["grub", "grub", "grub"]
+		1:
+			return ["brute"]
+		2:
+			return ["shade", "grub"]
+		_:
+			return ["shade", "shade"]
+
+
+## `ground_y` must be the real floor height at that spot — the cave floor is not
+## flat, and a sprite pinned to y=0 hovers or sinks.
+static func make_enemy(parent: Node3D, pos: Vector3, enemy_id: String, ground_y: float) -> Node3D:
+	var def: Dictionary = ENEMIES.get(enemy_id, ENEMIES["grub"])
+	var tex := _load(def["art"])
+	if tex == null:
+		return null
+
+	var holder := Node3D.new()
+	holder.name = "Enemy_%s" % enemy_id
+	holder.position = Vector3(pos.x, ground_y, pos.z)
+	parent.add_child(holder)
+
+	var height: float = def["height"]
+
+	# Contact shadow first, so the sprite is never a sticker floating on the rock
+	var shadow := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(height * 0.62, height * 0.34)
+	shadow.mesh = quad
+	shadow.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
+	shadow.position = Vector3(0.0, 0.03, 0.0)
+	var smat := StandardMaterial3D.new()
+	smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	smat.albedo_texture = _shadow()
+	smat.albedo_color = Color(0.0, 0.0, 0.0, 0.55)
+	smat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	smat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	smat.render_priority = 1
+	shadow.material_override = smat
+	shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	holder.add_child(shadow)
+
+	var spr := Sprite3D.new()
+	spr.name = "Sprite"
+	spr.texture = tex
+	spr.pixel_size = height / float(tex.get_height())
+	spr.centered = true
+	spr.position = Vector3(0.0, height * 0.5, 0.0)
+	spr.transparent = true
+	spr.shaded = false
+	spr.double_sided = true
+	spr.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+	spr.alpha_scissor_threshold = 0.2
+	spr.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	spr.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+	spr.render_priority = 3
+	holder.add_child(spr)
+
+	return holder
+
+
+static func _shadow() -> Texture2D:
+	if _shadow_tex != null:
+		return _shadow_tex
+	var s := 64
+	var img := Image.create(s, s, false, Image.FORMAT_RGBA8)
+	var c := Vector2(s * 0.5, s * 0.5)
+	for y in range(s):
+		for x in range(s):
+			var d := Vector2(float(x), float(y)).distance_to(c) / (s * 0.5)
+			var a := clampf(1.0 - d, 0.0, 1.0)
+			img.set_pixel(x, y, Color(0.0, 0.0, 0.0, a * a))
+	_shadow_tex = ImageTexture.create_from_image(img)
+	return _shadow_tex
+
+
+static func _load(id: String) -> Texture2D:
+	if _tex_cache.has(id):
+		return _tex_cache[id]
+	var path := ART_DIR + id + ".png"
+	var tex: Texture2D = null
+	if ResourceLoader.exists(path):
+		tex = ResourceLoader.load(path, "Texture2D") as Texture2D
+	if tex == null:
+		var img := Image.new()
+		if img.load(path) == OK:
+			if img.get_format() != Image.FORMAT_RGBA8:
+				img.convert(Image.FORMAT_RGBA8)
+			img.generate_mipmaps()
+			tex = ImageTexture.create_from_image(img)
+		else:
+			push_warning("[EnemySprites] missing art: %s" % path)
+	_tex_cache[id] = tex
+	return tex

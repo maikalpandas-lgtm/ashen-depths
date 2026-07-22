@@ -2,6 +2,7 @@ extends Node3D
 ## Corridor-first cave labyrinth with props (Phase 1+ visuals).
 
 const TorchSprites = preload("res://scripts/torch_sprites.gd")
+const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 const ROCK_SHADER = preload("res://shaders/cave_rock.gdshader")
 
 ## How far rock may bulge into the corridor. Keeps the walking line clear —
@@ -29,7 +30,9 @@ signal generation_finished(start_world: Vector3)
 @export var room_max_size: int = 3
 @export var cell_size: float = 3.0
 @export var wall_height: float = 3.2
-@export var encounter_rooms: int = 4
+## Packs per floor. 4 on ~820 corridor tiles meant you could wander the
+## whole dungeon without meeting anything.
+@export var encounter_rooms: int = 12
 ## Lower = denser wall torches (1 = every walkable cell with a wall).
 @export var torch_spacing: int = 2
 @export var extra_loops: int = 10
@@ -444,13 +447,14 @@ func _place_encounters() -> void:
 		var ok := true
 		for other in floor_cells:
 			if _get_cell(other.x, other.y) == Cell.ENCOUNTER:
-				if absi(other.x - c.x) + absi(other.y - c.y) < 6:
+				if absi(other.x - c.x) + absi(other.y - c.y) < 4:
 					ok = false
 					break
 		if not ok:
 			continue
 		_set_cell(c.x, c.y, Cell.ENCOUNTER)
 		placed += 1
+	print("[Dungeon] encounters=%d (asked %d)" % [placed, encounter_rooms])
 
 
 func _temp_collect() -> Array[Vector2i]:
@@ -1120,41 +1124,20 @@ func _spawn_chest(world: Vector3) -> void:
 
 func _spawn_encounter(world: Vector3, pack_name: String) -> void:
 	var area := Area3D.new()
-	area.position = world + Vector3(0, 0.5, 0)
+	area.position = world
 	area.collision_layer = 8
 	area.collision_mask = 2
-	var count := randi_range(2, 3)
 
-	# floating skull marker (like ref)
-	var skull := MeshInstance3D.new()
-	var sm := SphereMesh.new()
-	sm.radius = 0.35
-	sm.height = 0.55
-	skull.mesh = sm
-	var skmat := StandardMaterial3D.new()
-	skmat.albedo_color = Color(0.85, 0.82, 0.75)
-	skmat.emission_enabled = true
-	skmat.emission = Color(0.9, 0.85, 0.4)
-	skmat.emission_energy_multiplier = 1.2
-	skull.material_override = skmat
-	skull.position = Vector3(0, 1.1, 0)
-	area.add_child(skull)
-
-	for i in range(count):
-		var blob := MeshInstance3D.new()
-		var sphere := SphereMesh.new()
-		sphere.radius = 0.4
-		sphere.height = 0.75
-		blob.mesh = sphere
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color(0.5, 0.18, 0.22)
-		mat.emission_enabled = true
-		mat.emission = Color(0.55, 0.12, 0.15)
-		mat.emission_energy_multiplier = 0.7
-		blob.material_override = mat
-		var angle := TAU * float(i) / float(count)
-		blob.position = Vector3(cos(angle) * 0.75, 0.25, sin(angle) * 0.75)
-		area.add_child(blob)
+	# Real enemy sprites instead of glowing spheres. Which enemies stand here is
+	# derived from the cell, so a seed always rebuilds the same pack.
+	var cell := world_to_cell(world)
+	var pack: Array = EnemySprites.pack_for(absi(cell.x * 31 + cell.y * 17))
+	var n := pack.size()
+	for i in range(n):
+		var side: float = 0.0 if n == 1 else (float(i) / float(n - 1) - 0.5) * 1.7
+		var depth: float = 0.0 if n < 3 else (0.35 if i == 1 else -0.2)
+		var spot := world + Vector3(side, 0.0, depth)
+		EnemySprites.make_enemy(area, spot - world, pack[i], _floor_height(spot.x, spot.z))
 
 	var col := CollisionShape3D.new()
 	var shape := SphereShape3D.new()
@@ -1162,24 +1145,17 @@ func _spawn_encounter(world: Vector3, pack_name: String) -> void:
 	col.shape = shape
 	area.add_child(col)
 
+	# Cold underlight so a pack reads as a threat from down the corridor
 	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.85, 0.4)
-	light.light_energy = 1.2
-	light.omni_range = 5.0
-	light.position = Vector3(0, 1.1, 0)
+	light.light_color = Color(0.55, 0.85, 0.95)
+	light.light_energy = 1.5
+	light.omni_range = 4.5
+	light.position = Vector3(0, 0.5, 0)
 	area.add_child(light)
-
-	var label := Label3D.new()
-	label.text = "ENCOUNTER"
-	label.position = Vector3(0, 1.7, 0)
-	label.font_size = 24
-	label.modulate = Color(1, 0.85, 0.4)
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	area.add_child(label)
 
 	area.set_script(load("res://scripts/encounter_placeholder.gd"))
 	area.set("pack_name", pack_name)
-	area.set("enemy_count", count)
+	area.set("enemy_count", n)
 	entities_root.add_child(area)
 
 

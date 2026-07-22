@@ -124,6 +124,19 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	if _input_lock > 0.0:
 		_input_lock -= delta
+	_auto_walk()
+
+
+## Held key keeps walking. _unhandled_input only fires on the press edge, so on
+## its own it gave exactly one step per keypress. The hand sway rides on each
+## step, so this is also what makes the sway read as continuous walking.
+func _auto_walk() -> void:
+	if _busy or _input_lock > 0.0 or dungeon == null:
+		return
+	if Input.is_action_pressed("move_forward") or Input.is_action_pressed("ui_up"):
+		_try_step(FACINGS[facing_index])
+	elif Input.is_action_pressed("move_back") or Input.is_action_pressed("ui_down"):
+		_try_step(FACINGS[facing_index] * -1)
 
 
 func _physics_process(_delta: float) -> void:
@@ -197,6 +210,9 @@ func _kill_tween() -> void:
 
 
 func _bump() -> void:
+	# Throttle: with auto-walk, holding W into a wall would otherwise spawn a
+	# bump tween every single frame.
+	_input_lock = 0.22
 	if camera == null:
 		return
 	var tw := create_tween()

@@ -931,21 +931,52 @@ func _spawn_torches() -> void:
 					wall_dirs.append(d)
 			if wall_dirs.is_empty():
 				continue
-			var d: Vector2i = wall_dirs[placed % wall_dirs.size()]
+			var d: Vector2i = _best_torch_dir(x, y, wall_dirs)
 			var world := cell_to_world(Vector2i(x, y))
-			# Seat the bracket on the ACTUAL rock face. A fixed offset either
-			# floats the torch in mid-air where the wall recedes or buries it
-			# where the wall bulges, so sample the same displacement the mesh uses.
 			var torch_h := 1.3
 			var edge := cell_size * 0.5
 			var base := world + Vector3(float(d.x) * edge, 0.0, float(d.y) * edge)
-			var v := (torch_h + 0.2) / (wall_height + 0.5)
-			var push := wall_push(base + Vector3.UP * torch_h, torch_h, v)
-			var wall_dist: float = clampf(edge - push - 0.08, 0.35, edge - 0.05)
+			var wall_dist := edge - _mount_push(base, d, torch_h) + 0.03
+			wall_dist = clampf(wall_dist, 0.3, edge - 0.04)
 			var pos := world + Vector3(d.x * wall_dist, torch_h, d.y * wall_dist)
 			_add_torch(pos, d)
 			placed += 1
 	print("[Dungeon] torches=%d" % placed)
+
+
+## Deepest bulge of the rock over the bracket + stick footprint.
+##
+## One sample at the mount point is not enough: the rock swings by ~0.2m across
+## the sprite, so a torch seated on that single reading gets swallowed where the
+## wall bulges beside it. Taking the MAX over the footprint guarantees the whole
+## fixture clears the rock; the flame above is deliberately excluded so a tall
+## sprite does not push the torch out into the corridor.
+func _mount_push(base: Vector3, d: Vector2i, torch_h: float) -> float:
+	var right := Vector3(float(-d.y), 0.0, float(d.x))
+	var worst := -10.0
+	for i in range(-1, 2):
+		var lateral := float(i) * 0.22
+		for j in range(4):
+			var h: float = torch_h - 0.28 + float(j) * 0.28
+			var v: float = (h + 0.2) / (wall_height + 0.5)
+			var p := base + right * lateral + Vector3.UP * h
+			worst = maxf(worst, wall_push(p, h, v))
+	return worst
+
+
+## Prefer a wall face that continues on both sides: at a corner the neighbouring
+## panel overshoots past the corner and can cross in front of the torch.
+func _best_torch_dir(x: int, y: int, wall_dirs: Array[Vector2i]) -> Vector2i:
+	var n := wall_dirs.size()
+	var start := (x * 7 + y * 13) % n  # keep sides varied, not all on one wall
+	for k in range(n):
+		var d: Vector2i = wall_dirs[(start + k) % n]
+		var rx := d.y
+		var ry := -d.x
+		if (_edge_overshoot(x + rx, y + ry, d.x, d.y) == 0.0
+				and _edge_overshoot(x - rx, y - ry, d.x, d.y) == 0.0):
+			return d
+	return wall_dirs[start]
 
 
 func _add_torch(pos: Vector3, wall_dir: Vector2i) -> void:

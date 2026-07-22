@@ -79,8 +79,10 @@ func _on_combat_requested(pack: Array, source: Node) -> void:
 	_combat = Combat.new(party, pack, fight_seed)
 	_dragging = -1
 	_face_the_pack()
-	_form_up()
+	# Camera FIRST, then form_up along camera-right so the row is always
+	# left↔right on screen (player/pack world axes were stacking along the tunnel).
 	_enter_combat_view()
+	_form_up()
 	_root.visible = true
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -101,64 +103,75 @@ func _collect_enemy_nodes() -> void:
 	for child in _source.get_children():
 		if child is Node3D and str(child.name).begins_with("Enemy_"):
 			_enemy_nodes.append(child)
+	print("[Combat] pack nodes=%d kind=%s" % [_enemy_nodes.size(), _pack_kind()])
 
 
-## Line the pack up across the approach, facing the player.
-##
-## Combat is a *stage*, not cramped corridor physics: we spread wide (past wall
-## mesh) so fat grubs don't stack and every HP bar / target is distinct.
+## Stage a left→right line in *camera* space. Corridor width does not matter:
+## we place past the walls so every billboard has its own screen column.
 func _form_up() -> void:
 	if not is_instance_valid(_source) or _enemy_nodes.is_empty():
 		return
-	var players := get_tree().get_nodes_in_group("player")
-	if players.is_empty():
-		return
-	var player := players[0] as Node3D
 
-	# "Forward" = from player toward pack. Row spreads on `right`.
-	var forward := _source.global_position - player.global_position
-	forward.y = 0.0
-	if forward.length() < 0.01:
-		forward = Vector3.FORWARD
-	forward = forward.normalized()
-	var right := Vector3(-forward.z, 0.0, forward.x)
-	# Pull toward the camera so sprites sit in open air, not in the wall mesh
-	var center: Vector3 = _source.global_position - forward * 0.55
+	var right := Vector3.RIGHT
+	var to_cam := Vector3.BACK
+	if _cam and is_instance_valid(_cam):
+		right = _cam.global_transform.basis.x
+		right.y = 0.0
+		if right.length() < 0.01:
+			right = Vector3.RIGHT
+		else:
+			right = right.normalized()
+		to_cam = _cam.global_position - _source.global_position
+		to_cam.y = 0.0
+		if to_cam.length() < 0.01:
+			to_cam = Vector3.BACK
+		else:
+			to_cam = to_cam.normalized()
+	else:
+		var players := get_tree().get_nodes_in_group("player")
+		if not players.is_empty():
+			var player := players[0] as Node3D
+			to_cam = player.global_position - _source.global_position
+			to_cam.y = 0.0
+			if to_cam.length() > 0.01:
+				to_cam = to_cam.normalized()
+			right = Vector3(-to_cam.z, 0.0, to_cam.x)
+
+	# Slightly toward the camera so sprites clear the rock wall
+	var center: Vector3 = _source.global_position + to_cam * 0.45
 
 	var dungeon := _source.get_parent().get_parent() if _source.get_parent() else null
 	var n := _enemy_nodes.size()
-	# Wide stage: grubs are ~1m of art; need ~1.2–1.4m centre-to-centre
+	# Fat grubs need large centre gaps so silhouettes don't merge
 	var spacing: float = 0.0
 	var combat_scale: float = 1.0
 	match n:
 		1:
 			spacing = 0.0
-			combat_scale = 1.05
+			combat_scale = 1.0
 		2:
-			spacing = 1.45
-			combat_scale = 0.95
+			spacing = 1.85
+			combat_scale = 0.9
 		3:
-			spacing = 1.35
-			combat_scale = 0.78
+			spacing = 1.75
+			combat_scale = 0.72
 		_:
-			spacing = 1.15
-			combat_scale = 0.68
+			spacing = 1.5
+			combat_scale = 0.62
 
 	for i in range(n):
 		var node := _enemy_nodes[i] as Node3D
 		if not is_instance_valid(node):
 			continue
 		var offset := (float(i) - float(n - 1) * 0.5) * spacing
-		# Slight depth stagger so billboards + HP bars don't occupy one pixel column
-		var depth_bias: float = 0.0
-		if n >= 3:
-			depth_bias = 0.12 if (i % 2) == 1 else 0.0
-		var spot: Vector3 = center + right * offset - forward * depth_bias
+		# Same depth for all — pure left↔right line (no depth stacking)
+		var spot: Vector3 = center + right * offset
 		var ground := spot.y
 		if dungeon and dungeon.has_method("floor_height_at"):
 			ground = float(dungeon.call("floor_height_at", spot.x, spot.z))
 		node.global_position = Vector3(spot.x, ground, spot.z)
 		node.scale = Vector3(combat_scale, combat_scale, combat_scale)
+	print("[Combat] form_up n=%d spacing=%.2f along camera-right" % [n, spacing])
 
 
 ## Turn the crawler to look at the pack. The trigger fires from the neighbouring
@@ -201,23 +214,27 @@ func _enter_combat_view() -> void:
 	back = back.normalized()
 
 	var n_pack: int = maxi(1, _enemy_nodes.size())
-	# More enemies → stand further back and open FOV
-	var dist: float = 4.6 if n_pack <= 2 else (5.4 if n_pack == 3 else 5.9)
-	var fov: float = 70.0 if n_pack <= 2 else 78.0
+	# Far enough that a 1.75m * 2 gap row still fits with margin
+	var dist: float = 5.0 if n_pack <= 2 else (6.2 if n_pack == 3 else 6.8)
+	var fov: float = 72.0 if n_pack <= 2 else 82.0
 
+	if _cam and is_instance_valid(_cam):
+		_cam.queue_free()
 	_cam = Camera3D.new()
 	_cam.fov = fov
 	_cam.near = 0.05
 	_cam.far = 40.0
 	get_tree().current_scene.add_child(_cam)
-	_cam.global_position = pack + back * dist + Vector3.UP * 2.35
-	_cam.look_at(pack + Vector3.UP * 0.55, Vector3.UP)
+	_cam.global_position = pack + back * dist + Vector3.UP * 2.5
+	_cam.look_at(pack + Vector3.UP * 0.5, Vector3.UP)
 	_cam.current = true
 
+	if _stage_light and is_instance_valid(_stage_light):
+		_stage_light.queue_free()
 	_stage_light = OmniLight3D.new()
 	_stage_light.light_color = Color(1.0, 0.9, 0.78)
 	_stage_light.light_energy = 4.5
-	_stage_light.omni_range = 8.5
+	_stage_light.omni_range = 9.0
 	_stage_light.omni_attenuation = 1.0
 	get_tree().current_scene.add_child(_stage_light)
 	_stage_light.global_position = pack + Vector3.UP * 2.8 + back * 1.4

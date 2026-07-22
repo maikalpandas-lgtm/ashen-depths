@@ -25,7 +25,8 @@
 - [x] Starter decks 8–10 карт — по 9 на героя, мерж в один combat deck с owner-тегом
 - [x] Тесты логики — `godot --headless --script tests/run_tests.gd` (54 проверки)
 - [ ] Арт: 3 портрета + 5 карт (промпты в `docs/ART_PROMPTS.md`, генерит Grok)
-- [ ] UI руки: показать карты на экране
+- [x] Тест-оверлей **C**: портреты + HP + рука из реальной колоды (`scripts/ui/card_test_overlay.gd`)
+- [ ] Боевой UI руки (Фаза 3) — заменит тест-оверлей
 - [ ] Hub stub
 
 ## Фаза 3 — Бой + draft слой 1–2

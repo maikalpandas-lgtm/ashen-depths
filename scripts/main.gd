@@ -31,7 +31,7 @@ func _ready() -> void:
 	hp_bar.max_value = MAX_HP
 	hp_bar.value = MAX_HP
 	_update_hud()
-	hud_hint.text = "W/S step · A/D turn 90° · R new dungeon · F9 shot · Esc menu  |  camera locked forward"
+	hud_hint.text = "W/S step · A/D turn 90° · R new dungeon · C cards · F9 shot · Esc menu  |  camera locked forward"
 
 	if dungeon.get("start_cell") != null:
 		var start: Vector2i = dungeon.start_cell
@@ -84,7 +84,7 @@ func _on_dungeon_ready(start_world: Vector3) -> void:
 	if minimap and minimap.has_method("clear_fog"):
 		minimap.clear_fog()
 	_update_hud()
-	hud_hint.text = "W/S step · A/D turn 90° · R new dungeon · F9 shot · Esc menu"
+	hud_hint.text = "W/S step · A/D turn 90° · R new dungeon · C cards · F9 shot · Esc menu"
 
 
 func _place_player(pos: Vector3) -> void:

@@ -121,9 +121,14 @@ python3 tools/sprite_cutter.py path/to/raw.jpg assets/textures/out.png \
 | **card_firebolt** | `card_firebolt.png` | `masters/card_firebolt.png` | `masters/card_firebolt_source.jpg` | Firebolt — огненная стрела |
 | **card_blood_lash** | `card_blood_lash.png` | `masters/card_blood_lash.png` | `masters/card_blood_lash_source.jpg` | Blood Lash — кровавый хлыст |
 | **card_bone_rattle** | `card_bone_rattle.png` | `masters/card_bone_rattle.png` | `masters/card_bone_rattle_source.jpg` | Bone Rattle — кость на шнуре |
+| **card_hack** | `card_hack.png` | `masters/card_hack.png` | `masters/card_hack_source.jpg` | Hack — cleaver vs shield |
+| **card_cleave_cut** | `card_cleave_cut.png` | `masters/card_cleave_cut.png` | `masters/card_cleave_cut_source.jpg` | Cleave Cut — double slash |
+| **card_echo_strike** | `card_echo_strike.png` | `masters/card_echo_strike.png` | `masters/card_echo_strike_source.jpg` | Echo Strike — ghost blade |
+| **card_ward** | `card_ward.png` | `masters/card_ward.png` | `masters/card_ward_source.jpg` | Ward — spiked shield |
+| **card_offering** | `card_offering.png` | `masters/card_offering.png` | `masters/card_offering_source.jpg` | Offering — burning card |
 
-Промпты: `docs/ART_PROMPTS.md` §2.  
-Качество cut (bright edge): все **≤0.3%**.
+Промпты: `docs/ART_PROMPTS.md` §2 + §3.6 (батч 4).  
+Качество cut (bright edge): batch1 ≤0.3%; batch4 ≤0.6%.
 
 ---
 

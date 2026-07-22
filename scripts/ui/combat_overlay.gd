@@ -425,72 +425,132 @@ func _sync_world_sprites() -> void:
 		if spr == null:
 			continue
 		var dead := int(_combat.enemies[i]["hp"]) <= 0
-		spr.transparency = 0.75 if dead else 0.0
-		# Targeted monster glows; a rectangle around its HP bar was too subtle
+		# Hide dead fully so living HP UI isn't buried under corpses
+		spr.visible = not dead
+		spr.transparency = 0.0
 		spr.modulate = Color(1.7, 1.55, 1.15) if i == hovered else Color.WHITE
 
 
-## HP bar + intent, drawn over each monster where it actually stands.
+## Living enemy indices in left→right stage order.
+func _living_indices() -> Array:
+	var out: Array = []
+	if _combat == null:
+		return out
+	for i in range(_combat.enemies.size()):
+		if int(_combat.enemies[i]["hp"]) > 0:
+			out.append(i)
+	return out
+
+
+## After a kill, re-spread survivors so sprites + bars never stack on one column.
+func _reform_living() -> void:
+	if not is_instance_valid(_source) or _cam == null or not is_instance_valid(_cam):
+		return
+	var living := _living_indices()
+	if living.is_empty():
+		return
+	var right := _cam.global_transform.basis.x
+	right.y = 0.0
+	if right.length() < 0.01:
+		right = Vector3.RIGHT
+	else:
+		right = right.normalized()
+	var to_cam := _cam.global_position - _source.global_position
+	to_cam.y = 0.0
+	if to_cam.length() < 0.01:
+		to_cam = Vector3.BACK
+	else:
+		to_cam = to_cam.normalized()
+	var center: Vector3 = _source.global_position + to_cam * 0.45
+	var dungeon := _source.get_parent().get_parent() if _source.get_parent() else null
+	var n := living.size()
+	var spacing: float = 0.0 if n <= 1 else (1.85 if n == 2 else 1.75)
+	var combat_scale: float = 1.0 if n == 1 else (0.9 if n == 2 else 0.72)
+	for k in range(n):
+		var i: int = int(living[k])
+		if i >= _enemy_nodes.size():
+			continue
+		var node := _enemy_nodes[i] as Node3D
+		if not is_instance_valid(node):
+			continue
+		var offset := (float(k) - float(n - 1) * 0.5) * spacing
+		var spot: Vector3 = center + right * offset
+		var ground := spot.y
+		if dungeon and dungeon.has_method("floor_height_at"):
+			ground = float(dungeon.call("floor_height_at", spot.x, spot.z))
+		node.global_position = Vector3(spot.x, ground, spot.z)
+		node.scale = Vector3(combat_scale, combat_scale, combat_scale)
+
+
+## HP bars for every living foe — fixed screen slots (always readable, even
+## after kills). World unproject alone stacked bars on one pixel when sprites
+## overlapped; slots are assigned by living order left→right.
 func _draw_world_overlay() -> void:
 	if _combat == null:
 		return
-	var cam := get_viewport().get_camera_3d()
-	if cam == null:
-		return
 	var font := UiTheme.title_font()
 	var hovered := _hover_enemy() if _dragging >= 0 else -1
-	# First pass: project heads. Second: push bars apart if they collide.
-	var slots: Array = []  ## {i, p: Vector2, e}
-	for i in range(mini(_enemy_nodes.size(), _combat.enemies.size())):
-		var node := _enemy_nodes[i] as Node3D
-		var e: Dictionary = _combat.enemies[i]
-		if not is_instance_valid(node) or int(e["hp"]) <= 0:
-			continue
-		var head: Vector3 = node.global_position + Vector3.UP * _enemy_top(i)
-		if cam.is_position_behind(head):
-			continue
-		var p := cam.unproject_position(head)
-		p.y = clampf(p.y, 100.0, _world_layer.size.y - 260.0)
-		slots.append({"i": i, "p": p, "e": e})
-	# Spread overlapping bars horizontally so a 3-grub pack shows 3 readouts
-	slots.sort_custom(func(a, b): return a["p"].x < b["p"].x)
-	const MIN_BAR_GAP := 118.0
-	for s in range(1, slots.size()):
-		var prev: Vector2 = slots[s - 1]["p"]
-		var cur: Vector2 = slots[s]["p"]
-		if cur.x - prev.x < MIN_BAR_GAP:
-			cur.x = prev.x + MIN_BAR_GAP
-			slots[s]["p"] = cur
+	var living := _living_indices()
+	if living.is_empty():
+		return
 
-	var w := 100.0
-	for slot in slots:
-		var i: int = int(slot["i"])
-		var p: Vector2 = slot["p"]
-		var e: Dictionary = slot["e"]
-		var bar := Rect2(p.x - w * 0.5, p.y - 6.0, w, 12.0)
-		_world_layer.draw_rect(bar.grow(2.0), Color(0.05, 0.04, 0.06, 0.85))
-		_world_layer.draw_rect(bar, Color(0.22, 0.09, 0.1, 0.95))
+	var vp := _world_layer.size
+	if vp.x < 8.0 or vp.y < 8.0:
+		vp = get_viewport().get_visible_rect().size
+	# Clear of left HUD (~200px) and hand strip
+	var left_m := 220.0
+	var right_m := 40.0
+	var top_y := 92.0
+	var usable: float = maxf(160.0, vp.x - left_m - right_m)
+	var n := living.size()
+	var bar_w: float = minf(120.0, usable / float(maxi(1, n)) - 12.0)
+	bar_w = maxf(88.0, bar_w)
+
+	for k in range(n):
+		var i: int = int(living[k])
+		var e: Dictionary = _combat.enemies[i]
+		# Evenly spaced centres across the combat strip
+		var t: float = 0.5 if n == 1 else float(k) / float(n - 1)
+		var cx: float = left_m + usable * t
+		var p := Vector2(cx, top_y)
+
+		# Prefer anchoring above the 3D sprite when projection is sane
+		if i < _enemy_nodes.size():
+			var node := _enemy_nodes[i] as Node3D
+			var cam := get_viewport().get_camera_3d()
+			if cam and is_instance_valid(node):
+				var head: Vector3 = node.global_position + Vector3.UP * _enemy_top(i)
+				if not cam.is_position_behind(head):
+					var proj := cam.unproject_position(head)
+					# Keep slot X (stable), only borrow Y from head if on-screen
+					if proj.y > 70.0 and proj.y < vp.y - 280.0:
+						p.y = proj.y
+
+		var bar := Rect2(p.x - bar_w * 0.5, p.y - 8.0, bar_w, 14.0)
+		_world_layer.draw_rect(bar.grow(3.0), Color(0.02, 0.02, 0.04, 0.92))
+		_world_layer.draw_rect(bar, Color(0.18, 0.07, 0.08, 0.98))
 		var frac: float = clampf(float(e["hp"]) / maxf(1.0, float(e["max_hp"])), 0.0, 1.0)
 		_world_layer.draw_rect(Rect2(bar.position, Vector2(bar.size.x * frac, bar.size.y)),
-			Color(0.78, 0.26, 0.28))
+			Color(0.85, 0.28, 0.3))
 		if i == hovered:
-			_world_layer.draw_rect(bar.grow(5.0), Color(1.0, 0.85, 0.4), false, 2.0)
+			_world_layer.draw_rect(bar.grow(5.0), Color(1.0, 0.88, 0.35), false, 2.5)
 
 		if font == null:
 			continue
-		_world_layer.draw_string(font, p + Vector2(-w * 0.5, 26.0),
+		_world_layer.draw_string(font, Vector2(bar.position.x, bar.position.y + 32.0),
 			"%d/%d" % [e["hp"], e["max_hp"]],
-			HORIZONTAL_ALIGNMENT_CENTER, w, 14, Color(0.95, 0.9, 0.88))
+			HORIZONTAL_ALIGNMENT_CENTER, bar_w, 15, Color(0.98, 0.94, 0.9))
 		var it: Dictionary = e["intent"]
 		var is_block: bool = it.get("type", "attack") == "block"
-		_world_layer.draw_string(font, p + Vector2(-w * 0.5, -16.0),
+		_world_layer.draw_string(font, Vector2(bar.position.x, bar.position.y - 18.0),
 			("🛡 %d" if is_block else "🗡 %d") % it.get("value", 0),
-			HORIZONTAL_ALIGNMENT_CENTER, w, 18,
+			HORIZONTAL_ALIGNMENT_CENTER, bar_w, 18,
 			Color(0.6, 0.85, 1.0) if is_block else Color(1.0, 0.62, 0.42))
-		_world_layer.draw_string(font, p + Vector2(-w * 0.5, 44.0), str(e["name"]),
-			HORIZONTAL_ALIGNMENT_CENTER, w, 12, Color(0.86, 0.83, 0.79))
+		_world_layer.draw_string(font, Vector2(bar.position.x, bar.position.y + 48.0),
+			str(e["name"]),
+			HORIZONTAL_ALIGNMENT_CENTER, bar_w, 12, Color(0.9, 0.86, 0.8))
 		if int(e["block"]) > 0:
-			_world_layer.draw_string(font, p + Vector2(w * 0.5 + 4.0, 8.0),
+			_world_layer.draw_string(font, Vector2(bar.end.x + 4.0, bar.position.y + 12.0),
 				"🛡%d" % e["block"], HORIZONTAL_ALIGNMENT_LEFT, -1, 13,
 				Color(0.7, 0.88, 1.0))
 
@@ -527,6 +587,7 @@ func _spawn_slash(strength: int) -> void:
 func _play_events() -> void:
 	if _combat == null:
 		return
+	var any_died := false
 	for ev in _combat.events:
 		var i: int = int(ev["index"])
 		match ev["kind"]:
@@ -536,6 +597,7 @@ func _play_events() -> void:
 					var amt: int = int(ev.get("amount", 0))
 					Sfx.play("hit_heavy" if amt >= 10 else "hit", -1.0)
 			"enemy_died":
+				any_died = true
 				_split_enemy(i)
 				if Sfx:
 					Sfx.play("enemy_die", -1.0)
@@ -549,6 +611,8 @@ func _play_events() -> void:
 				if Sfx:
 					Sfx.play("block", -4.0)
 	_combat.events.clear()
+	if any_died:
+		_reform_living()
 
 
 func _enemy_sprite(index: int) -> Sprite3D:

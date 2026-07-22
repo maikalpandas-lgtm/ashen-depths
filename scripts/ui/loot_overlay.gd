@@ -21,6 +21,10 @@ func _ready() -> void:
 		GameState.loot_requested.connect(_on_loot_requested)
 
 
+func is_open() -> bool:
+	return _root != null and _root.visible
+
+
 func _on_loot_requested(offers: Array) -> void:
 	open(offers)
 

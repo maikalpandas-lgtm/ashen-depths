@@ -18,8 +18,8 @@ enum Sigil { SHARP, PIERCE, SWEEP, DRAIN, FRAIL_HIT, BONE, SANGUINE, ECHO, WARD,
 const CARDS := {
 	"slice": {
 		"name": "Сеча", "type": Type.STRIKE, "energy": 1, "blood": 0,
-		"damage": 6, "block": 0, "sigils": [],
-		"text": "6 урона", "art": "card_slice", "rarity": "common",
+		"damage": 7, "block": 0, "sigils": [],
+		"text": "7 урона", "art": "card_slice", "rarity": "common",
 	},
 	"hack": {
 		"name": "Рубка", "type": Type.STRIKE, "energy": 2, "blood": 0,

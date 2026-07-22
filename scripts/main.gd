@@ -100,7 +100,11 @@ func _on_inventory() -> void:
 func _on_settings() -> void:
 	if Sfx:
 		Sfx.play("ui_click")
-	hud_hint.text = "Настройки · скоро · Esc отпускает мышь"
+	var settings := get_node_or_null("SettingsOverlay")
+	if settings and settings.has_method("open"):
+		settings.call("open")
+	else:
+		hud_hint.text = "Esc — пауза / громкость"
 
 
 func _unhandled_input(event: InputEvent) -> void:

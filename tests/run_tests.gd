@@ -52,7 +52,7 @@ func _test_card_db() -> void:
 	check(not CardDB.has_card("nope"), "unknown id reports missing")
 	var a := CardDB.get_card("slice")
 	a["damage"] = 999
-	check(CardDB.get_card("slice")["damage"] == 6, "get_card returns a copy, not the shared def")
+	check(CardDB.get_card("slice")["damage"] == 7, "get_card returns a copy, not the shared def")
 	var blood := CardDB.get_card("blood_lash")
 	check(blood["blood"] == 4 and blood["energy"] == 0, "blood card costs HP, not energy")
 
@@ -145,7 +145,7 @@ func _test_combat_basics() -> void:
 	check(c.energy == Combat.START_ENERGY, "turn starts on 3 energy")
 	check(c.deck.hand.size() == Combat.DRAW_PER_TURN, "opening hand is 5")
 	check(c.enemies.size() == 2, "pack has 2 enemies")
-	check(c.enemies[1]["hp"] == 26, "brute HP comes from the enemy table")
+	check(c.enemies[1]["hp"] == 24, "brute HP comes from the enemy table")
 	check(c.phase == Combat.Phase.PLAYER, "player acts first")
 	for e in c.enemies:
 		check_silent(not (e["intent"] as Dictionary).is_empty(), "every enemy telegraphs an intent")
@@ -153,12 +153,13 @@ func _test_combat_basics() -> void:
 
 func _test_combat_damage() -> void:
 	print("combat resolution")
-	var c := _combat(["grub"])
+	# Shade has enough HP that one slice does not end the fight
+	var c := _combat(["shade"])
 	# Force a known hand so the test does not depend on the shuffle
 	c.deck.hand = [{"card": "slice", "owner": "kael"}, {"card": "block", "owner": "kael"}]
 	var hp_before: int = c.enemies[0]["hp"]
 	check(c.play_card(0, 0), "slice resolves")
-	check(c.enemies[0]["hp"] == hp_before - 6, "slice deals its 6")
+	check(c.enemies[0]["hp"] == hp_before - 7, "slice deals its 7")
 	check(c.energy == Combat.START_ENERGY - 1, "energy was spent")
 	check(c.deck.discard_pile.size() == 1, "played card went to the discard")
 
@@ -276,21 +277,21 @@ func _test_xp_level() -> void:
 	var level := 1
 	var xp := 0
 	var pending := 0
-	xp += 16
+	xp += 14
 	var gained := 0
-	while xp >= (15 + (level - 1) * 10) and gained < 3:
-		xp -= 15 + (level - 1) * 10
+	while xp >= (12 + (level - 1) * 8) and gained < 3:
+		xp -= 12 + (level - 1) * 8
 		level += 1
 		pending += 1
 		gained += 1
-	check(gained == 1, "16 XP levels once from 1")
+	check(gained == 1, "14 XP levels once from 1 (phase5 curve)")
 	check(level == 2, "level is now 2")
 	check(pending == 1, "one pending level-up pick")
 	var before_lvl := level
 	xp += 5
 	gained = 0
-	while xp >= (15 + (level - 1) * 10) and gained < 3:
-		xp -= 15 + (level - 1) * 10
+	while xp >= (12 + (level - 1) * 8) and gained < 3:
+		xp -= 12 + (level - 1) * 8
 		level += 1
 		pending += 1
 		gained += 1

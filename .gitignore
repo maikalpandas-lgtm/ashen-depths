@@ -16,3 +16,7 @@ assets/textures/_tmp*
 assets/textures/*_ffmpeg_try*
 assets/textures/raw/cut/
 assets/textures/raw/gen_*
+
+build/
+*.app
+

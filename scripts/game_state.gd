@@ -65,7 +65,8 @@ func new_run(seed_value: int = 0) -> void:
 
 
 func xp_to_next_level() -> int:
-	return 15 + (level - 1) * 10
+	# Phase 5: slightly faster early levels so Layer 2 shows up in a demo run
+	return 12 + (level - 1) * 8
 
 
 func grant_combat_xp(amount: int) -> int:

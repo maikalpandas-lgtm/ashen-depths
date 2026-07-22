@@ -13,7 +13,12 @@ config/icon="res://icon.svg"
 
 GameState="*res://scripts/game_state.gd"
 Sfx="*res://scripts/sfx.gd"
+Music="*res://scripts/music.gd"
 McpInteractionServer="*res://scripts/mcp/mcp_interaction_server.gd"
+
+[audio]
+
+buses/default_bus_layout="res://default_bus_layout.tres"
 
 [display]
 

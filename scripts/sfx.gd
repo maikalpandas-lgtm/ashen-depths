@@ -1,12 +1,10 @@
 extends Node
-## Lightweight SFX bus — Kenney CC0 clips in assets/audio/sfx/.
+## SFX pool + bus volume API. Clips in assets/audio/sfx/ (Kenney CC0).
 ##
 ## process_mode ALWAYS so combat (tree paused) still hears hits.
-## play("id") picks a random variant when several files share a prefix.
 
 const SFX_DIR := "res://assets/audio/sfx/"
 
-## Logical event → one file or a list (random pick). Paths without extension.
 const CATALOG := {
 	"step": ["step_0", "step_1", "step_2", "step_3", "step_4"],
 	"turn": "turn",
@@ -37,11 +35,17 @@ const CATALOG := {
 }
 
 const POOL_SIZE := 10
+const SAVE_PATH := "user://audio_settings.cfg"
 
-var _cache: Dictionary = {}  ## path_stem → AudioStream
-var _pool: Array = []  ## AudioStreamPlayer
+var _cache: Dictionary = {}
+var _pool: Array = []
 var _pool_i: int = 0
 var _rng := RandomNumberGenerator.new()
+
+## Linear 0..1 volumes
+var master_vol: float = 1.0
+var music_vol: float = 0.55
+var sfx_vol: float = 0.85
 
 
 func _ready() -> void:
@@ -50,13 +54,14 @@ func _ready() -> void:
 	for i in POOL_SIZE:
 		var p := AudioStreamPlayer.new()
 		p.name = "SfxPlayer_%d" % i
-		p.bus = "Master"
+		p.bus = "SFX"
 		p.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(p)
 		_pool.append(p)
+	load_settings()
+	apply_volumes()
 
 
-## Play a catalog id. pitch_var randomizes pitch ± that amount for less repetition.
 func play(id: String, volume_db: float = 0.0, pitch_var: float = 0.06) -> void:
 	var entry = CATALOG.get(id, null)
 	if entry == null:
@@ -83,6 +88,56 @@ func play(id: String, volume_db: float = 0.0, pitch_var: float = 0.06) -> void:
 	player.play()
 
 
+func set_master_volume(linear: float) -> void:
+	master_vol = clampf(linear, 0.0, 1.0)
+	apply_volumes()
+
+
+func set_music_volume(linear: float) -> void:
+	music_vol = clampf(linear, 0.0, 1.0)
+	apply_volumes()
+
+
+func set_sfx_volume(linear: float) -> void:
+	sfx_vol = clampf(linear, 0.0, 1.0)
+	apply_volumes()
+
+
+func apply_volumes() -> void:
+	_set_bus_linear("Master", master_vol)
+	_set_bus_linear("Music", music_vol)
+	_set_bus_linear("SFX", sfx_vol)
+
+
+func save_settings() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("audio", "master", master_vol)
+	cfg.set_value("audio", "music", music_vol)
+	cfg.set_value("audio", "sfx", sfx_vol)
+	cfg.save(SAVE_PATH)
+
+
+func load_settings() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(SAVE_PATH) != OK:
+		return
+	master_vol = float(cfg.get_value("audio", "master", master_vol))
+	music_vol = float(cfg.get_value("audio", "music", music_vol))
+	sfx_vol = float(cfg.get_value("audio", "sfx", sfx_vol))
+
+
+func _set_bus_linear(bus_name: String, linear: float) -> void:
+	var idx := AudioServer.get_bus_index(bus_name)
+	if idx < 0:
+		return
+	if linear <= 0.001:
+		AudioServer.set_bus_mute(idx, true)
+		AudioServer.set_bus_volume_db(idx, -80.0)
+	else:
+		AudioServer.set_bus_mute(idx, false)
+		AudioServer.set_bus_volume_db(idx, linear_to_db(linear))
+
+
 func _next_player() -> AudioStreamPlayer:
 	var p: AudioStreamPlayer = _pool[_pool_i]
 	_pool_i = (_pool_i + 1) % _pool.size()
@@ -97,7 +152,6 @@ func _load_stream(stem: String) -> AudioStream:
 	if ResourceLoader.exists(path):
 		stream = load(path) as AudioStream
 	if stream == null and FileAccess.file_exists(path):
-		# Works even before the editor writes .import sidecars
 		stream = AudioStreamOggVorbis.load_from_file(path)
 	if stream == null:
 		push_warning("[Sfx] missing: %s" % path)

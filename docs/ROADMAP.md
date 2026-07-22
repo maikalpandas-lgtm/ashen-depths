@@ -56,7 +56,12 @@
 
 ## Фаза 5 — Полиш + demo
 - [x] Audio MVP — Kenney CC0 SFX + `Sfx` autoload (бой, шаги, draft, chest)
-- [ ] Art pipeline, music bed, balance, export
+- [x] Music bed — explore/combat loops + Kenney jingles (`Music` autoload)
+- [x] Buses Master/Music/SFX + volume save (`user://audio_settings.cfg`)
+- [x] Title splash + Esc pause/settings
+- [x] Balance pass (enemy HP, slice 7, XP curve)
+- [x] Export presets macOS / Windows / Web + `docs/EXPORT.md`
+- [ ] Further art polish (chest/brazier 2D sprites — still debt)
 
 ---
 

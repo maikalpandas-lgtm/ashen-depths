@@ -65,6 +65,10 @@ func _ready() -> void:
 		GameState.combat_requested.connect(_on_combat_requested)
 
 
+func is_open() -> bool:
+	return _root != null and _root.visible
+
+
 func _on_combat_requested(pack: Array, source: Node) -> void:
 	if _root.visible:
 		return
@@ -84,6 +88,8 @@ func _on_combat_requested(pack: Array, source: Node) -> void:
 		Sfx.play("combat_start", -2.0)
 		if _pack_kind() == "floor_boss":
 			Sfx.play("hit_heavy", -6.0)
+	if Music:
+		Music.play_combat()
 	_refresh()
 
 
@@ -230,6 +236,8 @@ func _close() -> void:
 	_combat = null
 	_source = null
 	_enemy_nodes.clear()
+	if Music:
+		Music.play_explore()
 
 
 func _process(_delta: float) -> void:
@@ -891,6 +899,8 @@ func _finish_victory() -> void:
 	if Sfx:
 		Sfx.play("victory", -1.0)
 		Sfx.play("gold", -6.0)
+	if Music:
+		Music.play_jingle("win", -5.0)
 	if is_instance_valid(_source):
 		# Clear the grid cell too, or the minimap keeps its skull forever
 		var dungeon := _source.get_parent().get_parent() if _source.get_parent() else null
@@ -906,6 +916,8 @@ func _finish_victory() -> void:
 func _finish_defeat() -> void:
 	if Sfx:
 		Sfx.play("defeat", -1.0)
+	if Music:
+		Music.play_jingle("lose", -4.0)
 	_close()
 	var defeat := get_node_or_null("../DefeatOverlay")
 	if defeat and defeat.has_method("show_defeat"):

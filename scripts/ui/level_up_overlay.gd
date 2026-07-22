@@ -31,6 +31,10 @@ func _ready() -> void:
 		GameState.level_up_requested.connect(_on_level_up_requested)
 
 
+func is_open() -> bool:
+	return _root != null and _root.visible
+
+
 func _on_level_up_requested() -> void:
 	open()
 
@@ -54,6 +58,8 @@ func open() -> void:
 	if Sfx:
 		Sfx.play("draft_open")
 		Sfx.play("victory", -8.0)
+	if Music:
+		Music.play_jingle("level_up", -6.0)
 
 
 func _roll_rares(count: int) -> Array:

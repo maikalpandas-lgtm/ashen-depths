@@ -28,6 +28,10 @@ func _ready() -> void:
 		GameState.draft_requested.connect(_on_draft_requested)
 
 
+func is_open() -> bool:
+	return _root != null and _root.visible
+
+
 func _on_draft_requested(kill_gold: int) -> void:
 	open(kill_gold)
 

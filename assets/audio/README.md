@@ -9,3 +9,8 @@ SFX curated from **Kenney** packs (CC0 1.0 — see `KENNEY_LICENSE.txt`):
 - [Digital Audio](https://kenney.nl/assets/digital-audio)
 
 Renamed in `sfx/` for game ids. Play via autoload `Sfx.play("hit")`.
+
+## Music
+
+- `music/explore_loop.ogg`, `music/combat_loop.ogg` — short procedural ambient beds (project-made, free to use).
+- `jingles/` — from [Kenney Music Jingles](https://kenney.nl/assets/music-jingles) (CC0).

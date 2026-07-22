@@ -18,6 +18,10 @@ func _ready() -> void:
 		pass
 
 
+func is_open() -> bool:
+	return _root != null and _root.visible
+
+
 func show_defeat() -> void:
 	var floor_i := 1
 	var gold := 0

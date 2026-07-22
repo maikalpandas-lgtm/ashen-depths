@@ -28,6 +28,10 @@ func _ready() -> void:
 		GameState.shop_requested.connect(_on_shop_requested)
 
 
+func is_open() -> bool:
+	return _root != null and _root.visible
+
+
 func _on_shop_requested(mode: String) -> void:
 	open(mode)
 
@@ -46,6 +50,8 @@ func open(mode: String = "floor") -> void:
 	if Sfx:
 		Sfx.play("draft_open")
 		Sfx.play("gold", -8.0)
+	if Music:
+		Music.play_jingle("shop", -8.0)
 
 
 func _refresh() -> void:

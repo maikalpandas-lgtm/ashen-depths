@@ -30,6 +30,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
+func is_open() -> bool:
+	return _root != null and _root.visible
+
+
 func toggle() -> void:
 	if _root.visible:
 		close()

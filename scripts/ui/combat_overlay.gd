@@ -873,7 +873,8 @@ func _sfx_card_cast(card: Dictionary) -> void:
 				Sfx.play("slash", -2.0)
 
 
-## Prefer the enemy under the cursor; else nearest living if the cursor left the hand.
+## Prefer the enemy under the cursor (sprite OR HP bar); else nearest if left hand.
+## You can hit ANY living foe in the pack — aim at that rat / its bar.
 func _pick_damage_target() -> int:
 	var hovered := _hover_enemy()
 	if hovered >= 0:
@@ -881,16 +882,13 @@ func _pick_damage_target() -> int:
 	var only := _only_living_enemy()
 	if only >= 0:
 		return only
-	# Cursor still over the hand strip → cancel, don't auto-fire
 	var mouse := get_viewport().get_mouse_position()
 	var vp_h := get_viewport().get_visible_rect().size.y
 	if mouse.y > vp_h - 210.0:
 		return -1
-	# Anywhere else on the stage: hit the nearest living foe
 	return _nearest_living_enemy(99999.0)
 
 
-## One living foe left → always a valid target (solo packs / last standing).
 func _only_living_enemy() -> int:
 	if _combat == null:
 		return -1
@@ -899,17 +897,65 @@ func _only_living_enemy() -> int:
 		if int(_combat.enemies[i]["hp"]) <= 0:
 			continue
 		if found >= 0:
-			return -1  # more than one
+			return -1
 		found = i
 	return found
 
 
-## Closest living enemy within max screen distance, or -1.
+## Screen anchor for targeting: HP-bar slot (stable) + 3D body samples.
+func _enemy_aim_points(index: int) -> Array:
+	var pts: Array = []
+	# 1) Same fixed slot as the drawn HP bar — easiest way to pick "that" foe
+	var slot := _hp_slot_center(index)
+	if slot.x > -9000.0:
+		pts.append(slot)
+		pts.append(slot + Vector2(0, 40))
+		pts.append(slot + Vector2(0, 90))
+	# 2) 3D silhouette under the camera
+	var cam := get_viewport().get_camera_3d()
+	if cam and index >= 0 and index < _enemy_nodes.size():
+		var node := _enemy_nodes[index] as Node3D
+		if is_instance_valid(node) and int(_combat.enemies[index]["hp"]) > 0:
+			var top_h := _enemy_top(index) * maxf(node.scale.y, 0.5)
+			var cam_right := cam.global_transform.basis.x
+			cam_right.y = 0.0
+			if cam_right.length() < 0.01:
+				cam_right = Vector3.RIGHT
+			else:
+				cam_right = cam_right.normalized()
+			var base := node.global_position
+			for mid in [
+				base + Vector3.UP * (top_h * 0.5),
+				base + Vector3.UP * (top_h * 0.25),
+				base + Vector3.UP * (top_h * 0.75),
+				base + Vector3.UP * (top_h * 0.45) + cam_right * 0.7,
+				base + Vector3.UP * (top_h * 0.45) - cam_right * 0.7,
+			]:
+				if cam.is_position_behind(mid):
+					continue
+				pts.append(cam.unproject_position(mid))
+	return pts
+
+
+## Centre of the on-screen HP slot for enemy index (matches _draw_world_overlay).
+func _hp_slot_center(enemy_index: int) -> Vector2:
+	var living := _living_indices()
+	var k := living.find(enemy_index)
+	if k < 0:
+		return Vector2(-99999, -99999)
+	var vp := _world_layer.size if _world_layer else Vector2.ZERO
+	if vp.x < 8.0:
+		vp = get_viewport().get_visible_rect().size
+	var left_m := 220.0
+	var right_m := 40.0
+	var usable: float = maxf(160.0, vp.x - left_m - right_m)
+	var n := living.size()
+	var t: float = 0.5 if n == 1 else float(k) / float(n - 1)
+	return Vector2(left_m + usable * t, 92.0)
+
+
 func _nearest_living_enemy(max_dist: float) -> int:
 	if _combat == null:
-		return -1
-	var cam := get_viewport().get_camera_3d()
-	if cam == null:
 		return -1
 	var mouse := get_viewport().get_mouse_position()
 	var best := -1
@@ -917,64 +963,17 @@ func _nearest_living_enemy(max_dist: float) -> int:
 	for i in range(_combat.enemies.size()):
 		if int(_combat.enemies[i]["hp"]) <= 0:
 			continue
-		var screen := _enemy_screen_pos(i, cam)
-		if screen.x < -9000.0:
-			continue
-		var d: float = screen.distance_to(mouse)
-		if d < best_d:
-			best_d = d
-			best = i
+		for p in _enemy_aim_points(i):
+			var d: float = (p as Vector2).distance_to(mouse)
+			if d < best_d:
+				best_d = d
+				best = i
 	return best
 
 
-## Which living enemy the cursor is over (generous radius for fat sprites).
+## Cursor over this foe's bar or body (generous so any pack member is pickable).
 func _hover_enemy() -> int:
-	return _nearest_living_enemy(380.0)
-
-
-## Project an enemy silhouette sample to viewport pixels. Returns far-off point
-## if the node/camera cannot resolve it (so distance checks fail closed).
-func _enemy_screen_pos(index: int, cam: Camera3D) -> Vector2:
-	if index < 0 or index >= _enemy_nodes.size():
-		var n := _combat.enemies.size()
-		if n <= 0:
-			return Vector2(-99999, -99999)
-		var vp := get_viewport().get_visible_rect().size
-		var t := 0.5 if n == 1 else float(index) / float(n - 1)
-		return Vector2(lerpf(vp.x * 0.22, vp.x * 0.78, t), vp.y * 0.36)
-	var node := _enemy_nodes[index] as Node3D
-	if not is_instance_valid(node):
-		return Vector2(-99999, -99999)
-	var top_h := _enemy_top(index) * maxf(node.scale.y, 0.5)
-	# Sample in camera-relative lateral axes so wide billboards hit easily
-	var cam_right := cam.global_transform.basis.x
-	cam_right.y = 0.0
-	if cam_right.length() < 0.01:
-		cam_right = Vector3.RIGHT
-	else:
-		cam_right = cam_right.normalized()
-	var base := node.global_position
-	var points: Array[Vector3] = [
-		base + Vector3.UP * (top_h * 0.5),
-		base + Vector3.UP * (top_h * 0.2),
-		base + Vector3.UP * (top_h * 0.8),
-		base + Vector3.UP * (top_h * 0.45) + cam_right * 0.55,
-		base + Vector3.UP * (top_h * 0.45) - cam_right * 0.55,
-		base + Vector3.UP * (top_h * 0.45) + cam_right * 0.95,
-		base + Vector3.UP * (top_h * 0.45) - cam_right * 0.95,
-	]
-	var best := Vector2(-99999, -99999)
-	var best_d := INF
-	var mouse := get_viewport().get_mouse_position()
-	for mid in points:
-		if cam.is_position_behind(mid):
-			continue
-		var p := cam.unproject_position(mid)
-		var d := p.distance_to(mouse)
-		if d < best_d:
-			best_d = d
-			best = p
-	return best
+	return _nearest_living_enemy(420.0)
 
 
 func _enemy_top(index: int) -> float:

@@ -24,19 +24,24 @@
 - [x] **Deck** (draw / hand / discard / recycle / hand cap 10) — `scripts/cards/deck.gd`
 - [x] Starter decks 8–10 карт — по 9 на героя, мерж в один combat deck с owner-тегом
 - [x] Тесты логики — `godot --headless --script tests/run_tests.gd` (54 проверки)
-- [ ] Арт: 3 портрета + 5 карт (промпты в `docs/ART_PROMPTS.md`, генерит Grok)
+- [x] Арт: 3 портрета + 10 карт + рамка + бейджи (батчи 1, 3, 4)
 - [x] Тест-оверлей **C**: портреты + HP + рука из реальной колоды (`scripts/ui/card_test_overlay.gd`)
-- [ ] Боевой UI руки (Фаза 3) — заменит тест-оверлей
+- [x] Боевой UI руки — `scripts/ui/combat_overlay.gd`
 - [ ] Hub stub
 
 ## Фаза 3 — Бой + draft слой 1–2
-- [x] Enemies in corridor (billboard) — `scripts/enemy_sprites.gd`, 3 типа, 12 пачек на этаж
-- [ ] Combat overlay (вход в бой по столкновению)
-- [ ] Hand / ⚡3 / END TURN / Block / intents (**no board**)
-- [ ] Sigils + blood cost (Inscryption-flavor cards)
+- [x] Enemies in corridor (billboard) — `scripts/enemy_sprites.gd`, 7 типов, 22 стаи на этаж
+- [x] Бой на месте: стая стоит в коридоре, шеренга поперёк подхода, боевая камера + свет
+- [x] Hand / ⚡3 / END TURN / Block / intents (**no board**) — `combat_state.gd` + `combat_overlay.gd`
+- [x] Прицеливание перетаскиванием, линия из шариков, аура выбранной карты
+- [x] Фидбэк: подсветка цели, вспышка от удара, разрыв надвое при смерти, выпад + следы когтей + тряска
+- [x] Sigils + blood cost — Sharp/Pierce/Cleave/Drain/Bone/Echo/Sanguine/Ward
+- [x] Тесты боя — 77 проверок headless
 - [ ] **Layer 1:** post-combat 1 of 3 **or** skip→gold
 - [ ] **Layer 2:** level-up → upgrade **or** rare
 - [ ] Mini-boss + floor boss (simple rewards)
+- [ ] Переход между этажами (сейчас выход ничего не делает, этаж всегда 1)
+- [ ] Экран поражения (сейчас партию просто оставляет на 1 HP)
 
 ## Фаза 4 — Босс-слой + Backpack + Shop + хаб
 - [ ] **Layer 3:** relic pick + shard + optional curse altar
@@ -54,6 +59,10 @@
 ---
 
 ## Долги (не блокируют фазы)
+
+- **Славянский арт не нарисован:** Витязь / Поляница / Волхв и 4 врага Нави
+  (анчутка, лихо, мавка, полудница) есть в данных, но без спрайтов — промпты
+  в `ART_PROMPTS.md` §3.7. С 3-го этажа враги будут невидимыми.
 
 - Сундук и жаровни — до сих пор 3D-меши-заглушки (куб и цилиндр).
   По концепту все объекты должны быть 2D-спрайтами — см. `AGENTS.md`.

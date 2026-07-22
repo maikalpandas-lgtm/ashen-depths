@@ -8,6 +8,9 @@ export_presets.cfg
 .DS_Store
 *~
 
+# F9 debug screenshots (review material, not source)
+shots/
+
 # Temp sprite cut outputs
 assets/textures/_tmp*
 assets/textures/*_ffmpeg_try*

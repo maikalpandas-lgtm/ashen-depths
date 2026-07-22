@@ -12,6 +12,7 @@ extends Node3D
 @onready var hp_bar: ProgressBar = $UI/LeftPanel/Margin/VBox/HpBar
 
 const MAX_HP := 88
+const SHOT_DIR := "res://shots"
 
 
 func _ready() -> void:
@@ -30,7 +31,7 @@ func _ready() -> void:
 	hp_bar.max_value = MAX_HP
 	hp_bar.value = MAX_HP
 	_update_hud()
-	hud_hint.text = "W/S step · A/D turn 90° · R new dungeon · Esc menu  |  camera locked forward"
+	hud_hint.text = "W/S step · A/D turn 90° · R new dungeon · F9 shot · Esc menu  |  camera locked forward"
 
 	if dungeon.get("start_cell") != null:
 		var start: Vector2i = dungeon.start_cell
@@ -45,6 +46,33 @@ func _unhandled_input(event: InputEvent) -> void:
 			minimap.clear_fog()
 		if dungeon.has_method("generate"):
 			dungeon.generate()
+	if event is InputEventKey and event.pressed and not event.echo:
+		if (event as InputEventKey).keycode == KEY_F9:
+			_save_shot()
+
+
+## F9 — dump the current frame to shots/. Lets the look be reviewed from the
+## actual screen instead of guessing at shading maths that only shows up when
+## it renders. Seed is in the name so a shot can be reproduced.
+func _save_shot() -> void:
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	if img == null:
+		hud_hint.text = "F9: no frame to capture"
+		return
+	DirAccess.make_dir_recursive_absolute(SHOT_DIR)
+	var seed_val := 0
+	if GameState:
+		seed_val = GameState.current_seed
+	var stamp := Time.get_datetime_string_from_system().replace(":", "-").replace("T", "_")
+	var path := "%s/%s_seed%d.png" % [SHOT_DIR, stamp, seed_val]
+	var err := img.save_png(path)
+	if err == OK:
+		print("[Shot] %s" % path)
+		hud_hint.text = "📸 %s" % path.get_file()
+	else:
+		push_warning("[Shot] save failed err=%s" % err)
+		hud_hint.text = "F9: save failed (%s)" % err
 
 
 func _on_dungeon_ready(start_world: Vector3) -> void:
@@ -56,7 +84,7 @@ func _on_dungeon_ready(start_world: Vector3) -> void:
 	if minimap and minimap.has_method("clear_fog"):
 		minimap.clear_fog()
 	_update_hud()
-	hud_hint.text = "W/S step · A/D turn 90° · R new dungeon · Esc menu"
+	hud_hint.text = "W/S step · A/D turn 90° · R new dungeon · F9 shot · Esc menu"
 
 
 func _place_player(pos: Vector3) -> void:

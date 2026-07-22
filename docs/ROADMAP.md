@@ -54,7 +54,8 @@
 - [ ] Trailer floor
 
 ## Фаза 5 — Полиш + demo
-- [ ] Art pipeline, audio, balance, export
+- [x] Audio MVP — Kenney CC0 SFX + `Sfx` autoload (бой, шаги, draft, chest)
+- [ ] Art pipeline, music bed, balance, export
 
 ---
 

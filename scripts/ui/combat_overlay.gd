@@ -80,6 +80,8 @@ func _on_combat_requested(pack: Array, source: Node) -> void:
 	_root.visible = true
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if Sfx:
+		Sfx.play("combat_start", -2.0)
 	_refresh()
 
 
@@ -466,12 +468,22 @@ func _play_events() -> void:
 		match ev["kind"]:
 			"enemy_hit":
 				_flinch_enemy(i)
+				if Sfx:
+					var amt: int = int(ev.get("amount", 0))
+					Sfx.play("hit_heavy" if amt >= 10 else "hit", -1.0)
 			"enemy_died":
 				_split_enemy(i)
+				if Sfx:
+					Sfx.play("enemy_die", -1.0)
 			"enemy_attack":
 				_lunge_enemy(i)
 				_spawn_slash(int(ev["amount"]))
 				_shake = maxf(_shake, 0.06 + float(ev["amount"]) * 0.004)
+				if Sfx:
+					Sfx.play("party_hit", -1.0)
+			"enemy_block":
+				if Sfx:
+					Sfx.play("block", -4.0)
 	_combat.events.clear()
 
 
@@ -673,6 +685,8 @@ func _start_drag(index: int, holder: Control) -> void:
 		return
 	_dragging = index
 	_drag_from = holder.global_position + holder.size * 0.5
+	if Sfx:
+		Sfx.play("card_pick", -6.0, 0.04)
 	# Lift the existing node. Rebuilding here is what broke the drag: it freed
 	# the very button that is mid-press, so button_up never arrived.
 	if index < _card_views.size() and is_instance_valid(_card_views[index]):
@@ -693,18 +707,42 @@ func _finish_drag() -> void:
 		_refresh()
 		return
 	var card := CardDB.get_card(_combat.deck.hand[index]["card"])
+	var played := false
 	if int(card["damage"]) <= 0:
-		_combat.play_card(index, 0)
+		played = _combat.play_card(index, 0)
 	else:
 		var target := _pick_damage_target()
 		if target >= 0:
-			_combat.play_card(index, target)
+			played = _combat.play_card(index, target)
 		else:
 			# Missed the drop: give a short log so it doesn't feel broken
 			if _status:
 				_status.text = "наведи карту на врага  ·  ⚡ %d" % _combat.energy
+			if Sfx:
+				Sfx.play("miss", -4.0)
+	if played:
+		_sfx_card_cast(card)
 	_play_events()
 	_refresh()
+
+
+## Whoosh / spell layer for the card that just resolved (hits still fire in events).
+func _sfx_card_cast(card: Dictionary) -> void:
+	if not Sfx:
+		return
+	Sfx.play("card_play", -8.0, 0.03)
+	var ctype: int = int(card.get("type", CardDB.Type.STRIKE))
+	if int(card.get("block", 0)) > 0 and int(card.get("damage", 0)) <= 0:
+		Sfx.play("block", -3.0)
+		return
+	match ctype:
+		CardDB.Type.SPELL:
+			Sfx.play("spell", -2.0)
+		CardDB.Type.BLOOD:
+			Sfx.play("hit_heavy", -3.0)
+		_:
+			if int(card.get("damage", 0)) > 0:
+				Sfx.play("slash", -2.0)
 
 
 ## Prefer the enemy under the cursor; else solo pack auto-target; else nearest.
@@ -813,6 +851,8 @@ func _on_end_turn() -> void:
 			_finish_defeat()
 		_:
 			_dragging = -1
+			if Sfx:
+				Sfx.play("end_turn", -3.0)
 			_combat.end_turn()
 			_play_events()
 			_refresh()
@@ -822,6 +862,9 @@ func _finish_victory() -> void:
 	var reward := 10 + _combat.turn * 2
 	if GameState:
 		GameState.gold += reward
+	if Sfx:
+		Sfx.play("victory", -1.0)
+		Sfx.play("gold", -6.0)
 	if is_instance_valid(_source):
 		# Clear the grid cell too, or the minimap keeps its skull forever
 		var dungeon := _source.get_parent().get_parent() if _source.get_parent() else null
@@ -835,6 +878,8 @@ func _finish_victory() -> void:
 
 
 func _finish_defeat() -> void:
+	if Sfx:
+		Sfx.play("defeat", -1.0)
 	_close()
 	var defeat := get_node_or_null("../DefeatOverlay")
 	if defeat and defeat.has_method("show_defeat"):

@@ -22,6 +22,9 @@ func try_open() -> void:
 	if GameState:
 		GameState.gold += amount
 		GameState.chest_opened.emit(amount)
+	if Sfx:
+		Sfx.play("chest")
+		Sfx.play("gold", -2.0)
 	print("[Chest] +%d gold (total %d)" % [amount, GameState.gold if GameState else amount])
 	var label := get_node_or_null("Label3D") as Label3D
 	if label:

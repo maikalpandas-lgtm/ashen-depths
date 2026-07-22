@@ -12,6 +12,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 GameState="*res://scripts/game_state.gd"
+Sfx="*res://scripts/sfx.gd"
 McpInteractionServer="*res://scripts/mcp/mcp_interaction_server.gd"
 
 [display]

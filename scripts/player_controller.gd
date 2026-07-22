@@ -165,6 +165,8 @@ func _try_step(delta_cell: Vector2i) -> void:
 	cell = next
 	_busy = true
 	_input_lock = step_time + move_cooldown
+	if Sfx:
+		Sfx.play("step", -4.0, 0.08)
 	var target := _cell_world_pos(cell)
 	_kill_tween()
 	_move_tween = create_tween()
@@ -179,6 +181,8 @@ func _turn(dir: int) -> void:
 	_busy = true
 	_input_lock = turn_time + move_cooldown
 	facing_index = posmod(facing_index + dir, 4)
+	if Sfx:
+		Sfx.play("turn", -8.0, 0.05)
 	var target_yaw := _yaw_for_facing(facing_index)
 	_kill_tween()
 	_move_tween = create_tween()
@@ -212,6 +216,8 @@ func _check_exit_cell() -> void:
 	if int(dungeon.call("get_cell_type", cell.x, cell.y)) != 4:
 		return
 	if GameState and GameState.has_method("advance_floor"):
+		if Sfx:
+			Sfx.play("floor_down", -2.0)
 		GameState.advance_floor()
 
 
@@ -225,6 +231,8 @@ func _bump() -> void:
 	# Throttle: with auto-walk, holding W into a wall would otherwise spawn a
 	# bump tween every single frame.
 	_input_lock = 0.22
+	if Sfx:
+		Sfx.play("bump", -6.0, 0.04)
 	if camera == null:
 		return
 	var tw := create_tween()

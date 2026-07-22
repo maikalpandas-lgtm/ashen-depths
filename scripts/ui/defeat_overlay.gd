@@ -31,12 +31,16 @@ func show_defeat() -> void:
 	_root.visible = true
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if Sfx:
+		Sfx.play("defeat", -1.0)
 
 
 func _continue_wounded() -> void:
 	if GameState and GameState.party:
 		for m in GameState.party.members:
 			m["hp"] = maxi(1, int(m["hp"]))
+	if Sfx:
+		Sfx.play("ui_click")
 	_close()
 	if GameState and GameState.has_signal("defeat_finished"):
 		GameState.defeat_finished.emit("continue")
@@ -45,6 +49,8 @@ func _continue_wounded() -> void:
 func _restart_run() -> void:
 	if GameState:
 		GameState.new_run()
+	if Sfx:
+		Sfx.play("ui_click")
 	_close()
 	if GameState and GameState.has_signal("defeat_finished"):
 		GameState.defeat_finished.emit("restart")

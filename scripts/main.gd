@@ -88,6 +88,8 @@ func _setup_left_hud() -> void:
 
 
 func _on_inventory() -> void:
+	if Sfx:
+		Sfx.play("ui_click")
 	var cards := get_node_or_null("CardTestOverlay")
 	if cards and cards.has_method("_toggle"):
 		cards.call("_toggle")
@@ -96,6 +98,8 @@ func _on_inventory() -> void:
 
 
 func _on_settings() -> void:
+	if Sfx:
+		Sfx.play("ui_click")
 	hud_hint.text = "Настройки · скоро · Esc отпускает мышь"
 
 

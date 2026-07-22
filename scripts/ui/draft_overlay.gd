@@ -39,6 +39,10 @@ func open(kill_gold: int = 0) -> void:
 	_root.visible = true
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if Sfx:
+		Sfx.play("draft_open")
+		if kill_gold > 0:
+			Sfx.play("gold", -4.0)
 
 
 func _roll_offers() -> Array:
@@ -107,6 +111,8 @@ func _pick(index: int) -> void:
 	if GameState and GameState.party:
 		GameState.party.add_card(str(offer["owner"]), str(offer["card"]))
 		print("[Draft] +%s → %s" % [offer["card"], offer["owner"]])
+	if Sfx:
+		Sfx.play("draft_pick")
 	_close("Карта взята: %s" % CardDB.get_card(offer["card"]).get("name", offer["card"]))
 
 
@@ -114,6 +120,9 @@ func _skip() -> void:
 	if GameState:
 		GameState.gold += SKIP_GOLD
 	print("[Draft] skip +%d gold" % SKIP_GOLD)
+	if Sfx:
+		Sfx.play("draft_skip")
+		Sfx.play("gold", -4.0)
 	_close("Пропуск · +%d золота" % SKIP_GOLD)
 
 

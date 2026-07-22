@@ -103,12 +103,10 @@ func _collect_enemy_nodes() -> void:
 			_enemy_nodes.append(child)
 
 
-## Line the pack up across the corridor, facing whoever just walked in.
+## Line the pack up across the approach, facing the player.
 ##
-## In the world they are scattered around their tile, so depending on which way
-## the player arrived some ended up BEHIND the others and could not be seen or
-## clicked. Combat re-forms them into a row perpendicular to the approach, which
-## also means the same pack reads the same from any direction.
+## Combat is a *stage*, not cramped corridor physics: we spread wide (past wall
+## mesh) so fat grubs don't stack and every HP bar / target is distinct.
 func _form_up() -> void:
 	if not is_instance_valid(_source) or _enemy_nodes.is_empty():
 		return
@@ -117,37 +115,50 @@ func _form_up() -> void:
 		return
 	var player := players[0] as Node3D
 
-	# "Forward" = from player toward pack (along corridor). Row spreads on `right`.
+	# "Forward" = from player toward pack. Row spreads on `right`.
 	var forward := _source.global_position - player.global_position
 	forward.y = 0.0
 	if forward.length() < 0.01:
 		forward = Vector3.FORWARD
 	forward = forward.normalized()
 	var right := Vector3(-forward.z, 0.0, forward.x)
-	# Pull the line slightly toward the player so fat sprites sit in free air,
-	# not half-buried in the rock wall behind the pack tile.
-	var center: Vector3 = _source.global_position - forward * 0.35
+	# Pull toward the camera so sprites sit in open air, not in the wall mesh
+	var center: Vector3 = _source.global_position - forward * 0.55
 
 	var dungeon := _source.get_parent().get_parent() if _source.get_parent() else null
 	var n := _enemy_nodes.size()
-	# Corridor free width ~2.0–2.2m. Prefer a clear left→right row even if tight:
-	# grubs are wide (~1m art) so for 3+ we use denser spacing + slight scale-down.
-	var half_span: float = 0.95 if n <= 2 else 1.05
-	var spacing: float = 0.0 if n <= 1 else (2.0 * half_span) / float(n - 1)
-	var combat_scale: float = 1.0 if n <= 2 else (0.82 if n == 3 else 0.72)
+	# Wide stage: grubs are ~1m of art; need ~1.2–1.4m centre-to-centre
+	var spacing: float = 0.0
+	var combat_scale: float = 1.0
+	match n:
+		1:
+			spacing = 0.0
+			combat_scale = 1.05
+		2:
+			spacing = 1.45
+			combat_scale = 0.95
+		3:
+			spacing = 1.35
+			combat_scale = 0.78
+		_:
+			spacing = 1.15
+			combat_scale = 0.68
 
 	for i in range(n):
 		var node := _enemy_nodes[i] as Node3D
 		if not is_instance_valid(node):
 			continue
 		var offset := (float(i) - float(n - 1) * 0.5) * spacing
-		var spot: Vector3 = center + right * offset
+		# Slight depth stagger so billboards + HP bars don't occupy one pixel column
+		var depth_bias: float = 0.0
+		if n >= 3:
+			depth_bias = 0.12 if (i % 2) == 1 else 0.0
+		var spot: Vector3 = center + right * offset - forward * depth_bias
 		var ground := spot.y
 		if dungeon and dungeon.has_method("floor_height_at"):
 			ground = float(dungeon.call("floor_height_at", spot.x, spot.z))
 		node.global_position = Vector3(spot.x, ground, spot.z)
 		node.scale = Vector3(combat_scale, combat_scale, combat_scale)
-		# Billboard FIXED_Y on the sprite handles facing — don't yaw the holder
 
 
 ## Turn the crawler to look at the pack. The trigger fires from the neighbouring
@@ -168,10 +179,8 @@ func _face_the_pack() -> void:
 	player.rotation.y = round(yaw / (PI * 0.5)) * (PI * 0.5)
 
 
-## Frame the pack: camera pulled back and lifted, looking slightly down so the
-## monsters sit in the upper half above the hand, plus a light so they are not
-## silhouettes. The player's hands are hidden — they fill a third of the screen
-## and there is nothing to swing during a card fight.
+## Frame the pack: camera pulled well back so a 3-wide row of fat grubs still
+## reads left-to-right above the hand. Hands hidden during the fight.
 func _enter_combat_view() -> void:
 	if not is_instance_valid(_source):
 		return
@@ -191,23 +200,27 @@ func _enter_combat_view() -> void:
 		back = Vector3.BACK
 	back = back.normalized()
 
+	var n_pack: int = maxi(1, _enemy_nodes.size())
+	# More enemies → stand further back and open FOV
+	var dist: float = 4.6 if n_pack <= 2 else (5.4 if n_pack == 3 else 5.9)
+	var fov: float = 70.0 if n_pack <= 2 else 78.0
+
 	_cam = Camera3D.new()
-	# Wider FOV + step back so a 3-wide pack fits side-by-side on screen
-	_cam.fov = 68.0
+	_cam.fov = fov
 	_cam.near = 0.05
 	_cam.far = 40.0
 	get_tree().current_scene.add_child(_cam)
-	_cam.global_position = pack + back * 4.1 + Vector3.UP * 2.15
-	_cam.look_at(pack + Vector3.UP * 0.7, Vector3.UP)
+	_cam.global_position = pack + back * dist + Vector3.UP * 2.35
+	_cam.look_at(pack + Vector3.UP * 0.55, Vector3.UP)
 	_cam.current = true
 
 	_stage_light = OmniLight3D.new()
 	_stage_light.light_color = Color(1.0, 0.9, 0.78)
-	_stage_light.light_energy = 4.2
-	_stage_light.omni_range = 7.0
-	_stage_light.omni_attenuation = 1.1
+	_stage_light.light_energy = 4.5
+	_stage_light.omni_range = 8.5
+	_stage_light.omni_attenuation = 1.0
 	get_tree().current_scene.add_child(_stage_light)
-	_stage_light.global_position = pack + Vector3.UP * 2.6 + back * 1.2
+	_stage_light.global_position = pack + Vector3.UP * 2.8 + back * 1.4
 
 
 func _exit_combat_view() -> void:
@@ -405,6 +418,8 @@ func _draw_world_overlay() -> void:
 		return
 	var font := UiTheme.title_font()
 	var hovered := _hover_enemy() if _dragging >= 0 else -1
+	# First pass: project heads. Second: push bars apart if they collide.
+	var slots: Array = []  ## {i, p: Vector2, e}
 	for i in range(mini(_enemy_nodes.size(), _combat.enemies.size())):
 		var node := _enemy_nodes[i] as Node3D
 		var e: Dictionary = _combat.enemies[i]
@@ -414,11 +429,23 @@ func _draw_world_overlay() -> void:
 		if cam.is_position_behind(head):
 			continue
 		var p := cam.unproject_position(head)
-		# A tall monster projects its bar up into the banner and log. Keep the
-		# readouts below them and clear of the hand at the bottom.
 		p.y = clampf(p.y, 100.0, _world_layer.size.y - 260.0)
+		slots.append({"i": i, "p": p, "e": e})
+	# Spread overlapping bars horizontally so a 3-grub pack shows 3 readouts
+	slots.sort_custom(func(a, b): return a["p"].x < b["p"].x)
+	const MIN_BAR_GAP := 118.0
+	for s in range(1, slots.size()):
+		var prev: Vector2 = slots[s - 1]["p"]
+		var cur: Vector2 = slots[s]["p"]
+		if cur.x - prev.x < MIN_BAR_GAP:
+			cur.x = prev.x + MIN_BAR_GAP
+			slots[s]["p"] = cur
 
-		var w := 108.0
+	var w := 100.0
+	for slot in slots:
+		var i: int = int(slot["i"])
+		var p: Vector2 = slot["p"]
+		var e: Dictionary = slot["e"]
 		var bar := Rect2(p.x - w * 0.5, p.y - 6.0, w, 12.0)
 		_world_layer.draw_rect(bar.grow(2.0), Color(0.05, 0.04, 0.06, 0.85))
 		_world_layer.draw_rect(bar, Color(0.22, 0.09, 0.1, 0.95))
@@ -437,13 +464,13 @@ func _draw_world_overlay() -> void:
 		var is_block: bool = it.get("type", "attack") == "block"
 		_world_layer.draw_string(font, p + Vector2(-w * 0.5, -16.0),
 			("🛡 %d" if is_block else "🗡 %d") % it.get("value", 0),
-			HORIZONTAL_ALIGNMENT_CENTER, w, 20,
+			HORIZONTAL_ALIGNMENT_CENTER, w, 18,
 			Color(0.6, 0.85, 1.0) if is_block else Color(1.0, 0.62, 0.42))
 		_world_layer.draw_string(font, p + Vector2(-w * 0.5, 44.0), str(e["name"]),
-			HORIZONTAL_ALIGNMENT_CENTER, w, 13, Color(0.86, 0.83, 0.79))
+			HORIZONTAL_ALIGNMENT_CENTER, w, 12, Color(0.86, 0.83, 0.79))
 		if int(e["block"]) > 0:
-			_world_layer.draw_string(font, p + Vector2(w * 0.5 + 6.0, 8.0),
-				"🛡%d" % e["block"], HORIZONTAL_ALIGNMENT_LEFT, -1, 14,
+			_world_layer.draw_string(font, p + Vector2(w * 0.5 + 4.0, 8.0),
+				"🛡%d" % e["block"], HORIZONTAL_ALIGNMENT_LEFT, -1, 13,
 				Color(0.7, 0.88, 1.0))
 
 
@@ -761,7 +788,7 @@ func _sfx_card_cast(card: Dictionary) -> void:
 				Sfx.play("slash", -2.0)
 
 
-## Prefer the enemy under the cursor; else solo pack auto-target; else nearest.
+## Prefer the enemy under the cursor; else nearest living if the cursor left the hand.
 func _pick_damage_target() -> int:
 	var hovered := _hover_enemy()
 	if hovered >= 0:
@@ -769,8 +796,13 @@ func _pick_damage_target() -> int:
 	var only := _only_living_enemy()
 	if only >= 0:
 		return only
-	# Multi-pack and a near miss: still land on the closest silhouette
-	return _nearest_living_enemy(420.0)
+	# Cursor still over the hand strip → cancel, don't auto-fire
+	var mouse := get_viewport().get_mouse_position()
+	var vp_h := get_viewport().get_visible_rect().size.y
+	if mouse.y > vp_h - 210.0:
+		return -1
+	# Anywhere else on the stage: hit the nearest living foe
+	return _nearest_living_enemy(99999.0)
 
 
 ## One living foe left → always a valid target (solo packs / last standing).
@@ -810,32 +842,41 @@ func _nearest_living_enemy(max_dist: float) -> int:
 	return best
 
 
-## Which living enemy the cursor is over, by screen distance to its sprite.
+## Which living enemy the cursor is over (generous radius for fat sprites).
 func _hover_enemy() -> int:
-	return _nearest_living_enemy(300.0)
+	return _nearest_living_enemy(380.0)
 
 
 ## Project an enemy silhouette sample to viewport pixels. Returns far-off point
 ## if the node/camera cannot resolve it (so distance checks fail closed).
 func _enemy_screen_pos(index: int, cam: Camera3D) -> Vector2:
 	if index < 0 or index >= _enemy_nodes.size():
-		# No 3D node (desync) — still allow targeting via combat row heuristics
 		var n := _combat.enemies.size()
 		if n <= 0:
 			return Vector2(-99999, -99999)
 		var vp := get_viewport().get_visible_rect().size
 		var t := 0.5 if n == 1 else float(index) / float(n - 1)
-		return Vector2(lerpf(vp.x * 0.28, vp.x * 0.72, t), vp.y * 0.38)
+		return Vector2(lerpf(vp.x * 0.22, vp.x * 0.78, t), vp.y * 0.36)
 	var node := _enemy_nodes[index] as Node3D
 	if not is_instance_valid(node):
 		return Vector2(-99999, -99999)
-	var top_h := _enemy_top(index)
+	var top_h := _enemy_top(index) * maxf(node.scale.y, 0.5)
+	# Sample in camera-relative lateral axes so wide billboards hit easily
+	var cam_right := cam.global_transform.basis.x
+	cam_right.y = 0.0
+	if cam_right.length() < 0.01:
+		cam_right = Vector3.RIGHT
+	else:
+		cam_right = cam_right.normalized()
+	var base := node.global_position
 	var points: Array[Vector3] = [
-		node.global_position + Vector3.UP * (top_h * 0.55),
-		node.global_position + Vector3.UP * (top_h * 0.25),
-		node.global_position + Vector3.UP * (top_h * 0.85),
-		node.global_position + Vector3.UP * (top_h * 0.45) + Vector3.RIGHT * 0.35,
-		node.global_position + Vector3.UP * (top_h * 0.45) + Vector3.LEFT * 0.35,
+		base + Vector3.UP * (top_h * 0.5),
+		base + Vector3.UP * (top_h * 0.2),
+		base + Vector3.UP * (top_h * 0.8),
+		base + Vector3.UP * (top_h * 0.45) + cam_right * 0.55,
+		base + Vector3.UP * (top_h * 0.45) - cam_right * 0.55,
+		base + Vector3.UP * (top_h * 0.45) + cam_right * 0.95,
+		base + Vector3.UP * (top_h * 0.45) - cam_right * 0.95,
 	]
 	var best := Vector2(-99999, -99999)
 	var best_d := INF

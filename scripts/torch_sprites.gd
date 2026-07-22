@@ -94,7 +94,8 @@ static func _apply_flame_shimmer(
 	warp: float = 0.018,
 	blur: float = 0.009,
 	emission: float = 1.6,
-	billboard_y: bool = false
+	billboard_y: bool = false,
+	face_wall: bool = false
 ) -> void:
 	if _flame_shader == null or tex == null:
 		return
@@ -109,6 +110,7 @@ static func _apply_flame_shimmer(
 	mat.set_shader_parameter("alpha_scissor", 0.08)
 	mat.set_shader_parameter("emission_strength", emission)
 	mat.set_shader_parameter("billboard_y", 1.0 if billboard_y else 0.0)
+	mat.set_shader_parameter("face_wall", 1.0 if face_wall else 0.0)
 	spr.material_override = mat
 	spr.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
 
@@ -133,8 +135,11 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 	parent.add_child(holder)
 
 	# Soft radial halo — procedural falloff, so no hard quad edge on the rock
+	# X stays centred: the sprite mirrors depending on which side the wall lands
+	# on screen, so any lateral offset would be right half the time and wrong the
+	# other half. Height is what actually matters.
 	var glow := _make_soft_glow(1.1)
-	glow.position = Vector3(WALL_FLAME_OFFSET.x, WALL_FLAME_OFFSET.y, -0.1)
+	glow.position = Vector3(0.0, WALL_FLAME_OFFSET.y, -0.1)
 	holder.add_child(glow)
 
 	# Art has a single bracket on the right and sits ~0.26 above the mount point,
@@ -144,7 +149,7 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 	body.position = Vector3(0.0, 0.26, -0.06)
 	body.render_priority = 5
 	holder.add_child(body)
-	_apply_flame_shimmer(body, _torch_tex, 0.38, WALL_FLAME_SPEED, 0.03, 0.012, 2.8, true)
+	_apply_flame_shimmer(body, _torch_tex, 0.38, WALL_FLAME_SPEED, 0.03, 0.012, 2.8, true, true)
 
 	var light := OmniLight3D.new()
 	light.name = "Light"
@@ -155,7 +160,7 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 	light.omni_range = 6.4
 	light.omni_attenuation = 1.35
 	light.shadow_enabled = false
-	light.position = Vector3(WALL_FLAME_OFFSET.x, WALL_FLAME_OFFSET.y, -0.42)
+	light.position = Vector3(0.0, WALL_FLAME_OFFSET.y, -0.42)
 	holder.add_child(light)
 
 	var fill := OmniLight3D.new()

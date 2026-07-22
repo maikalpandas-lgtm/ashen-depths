@@ -14,9 +14,22 @@ uniform float emission_strength : hint_range(0.0, 4.0) = 1.6;
 /// 1 = fixed-Y billboard. Sprite3D.billboard is ignored under material_override,
 /// so wall fire has to spin around Y here instead.
 uniform float billboard_y : hint_range(0.0, 1.0) = 0.0;
+/// 1 = mirror the sprite so its bracket always points at the wall it hangs on.
+/// The art is a SIDE view with the mount drawn to the right, so on a wall that
+/// ends up screen-left the bracket would jut out into the corridor.
+uniform float face_wall : hint_range(0.0, 1.0) = 0.0;
+
+varying float v_mirror;
 
 
 void vertex() {
+	v_mirror = 0.0;
+	if (face_wall > 0.5) {
+		// Local +Z points into the rock. If that lands on the screen's left,
+		// the bracket has to swap sides.
+		vec3 into_rock = normalize(MODEL_MATRIX[2].xyz);
+		v_mirror = dot(into_rock, INV_VIEW_MATRIX[0].xyz) < 0.0 ? 1.0 : 0.0;
+	}
 	if (billboard_y > 0.5) {
 		MODELVIEW_MATRIX = VIEW_MATRIX * mat4(
 			vec4(normalize(cross(vec3(0.0, 1.0, 0.0), INV_VIEW_MATRIX[2].xyz)), 0.0),
@@ -33,7 +46,13 @@ void vertex() {
 
 
 void fragment() {
-	float flame_mask = 1.0 - smoothstep(flame_start - flame_soft, flame_start + flame_soft * 0.2, UV.y);
+	// Mirror before anything samples, so the shimmer travels with the art
+	vec2 suv = UV;
+	if (v_mirror > 0.5) {
+		suv.x = 1.0 - suv.x;
+	}
+
+	float flame_mask = 1.0 - smoothstep(flame_start - flame_soft, flame_start + flame_soft * 0.2, suv.y);
 	flame_mask = clamp(flame_mask, 0.0, 1.0);
 	float tip = flame_mask * flame_mask;
 
@@ -41,15 +60,15 @@ void fragment() {
 	float w = warp_strength * tip;
 
 	vec2 warp = vec2(
-		sin(t * 1.3 + UV.y * 12.0 + UV.x * 3.5) * 0.5
-			+ sin(t * 0.65 + UV.y * 5.5) * 0.35
-			+ sin(t * 2.0 + UV.x * 8.0) * 0.15,
-		cos(t * 1.0 + UV.x * 7.0) * 0.35
-			+ sin(t * 0.5 + UV.y * 6.5) * 0.45
+		sin(t * 1.3 + suv.y * 12.0 + suv.x * 3.5) * 0.5
+			+ sin(t * 0.65 + suv.y * 5.5) * 0.35
+			+ sin(t * 2.0 + suv.x * 8.0) * 0.15,
+		cos(t * 1.0 + suv.x * 7.0) * 0.35
+			+ sin(t * 0.5 + suv.y * 6.5) * 0.45
 	) * w;
-	warp.y += sin(t * 1.5 + UV.x * 4.5) * w * 0.7;
+	warp.y += sin(t * 1.5 + suv.x * 4.5) * w * 0.7;
 
-	vec2 uv = UV + warp;
+	vec2 uv = suv + warp;
 	vec4 col = texture(albedo_tex, uv);
 
 	float b = blur_strength * tip;

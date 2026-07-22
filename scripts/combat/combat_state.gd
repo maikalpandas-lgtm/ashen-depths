@@ -26,6 +26,10 @@ var bones: int = 0  ## §7.3 — spent by Echo
 var turn: int = 0
 var phase: int = Phase.PLAYER
 var log_lines: Array = []
+## What just happened, for the UI to animate. Rules stay node-free; the overlay
+## reads this instead of guessing from log text.
+## kind: "enemy_hit" | "enemy_died" | "enemy_attack" | "enemy_block"
+var events: Array = []
 
 var _rng := RandomNumberGenerator.new()
 var _discount: int = 0  ## Offering: next card costs 1 less
@@ -69,6 +73,7 @@ func end_turn() -> Array:
 	if phase != Phase.PLAYER:
 		return []
 	phase = Phase.ENEMY
+	events.clear()
 	var before := log_lines.size()
 	for e in enemies:
 		if int(e["hp"]) <= 0:
@@ -77,8 +82,10 @@ func end_turn() -> Array:
 		match intent.get("type", "attack"):
 			"block":
 				e["block"] = int(e["block"]) + int(intent["value"])
+				_event("enemy_block", enemies.find(e))
 				_log("%s braces (+%d block)" % [e["name"], intent["value"]])
 			_:
+				_event("enemy_attack", enemies.find(e), int(intent["value"]))
 				_hit_party(int(intent["value"]), e)
 	if _party_alive_hp() <= 0:
 		phase = Phase.LOST
@@ -123,6 +130,7 @@ func can_play(hand_index: int) -> bool:
 func play_card(hand_index: int, target: int) -> bool:
 	if not can_play(hand_index):
 		return false
+	events.clear()
 	var card := _card_at(hand_index)
 	var sigils: Array = card["sigils"]
 
@@ -196,7 +204,11 @@ func _hit_enemy(index: int, amount: int, ignore_block: bool) -> int:
 		e["block"] = int(e["block"]) - absorbed2
 		left -= absorbed2
 	left = maxi(0, left)
+	var was_alive := int(e["hp"]) > 0
 	e["hp"] = maxi(0, int(e["hp"]) - left)
+	_event("enemy_hit", index, left)
+	if was_alive and int(e["hp"]) <= 0:
+		_event("enemy_died", index)
 	_log("%s takes %d (%d/%d)" % [e["name"], left, e["hp"], e["max_hp"]])
 	return left
 
@@ -274,6 +286,10 @@ func _enemy_at(index: int) -> Dictionary:
 	if index < 0 or index >= enemies.size():
 		return {}
 	return enemies[index]
+
+
+func _event(kind: String, index: int, amount: int = 0) -> void:
+	events.append({"kind": kind, "index": index, "amount": amount})
 
 
 func _log(line: String) -> void:

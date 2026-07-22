@@ -34,6 +34,10 @@ var _hand_dirty := false
 ## Card face nodes by hand index, so a held card can be lifted WITHOUT rebuilding
 ## the row it lives in.
 var _card_views: Array = []
+## Screen slashes left by enemy swings: {points, age}. Faded out in _process.
+var _slashes: Array = []
+var _shake := 0.0  ## camera kick when the party is hit
+var _fx_layer: Control = null
 
 ## Combat framing: a dedicated camera and light, both dropped in for the fight
 ## and removed after. Fighting through the crawler camera put the pack tiny,
@@ -228,6 +232,16 @@ func _process(_delta: float) -> void:
 	if _dragging >= 0:
 		_line_layer.queue_redraw()
 
+	if not _slashes.is_empty():
+		for f in _slashes:
+			f["age"] += _delta
+		_slashes = _slashes.filter(func(f): return f["age"] < 0.45)
+		_fx_layer.queue_redraw()
+	if _shake > 0.0 and _cam:
+		_shake = maxf(0.0, _shake - _delta * 4.0)
+		_cam.h_offset = sin(Time.get_ticks_msec() * 0.06) * _shake
+		_cam.v_offset = cos(Time.get_ticks_msec() * 0.083) * _shake * 0.6
+
 
 # ---------------------------------------------------------------- construction
 
@@ -250,6 +264,12 @@ func _build_ui() -> void:
 	_world_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_world_layer.draw.connect(_draw_world_overlay)
 	_root.add_child(_world_layer)
+
+	_fx_layer = Control.new()
+	_fx_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_fx_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fx_layer.draw.connect(_draw_fx)
+	_root.add_child(_fx_layer)
 
 	_line_layer = Control.new()
 	_line_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -332,16 +352,20 @@ func _refresh() -> void:
 			_end_button.text = "КОНЕЦ ХОДА"
 
 
-## Fade the corpse in the corridor instead of leaving it standing.
+## Fade a corpse, and light up whichever monster the dragged card is aimed at.
 func _sync_world_sprites() -> void:
+	var hovered := _hover_enemy() if _dragging >= 0 else -1
 	for i in range(mini(_enemy_nodes.size(), _combat.enemies.size())):
 		var node := _enemy_nodes[i] as Node3D
 		if not is_instance_valid(node):
 			continue
-		var spr := node.get_node_or_null("Sprite")
-		if spr and spr is GeometryInstance3D:
-			(spr as GeometryInstance3D).transparency = (
-				0.75 if int(_combat.enemies[i]["hp"]) <= 0 else 0.0)
+		var spr := node.get_node_or_null("Sprite") as Sprite3D
+		if spr == null:
+			continue
+		var dead := int(_combat.enemies[i]["hp"]) <= 0
+		spr.transparency = 0.75 if dead else 0.0
+		# Targeted monster glows; a rectangle around its HP bar was too subtle
+		spr.modulate = Color(1.7, 1.55, 1.15) if i == hovered else Color.WHITE
 
 
 ## HP bar + intent, drawn over each monster where it actually stands.
@@ -390,6 +414,141 @@ func _draw_world_overlay() -> void:
 			_world_layer.draw_string(font, p + Vector2(w * 0.5 + 6.0, 8.0),
 				"🛡%d" % e["block"], HORIZONTAL_ALIGNMENT_LEFT, -1, 14,
 				Color(0.7, 0.88, 1.0))
+
+
+## Slashes left on screen by an enemy swing, fading out.
+func _draw_fx() -> void:
+	for f in _slashes:
+		var t: float = clampf(float(f["age"]) / 0.45, 0.0, 1.0)
+		var a: float = (1.0 - t) * (1.0 - t)
+		var pts: PackedVector2Array = f["points"]
+		_fx_layer.draw_polyline(pts, Color(0.05, 0.02, 0.03, a * 0.75), 16.0, true)
+		_fx_layer.draw_polyline(pts, Color(0.95, 0.25, 0.22, a), 6.0, true)
+
+
+## A claw mark torn across the screen. Angle and length vary so repeated hits
+## never draw the same stroke twice.
+func _spawn_slash(strength: int) -> void:
+	var size := _root.size
+	var centre := Vector2(
+		randf_range(size.x * 0.28, size.x * 0.72),
+		randf_range(size.y * 0.22, size.y * 0.55))
+	var angle := randf_range(-0.9, -0.35) + (PI if randf() < 0.5 else 0.0)
+	var length: float = clampf(160.0 + float(strength) * 22.0, 160.0, 520.0)
+	var dir := Vector2(cos(angle), sin(angle))
+	var pts := PackedVector2Array()
+	for i in range(9):
+		var t := float(i) / 8.0 - 0.5
+		# slight bow, so it reads as a claw rather than a ruler line
+		pts.append(centre + dir * (t * length) + dir.orthogonal() * (1.0 - abs(t * 2.0)) * 26.0)
+	_slashes.append({"points": pts, "age": 0.0})
+
+
+## Play whatever combat_state just reported.
+func _play_events() -> void:
+	if _combat == null:
+		return
+	for ev in _combat.events:
+		var i: int = int(ev["index"])
+		match ev["kind"]:
+			"enemy_hit":
+				_flinch_enemy(i)
+			"enemy_died":
+				_split_enemy(i)
+			"enemy_attack":
+				_lunge_enemy(i)
+				_spawn_slash(int(ev["amount"]))
+				_shake = maxf(_shake, 0.06 + float(ev["amount"]) * 0.004)
+	_combat.events.clear()
+
+
+func _enemy_sprite(index: int) -> Sprite3D:
+	if index < 0 or index >= _enemy_nodes.size():
+		return null
+	var node := _enemy_nodes[index] as Node3D
+	if not is_instance_valid(node):
+		return null
+	return node.get_node_or_null("Sprite") as Sprite3D
+
+
+## Struck: a short white flash and a knock backwards.
+func _flinch_enemy(index: int) -> void:
+	var spr := _enemy_sprite(index)
+	if spr == null:
+		return
+	var base := spr.position
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(spr, "modulate", Color(3.0, 2.4, 2.4), 0.05)
+	tw.tween_property(spr, "position", base + Vector3(0.0, 0.06, 0.22), 0.06)
+	tw.chain().set_parallel(true)
+	tw.tween_property(spr, "modulate", Color.WHITE, 0.16)
+	tw.tween_property(spr, "position", base, 0.16)
+
+
+## Swinging: lunge at the camera and settle back.
+func _lunge_enemy(index: int) -> void:
+	if index < 0 or index >= _enemy_nodes.size():
+		return
+	var node := _enemy_nodes[index] as Node3D
+	if not is_instance_valid(node):
+		return
+	var base := node.position
+	var tw := create_tween()
+	tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(node, "position", base + Vector3(0.0, 0.1, 0.75), 0.13)
+	tw.tween_property(node, "position", base, 0.22)
+
+
+## Death: cut the sprite down the middle and throw the halves apart.
+##
+## The halves cannot keep the fixed-Y billboard — it would overwrite any spin
+## we put on them — so they hang under a holder that is yawed at the camera once
+## and then rotate freely inside it.
+func _split_enemy(index: int) -> void:
+	var spr := _enemy_sprite(index)
+	if spr == null or spr.texture == null:
+		return
+	var node := _enemy_nodes[index] as Node3D
+	var tex := spr.texture
+	var cam := get_viewport().get_camera_3d()
+	spr.visible = false
+
+	var holder := Node3D.new()
+	holder.position = spr.position
+	node.add_child(holder)
+	if cam:
+		var to_cam := cam.global_position - node.global_position
+		holder.global_rotation = Vector3(0.0, atan2(to_cam.x, to_cam.z), 0.0)
+
+	var half_w := tex.get_width() / 2
+	for side in [-1, 1]:
+		var piece := Sprite3D.new()
+		piece.texture = tex
+		piece.pixel_size = spr.pixel_size
+		piece.centered = true
+		piece.transparent = true
+		piece.shaded = false
+		piece.double_sided = true
+		piece.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+		piece.alpha_scissor_threshold = 0.2
+		piece.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+		piece.render_priority = 4
+		piece.region_enabled = true
+		piece.region_rect = Rect2(
+			0 if side < 0 else half_w, 0, half_w, tex.get_height())
+		piece.position = Vector3(float(side) * half_w * 0.5 * spr.pixel_size, 0.0, 0.0)
+		holder.add_child(piece)
+
+		var away := Vector3(float(side) * 0.75, -0.15, 0.0)
+		var tw := create_tween()
+		tw.set_parallel(true)
+		tw.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(piece, "position", piece.position + away, 0.55)
+		tw.tween_property(piece, "rotation_degrees:z", float(side) * -55.0, 0.55)
+		tw.tween_property(piece, "transparency", 1.0, 0.55)
+	get_tree().create_timer(0.7, true, false, true).timeout.connect(
+		func(): if is_instance_valid(holder): holder.queue_free())
 
 
 ## Arc from the held card to the cursor, like the reference.
@@ -482,6 +641,7 @@ func _finish_drag() -> void:
 		var target := _hover_enemy()
 		if target >= 0:
 			_combat.play_card(index, target)
+	_play_events()
 	_refresh()
 
 
@@ -526,6 +686,7 @@ func _on_end_turn() -> void:
 		_:
 			_dragging = -1
 			_combat.end_turn()
+			_play_events()
 			_refresh()
 
 

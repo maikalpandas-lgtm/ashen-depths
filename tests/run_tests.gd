@@ -183,6 +183,21 @@ func _test_combat_end() -> void:
 	check(c.phase == Combat.Phase.WON, "killing the last enemy wins")
 	check(c.alive_enemies().is_empty(), "no enemies left standing")
 
+	# events must describe what happened, the UI animates off them
+	var ev := _combat(["grub"])
+	ev.deck.hand = [{"card": "slice", "owner": "kael"}]
+	ev.enemies[0]["hp"] = 3
+	ev.play_card(0, 0)
+	var kinds: Array = ev.events.map(func(e): return e["kind"])
+	check(kinds.has("enemy_hit"), "a hit is reported as an event")
+	check(kinds.has("enemy_died"), "a kill is reported as an event")
+
+	var atk := _combat(["grub"])
+	atk.enemies[0]["intent"] = {"type": "attack", "value": 2}
+	atk.end_turn()
+	check(atk.events.any(func(e): return e["kind"] == "enemy_attack"),
+		"an enemy swing is reported as an event")
+
 	var lose := _combat(["brute"])
 	for m in lose.party.members:
 		m["hp"] = 1

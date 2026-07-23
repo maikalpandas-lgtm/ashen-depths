@@ -22,25 +22,6 @@ const CARD_W := 138
 const CARD_H := 193
 const DRAG_LIFT := 26.0  ## how far a held card rises out of the hand
 
-## Formation across the corridor, sized against the sprites that actually have
-## to fit: grub 1.34m wide, shade 1.48m, stone brute 2.36m. With 4.5m cells
-## (~3.5m clear of the rock bulge) a pack now stands INSIDE the tunnel — before,
-## a 2m corridor could not even hold the brute, and a three-wide pack was
-## squashed to 72% and pushed through the walls to stay visible.
-## Span check: (n-1)*spacing + widest*scale must stay under ~3.5m.
-const FORM_SPACING := {1: 0.0, 2: 1.60, 3: 1.15}
-const FORM_SPACING_MANY := 0.95
-const FORM_SCALE := {1: 1.0, 2: 1.0, 3: 0.85}
-const FORM_SCALE_MANY := 0.7
-
-
-static func form_spacing(n: int) -> float:
-	return float(FORM_SPACING.get(n, FORM_SPACING_MANY))
-
-
-static func form_scale(n: int) -> float:
-	return float(FORM_SCALE.get(n, FORM_SCALE_MANY))
-
 var _combat: Combat = null
 var _source: Node3D = null  ## pack node in the world, freed on victory
 var _enemy_nodes: Array = []  ## world node per combat.enemies index
@@ -76,6 +57,16 @@ var _status: Label = null
 var _banner: Label = null
 var _log: Label = null
 var _end_button: Button = null
+
+
+## Formation lives in EnemySprites — the generator lays the pack out in the
+## world with the same numbers, so nothing shifts when the fight opens.
+static func form_spacing(pack: Array) -> float:
+	return EnemySprites.form_spacing(pack)
+
+
+static func form_scale(pack: Array) -> float:
+	return EnemySprites.form_scale(pack)
 
 
 func _ready() -> void:
@@ -171,9 +162,13 @@ func _form_up() -> void:
 
 	var dungeon := _source.get_parent().get_parent() if _source.get_parent() else null
 	var n := _enemy_nodes.size()
-	# Spacing and scale: see FORM_SPACING at the top of this file
-	var spacing := form_spacing(n)
-	var combat_scale := form_scale(n)
+	# Same numbers the generator used in the world
+	var pack_ids: Array = []
+	for e in _combat.enemies:
+		pack_ids.append(e["id"])
+	var layout := EnemySprites.form_layout(pack_ids)
+	var spacing := float(layout["spacing"])
+	var combat_scale := float(layout["scale"])
 
 	for i in range(n):
 		var node := _enemy_nodes[i] as Node3D
@@ -488,8 +483,15 @@ func _reform_living() -> void:
 	var center: Vector3 = _source.global_position + to_cam * 0.45
 	var dungeon := _source.get_parent().get_parent() if _source.get_parent() else null
 	var n := living.size()
-	var spacing := form_spacing(n)
-	var combat_scale := form_scale(n)
+	# Re-form from the SURVIVORS' ids: once a wide brute dies, the rest can
+	# spread back out instead of keeping the dead one's cramped spacing.
+	var living_ids: Array = []
+	for idx in living:
+		if int(idx) < _combat.enemies.size():
+			living_ids.append(_combat.enemies[int(idx)]["id"])
+	var layout2 := EnemySprites.form_layout(living_ids)
+	var spacing := float(layout2["spacing"])
+	var combat_scale := float(layout2["scale"])
 	for k in range(n):
 		var i: int = int(living[k])
 		if i >= _enemy_nodes.size():
@@ -640,11 +642,10 @@ func _play_events() -> void:
 ## Scale the formation gave this monster, so the hover swell can return to it
 ## instead of snapping everyone back to 1.0.
 func _form_scale_for(_index: int) -> float:
-	var alive := 0
+	var pack_ids: Array = []
 	for e in _combat.enemies:
-		if int(e["hp"]) > 0:
-			alive += 1
-	return form_scale(maxi(1, alive))
+		pack_ids.append(e["id"])
+	return EnemySprites.form_scale(pack_ids)
 
 
 func _enemy_sprite(index: int) -> Sprite3D:

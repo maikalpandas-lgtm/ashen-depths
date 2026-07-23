@@ -44,6 +44,7 @@
 ```bash
 godot --headless --script tests/run_tests.gd          # правила боя, колоды
 godot --headless --script tests/click_through_test.gd # карта не глотает клики
+godot --headless --script tests/formation_test.gd     # стая влезает в коридор
 ```
 
 ⚠️ **`Panel` по умолчанию `MOUSE_FILTER_STOP`**, `TextureRect` — `PASS`, `Label` — `IGNORE`.

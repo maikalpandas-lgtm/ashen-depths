@@ -8,6 +8,54 @@ extends RefCounted
 
 const ART_DIR := "res://assets/textures/"
 
+## Formation across the corridor — ONE definition, used both when the pack is
+## spawned in the world and when combat re-forms it, so a pack looks the same
+## walking up to it as it does in the fight.
+##
+## Sized against the sprites that must fit: grub 1.34m wide, shade 1.48m,
+## stone brute 2.36m, against ~3.5m of corridor clear of the rock bulge.
+## Corridor width available to a row, after the worst-case rock bulge.
+const CLEAR_WIDTH := 3.5
+const MIN_SCALE := 0.6
+
+
+## Widest sprite in a pack, in metres. Sizing a row by member COUNT alone was
+## wrong: two grubs and two stone brutes are both "n = 2" but 2.7m and 4.7m of
+## silhouette, so the brute pair always hung through the walls.
+static func pack_widest(pack: Array) -> float:
+	var widest := 0.0
+	for id in pack:
+		var def: Dictionary = ENEMIES.get(id, {})
+		var px := art_size(str(def.get("art", "")))
+		if px == Vector2i.ZERO or int(px.y) == 0:
+			continue
+		widest = maxf(widest, float(def["height"]) * float(px.x) / float(px.y))
+	return widest if widest > 0.0 else 1.3
+
+
+## Spacing and scale for a row of `pack`, fitted to the corridor.
+static func form_layout(pack: Array) -> Dictionary:
+	var n: int = maxi(1, pack.size())
+	var w := pack_widest(pack)
+	# Shrink only as far as the row actually needs
+	var scale_f: float = clampf(CLEAR_WIDTH / (float(n) * w), MIN_SCALE, 1.0)
+	var used := w * scale_f
+	var spacing := 0.0
+	if n > 1:
+		# Spread across what is left, but never further apart than a body width
+		# plus a little air — a pair should read as a pair, not as two loners.
+		spacing = minf((CLEAR_WIDTH - used) / float(n - 1), used * 1.15)
+	return {"spacing": spacing, "scale": scale_f}
+
+
+static func form_spacing(pack: Array) -> float:
+	return float(form_layout(pack)["spacing"])
+
+
+static func form_scale(pack: Array) -> float:
+	return float(form_layout(pack)["scale"])
+
+
 ## Floor at which the Root Labyrinth breaks through into Навь
 const NAV_FROM_FLOOR := 3
 
@@ -44,6 +92,13 @@ static func ids_of_realm(realm: String) -> Array:
 
 static var _tex_cache: Dictionary = {}
 static var _shadow_tex: Texture2D = null
+
+
+## PNG dimensions for an art id, so layout maths can reason about how wide a
+## sprite actually is instead of assuming it is square.
+static func art_size(art_id: String) -> Vector2i:
+	var tex := _load(art_id)
+	return Vector2i(tex.get_width(), tex.get_height()) if tex else Vector2i.ZERO
 
 
 static func ids() -> Array:

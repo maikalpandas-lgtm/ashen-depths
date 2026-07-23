@@ -1273,19 +1273,21 @@ func _spawn_encounter(world: Vector3, pack_name: String) -> void:
 			pack_name = "Страж этажа"
 		_:
 			pack = EnemySprites.pack_for(absi(cell.x * 31 + cell.y * 17), floor_i)
-	# In the world a pack queues up ALONG the corridor, one behind another —
-	# spreading them sideways put half the pack inside the rock of a one-tile
-	# tunnel. Combat re-forms them into a row across the view (_form_up).
+	# A row ACROSS the corridor, with the same spacing and scale combat uses, so
+	# the pack does not visibly rearrange itself the moment the fight opens.
+	# Corridors are 4.5m wide now, which is what makes a row fit at all.
 	var n := pack.size()
 	var along := _corridor_axis(cell)
 	var across := Vector3(-along.z, 0.0, along.x)
+	var layout := EnemySprites.form_layout(pack)
+	var spacing := float(layout["spacing"])
+	var scale_f := float(layout["scale"])
 	for i in range(n):
-		var back: float = 0.0 if n == 1 else (float(i) - float(n - 1) * 0.5) * 1.15
-		# A touch of sway so the file is not a perfectly hidden single silhouette
-		var lean: float = 0.0 if n == 1 else (0.22 if i % 2 == 0 else -0.22)
-		var spot := world + along * back + across * lean
+		var side: float = (float(i) - float(n - 1) * 0.5) * spacing
+		var spot := world + across * side
 		var made := EnemySprites.make_enemy(area, spot - world, pack[i], _floor_height(spot.x, spot.z))
 		if made:
+			made.scale = Vector3.ONE * scale_f
 			spawned.append(made)
 
 	var col := CollisionShape3D.new()

@@ -32,6 +32,7 @@ const DRAG_LIFT := 26.0  ## how far a held card rises out of the hand
 const FLASH_TIME := 0.22  ## how long a struck monster stays lit
 const POPUP_TIME := 1.1  ## how long a damage number lives
 const IMPACT_TIME := 0.34  ## how long a hit burst lives
+const MOTE_COUNT := 90  ## floating dust specks
 
 var _combat: Combat = null
 var _source: Node3D = null  ## pack node in the world, freed on victory
@@ -63,6 +64,10 @@ var _popups: Array = []
 ## one, mine included — a number appearing with nothing behind it reads as a
 ## spreadsheet, not a blow.
 var _impacts: Array = []
+## Floating dust motes. The reference fills its cave with slow white specks and
+## they do more for the mood than any single effect — a still frame stops
+## looking like a screenshot of a menu.
+var _motes: Array = []
 var _fx_layer: Control = null
 
 ## Combat framing: a dedicated camera and light, both dropped in for the fight
@@ -320,6 +325,7 @@ func _process(_delta: float) -> void:
 	# skipping this left the targeting line burned on screen after the hit.
 	_line_layer.queue_redraw()
 
+	_update_motes(_delta)
 	_update_enemy_visuals(_delta)
 	if not _impacts.is_empty():
 		for imp in _impacts:
@@ -602,9 +608,12 @@ func _draw_world_overlay() -> void:
 		if cam and i < _enemy_nodes.size():
 			var node := _enemy_nodes[i] as Node3D
 			if is_instance_valid(node) and node.visible:
-				var head: Vector3 = node.global_position + Vector3.UP * _enemy_top(i)
-				if not cam.is_position_behind(head):
-					p = cam.unproject_position(head)
+				# Anchor at the FEET: the reference puts the name and bar under
+				# its monsters, which keeps the art clear and stops tall
+				# enemies pushing their labels into the banner.
+				var feet: Vector3 = node.global_position + Vector3.UP * 0.05
+				if not cam.is_position_behind(feet):
+					p = cam.unproject_position(feet)
 					have_proj = true
 		if not have_proj:
 			var left_m := 220.0
@@ -623,7 +632,7 @@ func _draw_world_overlay() -> void:
 		if int(e.get("hp", 0)) <= 0:
 			continue
 		var p: Vector2 = spots[k]
-		var bar := Rect2(p.x - bar_w * 0.5, p.y - 10.0, bar_w, 14.0)
+		var bar := Rect2(p.x - bar_w * 0.5, p.y + 22.0, bar_w, 13.0)
 		_world_layer.draw_rect(bar.grow(3.0), Color(0.02, 0.02, 0.04, 0.92))
 		_world_layer.draw_rect(bar, Color(0.18, 0.07, 0.08, 0.98))
 		var frac: float = clampf(float(e["hp"]) / maxf(1.0, float(e["max_hp"])), 0.0, 1.0)
@@ -634,22 +643,76 @@ func _draw_world_overlay() -> void:
 
 		if font == null:
 			continue
-		_world_layer.draw_string(font, Vector2(bar.position.x, bar.position.y + 32.0),
+		# Numbers sit ON the bar, name above it
+		_world_layer.draw_string(font, Vector2(bar.position.x, bar.position.y + 11.0),
 			"%d/%d" % [e["hp"], e["max_hp"]],
-			HORIZONTAL_ALIGNMENT_CENTER, bar_w, 15, Color(0.98, 0.94, 0.9))
+			HORIZONTAL_ALIGNMENT_CENTER, bar_w, 12, Color(1.0, 0.96, 0.93))
+		# Name directly above its bar
+		_world_layer.draw_string(font, Vector2(bar.position.x, bar.position.y - 6.0),
+			str(e["name"]),
+			HORIZONTAL_ALIGNMENT_CENTER, bar_w, 13, Color(0.94, 0.9, 0.84))
+		# Intent stays up by the monster's head, where it telegraphs the swing
 		var it: Dictionary = e["intent"]
 		var is_block: bool = it.get("type", "attack") == "block"
-		_world_layer.draw_string(font, Vector2(bar.position.x, bar.position.y - 18.0),
+		var head_y: float = p.y - _enemy_screen_height(i) - 14.0
+		_world_layer.draw_string(font, Vector2(bar.position.x, head_y),
 			("🛡 %d" if is_block else "🗡 %d") % it.get("value", 0),
-			HORIZONTAL_ALIGNMENT_CENTER, bar_w, 18,
+			HORIZONTAL_ALIGNMENT_CENTER, bar_w, 20,
 			Color(0.6, 0.85, 1.0) if is_block else Color(1.0, 0.62, 0.42))
-		_world_layer.draw_string(font, Vector2(bar.position.x, bar.position.y + 48.0),
-			str(e["name"]),
-			HORIZONTAL_ALIGNMENT_CENTER, bar_w, 12, Color(0.9, 0.86, 0.8))
 		if int(e["block"]) > 0:
 			_world_layer.draw_string(font, Vector2(bar.end.x + 4.0, bar.position.y + 12.0),
 				"🛡%d" % e["block"], HORIZONTAL_ALIGNMENT_LEFT, -1, 13,
 				Color(0.7, 0.88, 1.0))
+
+
+## How tall this monster looks on screen right now, so labels can sit above its
+## head without guessing at a fixed pixel offset.
+func _enemy_screen_height(index: int) -> float:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null or index >= _enemy_nodes.size():
+		return 120.0
+	var node := _enemy_nodes[index] as Node3D
+	if not is_instance_valid(node):
+		return 120.0
+	var feet: Vector3 = node.global_position
+	var head: Vector3 = feet + Vector3.UP * _enemy_top(index)
+	if cam.is_position_behind(feet) or cam.is_position_behind(head):
+		return 120.0
+	return absf(cam.unproject_position(feet).y - cam.unproject_position(head).y)
+
+
+## Slow drifting specks, respawned forever while the fight is open.
+func _update_motes(delta: float) -> void:
+	var area := _root.size
+	if area.x < 10.0:
+		area = get_viewport().get_visible_rect().size
+	while _motes.size() < MOTE_COUNT:
+		_motes.append({
+			"pos": Vector2(randf() * area.x, randf() * area.y * 0.75),
+			"vel": Vector2(randf_range(-7.0, 7.0), randf_range(-16.0, -5.0)),
+			"r": randf_range(1.2, 2.8),
+			"phase": randf() * TAU,
+		})
+	for m in _motes:
+		var pos: Vector2 = m["pos"]
+		var vel: Vector2 = m["vel"]
+		m["phase"] = float(m["phase"]) + delta * 1.4
+		# Sway sideways so they drift rather than march
+		pos += Vector2(vel.x + sin(float(m["phase"])) * 5.0, vel.y) * delta
+		if pos.y < -10.0:
+			pos = Vector2(randf() * area.x, area.y * 0.78)
+		m["pos"] = pos
+	_fx_layer.queue_redraw()
+
+
+func _draw_motes() -> void:
+	var area := _root.size
+	for m in _motes:
+		var pos: Vector2 = m["pos"]
+		# Fade out towards the top of the arena
+		var a: float = clampf(pos.y / maxf(area.y * 0.55, 1.0), 0.0, 1.0) * 0.5
+		a *= 0.6 + 0.4 * sin(float(m["phase"]) * 0.8)
+		_fx_layer.draw_circle(pos, float(m["r"]), Color(1.0, 0.98, 0.92, a))
 
 
 ## Burst where a blow landed: an expanding ring plus a few slash strokes.
@@ -705,10 +768,12 @@ func _draw_popups() -> void:
 		p.x += float(pop["drift"]) * t * 34.0
 
 		var crit: bool = pop["crit"]
-		var size: int = 40 if crit else 26
-		# A crit punches in bigger, then settles
-		if crit and t < 0.18:
-			size = int(lerpf(58.0, 40.0, t / 0.18))
+		# Much larger than before. The reference throws a huge white number with
+		# a small caption over it; a modest number next to a monster reads as a
+		# tooltip, not as a blow landing.
+		var size: int = 92 if crit else 62
+		if t < 0.18:
+			size = int(lerpf(float(size) * 1.45, float(size), t / 0.18))
 		var alpha: float = 1.0 if t < 0.6 else (1.0 - (t - 0.6) / 0.4)
 		var text: String = str(pop["text"])
 		var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, size).x
@@ -720,15 +785,22 @@ func _draw_popups() -> void:
 				HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(0.05, 0.03, 0.04, alpha))
 		_fx_layer.draw_string(font, at, text,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(pop["colour"], alpha))
-		if crit:
-			var tag := "КРИТ!"
-			var tw := font.get_string_size(tag, HORIZONTAL_ALIGNMENT_CENTER, -1, 18).x
-			_fx_layer.draw_string(font, p - Vector2(tw * 0.5, 22.0), tag,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(1.0, 0.85, 0.3, alpha))
+		var tag: String = str(pop.get("tag", ""))
+		if tag != "":
+			var tag_size := 24
+			var tw := font.get_string_size(tag, HORIZONTAL_ALIGNMENT_CENTER, -1, tag_size).x
+			var tag_at := p - Vector2(tw * 0.5, float(size) * 0.72)
+			for off in [Vector2(-2, 0), Vector2(2, 0), Vector2(0, -2), Vector2(0, 2)]:
+				_fx_layer.draw_string(font, tag_at + off, tag,
+					HORIZONTAL_ALIGNMENT_LEFT, -1, tag_size, Color(0.05, 0.03, 0.04, alpha))
+			_fx_layer.draw_string(font, tag_at, tag,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, tag_size,
+				Color(1.0, 0.88, 0.4, alpha))
 
 
 ## Slashes left on screen by an enemy swing, fading out.
 func _draw_fx() -> void:
+	_draw_motes()
 	_draw_impacts()
 	_draw_popups()
 	for f in _slashes:
@@ -832,16 +904,21 @@ func _spawn_popup(index: int, amount: int, crit: bool) -> void:
 	if not is_instance_valid(node):
 		return
 	var text := str(amount)
-	var colour := Color(1.0, 0.86, 0.35) if crit else Color(1.0, 0.95, 0.9)
+	var colour := Color(1.0, 0.92, 0.72) if crit else Color(1.0, 0.98, 0.95)
+	var tag := "КРИТ!" if crit else ""
 	if amount <= 0:
-		text = "БЛОК"
-		colour = Color(0.65, 0.85, 1.0)
+		text = "0"
+		tag = "БЛОК"
+		colour = Color(0.7, 0.88, 1.0)
+	elif int(_combat.enemies[index]["hp"]) <= 0:
+		tag = "ДОБИТ"
 	_popups.append({
-		"world": node.global_position + Vector3.UP * (_enemy_top(index) * 0.75),
+		"world": node.global_position + Vector3.UP * (_enemy_top(index) * 1.15),
 		"text": text,
 		"age": 0.0,
 		"crit": crit,
 		"colour": colour,
+		"tag": tag,
 		"drift": randf_range(-1.0, 1.0),
 	})
 
@@ -894,6 +971,13 @@ func _split_enemy(index: int) -> void:
 		var to_cam := cam.global_position - node.global_position
 		holder.global_rotation = Vector3(0.0, atan2(to_cam.x, to_cam.z), 0.0)
 
+	# The cut runs DIAGONALLY, like the reference — a straight vertical split
+	# reads as a sprite politely falling in two rather than as a sword stroke.
+	# The halves are cut vertically in texture space, so tilting the whole
+	# holder tilts the cut and the separation together.
+	var cut_angle := deg_to_rad(randf_range(22.0, 38.0) * (1.0 if randf() < 0.5 else -1.0))
+	holder.rotation.z = cut_angle
+
 	var half_w := tex.get_width() / 2
 	for side in [-1, 1]:
 		var piece := Sprite3D.new()
@@ -918,14 +1002,16 @@ func _split_enemy(index: int) -> void:
 		var sprite_h := float(tex.get_height()) * spr.pixel_size
 		var edge := MeshInstance3D.new()
 		var quad := QuadMesh.new()
-		quad.size = Vector2(0.11, sprite_h * 0.96)
+		quad.size = Vector2(0.16, sprite_h * 1.02)
 		edge.mesh = quad
 		var emat := StandardMaterial3D.new()
 		emat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		emat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		emat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 		emat.cull_mode = BaseMaterial3D.CULL_DISABLED
-		emat.albedo_color = Color(1.0, 0.86, 0.6, 1.0)
+		# Starts white-hot: on the reference the cut is the brightest thing on
+		# screen for a moment before it cools to ember.
+		emat.albedo_color = Color(1.0, 1.0, 0.95, 1.0)
 		emat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
 		emat.render_priority = 6
 		edge.material_override = emat
@@ -934,12 +1020,13 @@ func _split_enemy(index: int) -> void:
 		edge.position = Vector3(-float(side) * half_w * 0.5 * spr.pixel_size, 0.0, 0.01)
 		piece.add_child(edge)
 
-		var away := Vector3(float(side) * 0.75, -0.15, 0.0)
+		# Apart along the local X, i.e. perpendicular to the tilted cut
+		var away := Vector3(float(side) * 0.85, -0.12, 0.0)
 		var tw := create_tween()
 		tw.set_parallel(true)
 		tw.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tw.tween_property(piece, "position", piece.position + away, 0.55)
-		tw.tween_property(piece, "rotation_degrees:z", float(side) * -55.0, 0.55)
+		tw.tween_property(piece, "rotation_degrees:z", float(side) * -48.0, 0.55)
 		tw.tween_property(piece, "transparency", 1.0, 0.55)
 		# The glow dies faster than the halves: a flare at the moment of the cut,
 		# not a torch carried off with the corpse.

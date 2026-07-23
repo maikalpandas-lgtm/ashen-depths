@@ -21,6 +21,7 @@ const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 const CARD_W := 138
 const CARD_H := 193
 const DRAG_LIFT := 26.0  ## how far a held card rises out of the hand
+const FLASH_TIME := 0.22  ## how long a struck monster stays lit
 
 var _combat: Combat = null
 var _source: Node3D = null  ## pack node in the world, freed on victory
@@ -40,6 +41,10 @@ var _hover_card: int = -1
 ## Screen slashes left by enemy swings: {points, age}. Faded out in _process.
 var _slashes: Array = []
 var _shake := 0.0  ## camera kick when the party is hit
+## Hit flash per enemy index, in seconds remaining. Sprite tint and scale have
+## exactly ONE writer (_update_enemy_visuals): a tween on modulate used to be
+## wiped by the next _refresh in the same frame, so no hit ever flashed.
+var _enemy_flash: Dictionary = {}
 var _fx_layer: Control = null
 
 ## Combat framing: a dedicated camera and light, both dropped in for the fight
@@ -294,6 +299,7 @@ func _process(_delta: float) -> void:
 	# skipping this left the targeting line burned on screen after the hit.
 	_line_layer.queue_redraw()
 
+	_update_enemy_visuals(_delta)
 	if not _slashes.is_empty():
 		for f in _slashes:
 			f["age"] += _delta
@@ -395,7 +401,7 @@ func _refresh() -> void:
 	if _combat == null:
 		return
 	_hand_dirty = true
-	_sync_world_sprites()
+	_sync_world_visibility()
 
 	var hp_now := _party_hp()
 	var hp_max := _party_max_hp()
@@ -425,9 +431,45 @@ func _refresh() -> void:
 			_end_button.text = "КОНЕЦ ХОДА"
 
 
-## Fade a corpse, and light up whichever monster the dragged card is aimed at.
-func _sync_world_sprites() -> void:
+## Tint and scale of every living monster, recomputed each frame. One writer:
+## a hit flash and the hover highlight both want the sprite's colour, and when
+## they were separate a tween on modulate got overwritten by the next refresh
+## in the same frame, so hits never flashed at all.
+func _update_enemy_visuals(delta: float) -> void:
+	if _combat == null or not _root.visible:
+		return
 	var hovered := _hover_enemy() if _dragging >= 0 else -1
+	var pulse: float = 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.011)
+	var base_scale := _form_scale_for(0)
+	for i in range(mini(_enemy_nodes.size(), _combat.enemies.size())):
+		var node := _enemy_nodes[i] as Node3D
+		if not is_instance_valid(node):
+			continue
+		var spr := node.get_node_or_null("Sprite") as Sprite3D
+		if spr == null or not spr.visible:
+			continue
+
+		var flash: float = float(_enemy_flash.get(i, 0.0))
+		if flash > 0.0:
+			flash = maxf(0.0, flash - delta)
+			_enemy_flash[i] = flash
+
+		var tint := Color.WHITE
+		var scale_f := base_scale
+		if i == hovered:
+			tint = Color(1.5, 1.4, 1.05).lerp(Color(2.1, 1.85, 1.25), pulse)
+			scale_f *= 1.05 + 0.02 * pulse
+		if flash > 0.0:
+			# Blow past the hover tint — being hit must always be the loud thing
+			var t: float = flash / FLASH_TIME
+			tint = tint.lerp(Color(3.2, 2.5, 2.3), t)
+			scale_f *= 1.0 + 0.12 * t
+		spr.modulate = tint
+		node.scale = Vector3.ONE * scale_f
+
+
+## Corpse visibility only — tint and scale belong to _update_enemy_visuals.
+func _sync_world_visibility() -> void:
 	for i in range(mini(_enemy_nodes.size(), _combat.enemies.size())):
 		var node := _enemy_nodes[i] as Node3D
 		if not is_instance_valid(node):
@@ -439,15 +481,6 @@ func _sync_world_sprites() -> void:
 		# Hide dead fully so living HP UI isn't buried under corpses
 		spr.visible = not dead
 		spr.transparency = 0.0
-		# Targeted monster pulses hot and swells slightly — tinting it a flat
-		# brighter shade read as "lit", not as "this one takes the hit".
-		if i == hovered:
-			var pulse: float = 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.011)
-			spr.modulate = Color(1.5, 1.4, 1.05).lerp(Color(2.1, 1.85, 1.25), pulse)
-			node.scale = Vector3.ONE * (_form_scale_for(i) * (1.05 + 0.02 * pulse))
-		else:
-			spr.modulate = Color.WHITE
-			node.scale = Vector3.ONE * _form_scale_for(i)
 
 
 ## Living enemy indices only (hp > 0). Dead never get bars or aim slots.
@@ -657,19 +690,17 @@ func _enemy_sprite(index: int) -> Sprite3D:
 	return node.get_node_or_null("Sprite") as Sprite3D
 
 
-## Struck: a short white flash and a knock backwards.
+## Struck: flag the flash (drawn in _update_enemy_visuals) and knock the sprite
+## back. Position is safe to tween — nothing else writes it.
 func _flinch_enemy(index: int) -> void:
+	_enemy_flash[index] = FLASH_TIME
 	var spr := _enemy_sprite(index)
 	if spr == null:
 		return
 	var base := spr.position
 	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(spr, "modulate", Color(3.0, 2.4, 2.4), 0.05)
-	tw.tween_property(spr, "position", base + Vector3(0.0, 0.06, 0.22), 0.06)
-	tw.chain().set_parallel(true)
-	tw.tween_property(spr, "modulate", Color.WHITE, 0.16)
-	tw.tween_property(spr, "position", base, 0.16)
+	tw.tween_property(spr, "position", base + Vector3(0.0, 0.06, 0.24), 0.06)
+	tw.tween_property(spr, "position", base, 0.18)
 
 
 ## Swinging: lunge at the camera and settle back.
@@ -726,6 +757,27 @@ func _split_enemy(index: int) -> void:
 		piece.position = Vector3(float(side) * half_w * 0.5 * spr.pixel_size, 0.0, 0.0)
 		holder.add_child(piece)
 
+		# Hot edge along the cut, so the split reads as a wound rather than as
+		# the sprite quietly falling in two.
+		var sprite_h := float(tex.get_height()) * spr.pixel_size
+		var edge := MeshInstance3D.new()
+		var quad := QuadMesh.new()
+		quad.size = Vector2(0.055, sprite_h * 0.92)
+		edge.mesh = quad
+		var emat := StandardMaterial3D.new()
+		emat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		emat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		emat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		emat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		emat.albedo_color = Color(1.0, 0.72, 0.42, 0.95)
+		emat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+		emat.render_priority = 6
+		edge.material_override = emat
+		edge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# On the INNER side of the half — where the cut actually is
+		edge.position = Vector3(-float(side) * half_w * 0.5 * spr.pixel_size, 0.0, 0.01)
+		piece.add_child(edge)
+
 		var away := Vector3(float(side) * 0.75, -0.15, 0.0)
 		var tw := create_tween()
 		tw.set_parallel(true)
@@ -733,6 +785,9 @@ func _split_enemy(index: int) -> void:
 		tw.tween_property(piece, "position", piece.position + away, 0.55)
 		tw.tween_property(piece, "rotation_degrees:z", float(side) * -55.0, 0.55)
 		tw.tween_property(piece, "transparency", 1.0, 0.55)
+		# The glow dies faster than the halves: a flare at the moment of the cut,
+		# not a torch carried off with the corpse.
+		tw.tween_property(emat, "albedo_color", Color(1.0, 0.45, 0.2, 0.0), 0.4)
 	get_tree().create_timer(0.7, true, false, true).timeout.connect(
 		func(): if is_instance_valid(holder): holder.queue_free())
 

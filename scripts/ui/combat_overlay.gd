@@ -22,6 +22,25 @@ const CARD_W := 138
 const CARD_H := 193
 const DRAG_LIFT := 26.0  ## how far a held card rises out of the hand
 
+## Formation across the corridor, sized against the sprites that actually have
+## to fit: grub 1.34m wide, shade 1.48m, stone brute 2.36m. With 4.5m cells
+## (~3.5m clear of the rock bulge) a pack now stands INSIDE the tunnel — before,
+## a 2m corridor could not even hold the brute, and a three-wide pack was
+## squashed to 72% and pushed through the walls to stay visible.
+## Span check: (n-1)*spacing + widest*scale must stay under ~3.5m.
+const FORM_SPACING := {1: 0.0, 2: 1.60, 3: 1.15}
+const FORM_SPACING_MANY := 0.95
+const FORM_SCALE := {1: 1.0, 2: 1.0, 3: 0.85}
+const FORM_SCALE_MANY := 0.7
+
+
+static func form_spacing(n: int) -> float:
+	return float(FORM_SPACING.get(n, FORM_SPACING_MANY))
+
+
+static func form_scale(n: int) -> float:
+	return float(FORM_SCALE.get(n, FORM_SCALE_MANY))
+
 var _combat: Combat = null
 var _source: Node3D = null  ## pack node in the world, freed on victory
 var _enemy_nodes: Array = []  ## world node per combat.enemies index
@@ -106,8 +125,9 @@ func _collect_enemy_nodes() -> void:
 	print("[Combat] pack nodes=%d kind=%s" % [_enemy_nodes.size(), _pack_kind()])
 
 
-## Stage a left→right line in *camera* space. Corridor width does not matter:
-## we place past the walls so every billboard has its own screen column.
+## Stage a left→right line in *camera* space, so the row reads the same however
+## the player walked in. Spacing is tuned to keep it inside the corridor now
+## that corridors are wide enough to hold a pack.
 func _form_up() -> void:
 	if not is_instance_valid(_source) or _enemy_nodes.is_empty():
 		return
@@ -142,22 +162,9 @@ func _form_up() -> void:
 
 	var dungeon := _source.get_parent().get_parent() if _source.get_parent() else null
 	var n := _enemy_nodes.size()
-	# Fat grubs need large centre gaps so silhouettes don't merge
-	var spacing: float = 0.0
-	var combat_scale: float = 1.0
-	match n:
-		1:
-			spacing = 0.0
-			combat_scale = 1.0
-		2:
-			spacing = 1.85
-			combat_scale = 0.9
-		3:
-			spacing = 1.75
-			combat_scale = 0.72
-		_:
-			spacing = 1.5
-			combat_scale = 0.62
+	# Spacing and scale: see FORM_SPACING at the top of this file
+	var spacing := form_spacing(n)
+	var combat_scale := form_scale(n)
 
 	for i in range(n):
 		var node := _enemy_nodes[i] as Node3D
@@ -464,8 +471,8 @@ func _reform_living() -> void:
 	var center: Vector3 = _source.global_position + to_cam * 0.45
 	var dungeon := _source.get_parent().get_parent() if _source.get_parent() else null
 	var n := living.size()
-	var spacing: float = 0.0 if n <= 1 else (1.85 if n == 2 else 1.75)
-	var combat_scale: float = 1.0 if n == 1 else (0.9 if n == 2 else 0.72)
+	var spacing := form_spacing(n)
+	var combat_scale := form_scale(n)
 	for k in range(n):
 		var i: int = int(living[k])
 		if i >= _enemy_nodes.size():

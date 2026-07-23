@@ -3,7 +3,9 @@ extends CharacterBody3D
 ## No free-look mouse yaw — props can stay fixed on walls without billboards.
 ## Y is always locked — cannot fall through the world.
 
-@export var step_time: float = 0.16
+## Scaled with cell_size (3.0 -> 4.5): a step now covers half again as much
+## ground, and at the old 0.16s the crawler shot down corridors.
+@export var step_time: float = 0.24
 @export var turn_time: float = 0.12
 @export var move_cooldown: float = 0.02
 @export var feet_y: float = 0.0

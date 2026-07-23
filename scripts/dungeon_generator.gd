@@ -30,8 +30,14 @@ signal generation_finished(start_world: Vector3)
 @export var room_count: int = 4
 @export var room_min_size: int = 2
 @export var room_max_size: int = 3
-@export var cell_size: float = 3.0
-@export var wall_height: float = 3.2
+## 4.5, not 3.0: a 3m cell left only 2m of clear floor once the rock bulge is
+## subtracted, and the stone brute alone is 2.36m wide — it did not fit in a
+## corridor at all, and a three-wide pack had to be squashed to 72% and shoved
+## through the walls to stay visible. 4.5 leaves ~3.5m clear, which holds every
+## pack in the bestiary at near-full size.
+@export var cell_size: float = 4.5
+## Raised with the width: 3.2m walls around a 4.5m corridor read squat.
+@export var wall_height: float = 3.9
 ## Packs per floor. Doubled for denser runs (~44 on a full maze).
 @export var encounter_rooms: int = 44
 ## Lower = denser wall torches (1 = every walkable cell with a wall).
@@ -623,7 +629,8 @@ func _build_merged_floor() -> void:
 	var mi := MeshInstance3D.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var segs := 5
+	# Segments per cell, scaled so detail per METRE survives a wider cell
+	var segs := int(ceil(5.0 * cell_size / 3.0))
 	var half := cell_size * 0.5
 	var uv_s := _world_uv_scale()
 	for cell in floor_cells:
@@ -725,7 +732,8 @@ func _build_merged_ceiling() -> void:
 	var mi := MeshInstance3D.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var segs := 5
+	# Segments per cell, scaled so detail per METRE survives a wider cell
+	var segs := int(ceil(5.0 * cell_size / 3.0))
 	var half := cell_size * 0.5 + 0.1
 	var uv_s := _world_uv_scale()
 	for cell in floor_cells:
@@ -878,7 +886,7 @@ func _add_cave_wall_mesh(base: Vector3, face_into: Vector3, over_neg: float, ove
 	var mi := MeshInstance3D.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var segs_w := 9
+	var segs_w := int(ceil(9.0 * cell_size / 3.0))
 	var segs_h := 10
 	var half := cell_size * 0.5
 	var a_neg := -half - over_neg

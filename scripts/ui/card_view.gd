@@ -175,7 +175,20 @@ static func build(card: Dictionary, owner_colour: Color, card_size: Vector2) -> 
 	_place(cost, COST_RECT)
 	root.add_child(cost)
 
+	# A card is decoration — clicking it is always someone else's job (the hand
+	# puts a button over it, the draft wraps it in one). Panel defaults to
+	# MOUSE_FILTER_STOP, so the body panel silently ate every click meant for a
+	# parent button and the draft could not be picked. Force the whole subtree
+	# transparent to the mouse rather than remembering it per node.
+	_ignore_mouse(root)
 	return root
+
+
+static func _ignore_mouse(node: Node) -> void:
+	if node is Control:
+		(node as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for child in node.get_children():
+		_ignore_mouse(child)
 
 
 ## Largest size at which `text` still fits `box`, measured with the real font

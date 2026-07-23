@@ -39,6 +39,17 @@
 
 - Текстуры скалы генерятся процедурно на **каждый** данж. Не звать `_build_materials()` лишний раз и не сканировать все точки решётки на пиксель (`_angular_rock` смотрит только блок 5×5).
 
+## Тесты
+
+```bash
+godot --headless --script tests/run_tests.gd          # правила боя, колоды
+godot --headless --script tests/click_through_test.gd # карта не глотает клики
+```
+
+⚠️ **`Panel` по умолчанию `MOUSE_FILTER_STOP`**, `TextureRect` — `PASS`, `Label` — `IGNORE`.
+Любой `Panel` поверх интерактивного элемента съедает клик молча. Карта целиком
+помечена `IGNORE` (`CardView._ignore_mouse`) — не снимать.
+
 ## Godot
 
 - **Не запускать игру для проверки** — юзер запускает сам. Максимум `godot --headless --check-only --script <file>`.

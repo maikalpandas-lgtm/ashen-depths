@@ -1243,6 +1243,7 @@ func _spawn_encounter(world: Vector3, pack_name: String) -> void:
 
 	# Real enemy sprites instead of glowing spheres. Which enemies stand here is
 	# derived from the cell, so a seed always rebuilds the same pack.
+	var spawned: Array[Node3D] = []
 	var cell := world_to_cell(world)
 	var floor_i: int = GameState.floor_index if GameState else 1
 	var kind: String = str(encounter_kinds.get(cell, "normal"))
@@ -1261,7 +1262,9 @@ func _spawn_encounter(world: Vector3, pack_name: String) -> void:
 		var side: float = 0.0 if n == 1 else (float(i) / float(n - 1) - 0.5) * 1.7
 		var depth: float = 0.0 if n < 3 else (0.35 if i == 1 else -0.2)
 		var spot := world + Vector3(side, 0.0, depth)
-		EnemySprites.make_enemy(area, spot - world, pack[i], _floor_height(spot.x, spot.z))
+		var made := EnemySprites.make_enemy(area, spot - world, pack[i], _floor_height(spot.x, spot.z))
+		if made:
+			spawned.append(made)
 
 	var col := CollisionShape3D.new()
 	var shape := SphereShape3D.new()
@@ -1294,6 +1297,9 @@ func _spawn_encounter(world: Vector3, pack_name: String) -> void:
 	area.set("pack_name", pack_name)
 	area.set("enemy_count", n)
 	area.set("pack_ids", pack)
+	# Authoritative pack order for combat. Matching child names is fragile —
+	# duplicates get renamed — so hand the list over explicitly.
+	area.set_meta("enemy_nodes", spawned)
 	area.set("pack_kind", kind)
 	entities_root.add_child(area)
 

@@ -114,14 +114,20 @@ func _on_combat_requested(pack: Array, source: Node) -> void:
 	_refresh()
 
 
-## The pack node holds one Enemy_* child per member, in pack order.
+## The generator records the pack in spawn order on the node. Fall back to a
+## name scan only for packs built before that existed.
 func _collect_enemy_nodes() -> void:
 	_enemy_nodes.clear()
 	if not is_instance_valid(_source):
 		return
-	for child in _source.get_children():
-		if child is Node3D and str(child.name).begins_with("Enemy_"):
-			_enemy_nodes.append(child)
+	if _source.has_meta("enemy_nodes"):
+		for n in _source.get_meta("enemy_nodes"):
+			if is_instance_valid(n):
+				_enemy_nodes.append(n)
+	if _enemy_nodes.is_empty():
+		for child in _source.get_children():
+			if child is Node3D and str(child.name).begins_with("Enemy_"):
+				_enemy_nodes.append(child)
 	print("[Combat] pack nodes=%d kind=%s" % [_enemy_nodes.size(), _pack_kind()])
 
 

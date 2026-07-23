@@ -99,9 +99,12 @@ static func make_enemy(parent: Node3D, pos: Vector3, enemy_id: String, ground_y:
 		return null
 
 	var holder := Node3D.new()
-	holder.name = "Enemy_%s" % enemy_id
+	# Name AFTER add_child: setting it first means Godot throws the name away on
+	# a collision and invents "@Node3D@3", so a pack of three identical grubs
+	# left only ONE node matching an "Enemy_*" scan.
 	holder.position = Vector3(pos.x, ground_y, pos.z)
 	parent.add_child(holder)
+	holder.name = "Enemy_%s" % enemy_id
 
 	var height: float = def["height"]
 

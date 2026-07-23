@@ -1,124 +1,183 @@
 extends RefCounted
-## Draws one card: the frame image, the skill art seated in its window, and the
-## numbers composited on top. Shared by the deck peek and by combat, so a card
-## looks the same wherever it appears.
+## Draws one card. Shared by the deck peek and by combat, so a card looks the
+## same wherever it appears.
+##
+## Layout follows the competitor: the illustration BLEEDS across the top half of
+## the card, a cost medallion overlaps its top-left corner, a name ribbon sits on
+## the seam, a small type tab hangs under it, and the rules text has the lower
+## parchment to itself.
+##
+## This replaced card_frame.png, whose painted window was only 79x53px on a
+## 138x193 card — a square illustration ended up filling 11% of the card against
+## the reference's ~55%, i.e. five times too small. The frame is still in
+## assets/ and ART_PROMPTS.md §3.5; regenerate it to THIS layout if a painted
+## frame is wanted back.
+##
+## Name / cost / text are NEVER baked into art: they follow the card database,
+## or the first balance pass makes every card lie about itself.
 
 const CardDB = preload("res://scripts/cards/card_db.gd")
 const UiTheme = preload("res://scripts/ui/ui_theme.gd")
 
 const ART_DIR := "res://assets/textures/"
 
-## Zones inside the frame, as fractions of the card. MEASURED off card_frame.png
-## rather than guessed — the delivered frame put its window and ribbon well
-## inside my original estimates, so text would have sat on bare parchment.
-## Same table is mirrored in docs/ART_PROMPTS.md §3.5 for the next frame.
-const COST_RECT := Rect2(0.126, 0.081, 0.238, 0.170)  ## medallion socket
-const ART_RECT := Rect2(0.210, 0.147, 0.570, 0.276)  ## inside the wooden window
-## Wider than the ribbon's flat middle: its curled ends are decorative, and a
-## long name reads fine sitting over them.
-const NAME_RECT := Rect2(0.180, 0.482, 0.640, 0.080)
-const TEXT_RECT := Rect2(0.160, 0.600, 0.680, 0.280)  ## empty parchment below
+## Zones as fractions of the card.
+const ART_RECT := Rect2(0.0, 0.0, 1.0, 0.60)
+const COST_RECT := Rect2(0.02, 0.015, 0.26, 0.185)
+const NAME_RECT := Rect2(0.05, 0.535, 0.90, 0.105)
+const TYPE_RECT := Rect2(0.30, 0.645, 0.40, 0.070)
+const TEXT_RECT := Rect2(0.07, 0.735, 0.86, 0.235)
+
+const PARCHMENT := Color(0.91, 0.86, 0.73)
+const INK := Color(0.16, 0.11, 0.07)
+const EDGE := Color(0.24, 0.16, 0.11)
+
+## Colour + label per card type, so a hand reads at a glance (reference does the
+## same with its CUT / PREP / SEASON tabs).
+const TYPE_TAG := {
+	CardDB.Type.STRIKE: ["УДАР", Color(0.62, 0.24, 0.20)],
+	CardDB.Type.GUARD: ["ЗАЩИТА", Color(0.22, 0.40, 0.58)],
+	CardDB.Type.SKILL: ["ПРИЁМ", Color(0.36, 0.44, 0.26)],
+	CardDB.Type.SPELL: ["ЧАРЫ", Color(0.45, 0.28, 0.55)],
+	CardDB.Type.BLOOD: ["КРОВЬ", Color(0.55, 0.13, 0.18)],
+}
 
 static var _tex_cache: Dictionary = {}
 
 
-## A card is one frame image with the skill art dropped into its window and the
-## numbers drawn on top. Name / cost / text are NEVER baked into art: they have
-## to follow the card database, or the first balance pass makes every card lie.
 static func build(card: Dictionary, owner_colour: Color, card_size: Vector2) -> Control:
 	var is_blood := int(card["blood"]) > 0
 
 	var root := Control.new()
 	root.custom_minimum_size = card_size
+	root.clip_contents = true
 
-	var frame_tex := load_art("card_frame")
-	if frame_tex != null:
-		var bg := TextureRect.new()
-		bg.texture = frame_tex
-		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-		bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		bg.stretch_mode = TextureRect.STRETCH_SCALE
-		root.add_child(bg)
-	else:
-		# Frame art not delivered yet — keep the view usable meanwhile
-		var panel := Panel.new()
-		panel.set_anchors_preset(Control.PRESET_FULL_RECT)
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0.82, 0.76, 0.62, 0.97)
-		style.border_color = Color(0.28, 0.2, 0.14)
-		style.set_border_width_all(3)
-		style.set_corner_radius_all(7)
-		panel.add_theme_stylebox_override("panel", style)
-		root.add_child(panel)
+	# --- body -------------------------------------------------------------
+	var body := Panel.new()
+	body.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var body_style := StyleBoxFlat.new()
+	body_style.bg_color = PARCHMENT
+	body_style.border_color = EDGE
+	body_style.set_border_width_all(3)
+	body_style.set_corner_radius_all(9)
+	body.add_theme_stylebox_override("panel", body_style)
+	root.add_child(body)
 
-	# Owner tint: three decks are merged into one, and the border colour is how
-	# they stay tellable apart (DESIGN §7.5)
+	# --- illustration, bleeding across the top ----------------------------
+	# Clipped by its own frame so KEEP_ASPECT_COVERED can crop instead of
+	# letterboxing the art into a stamp.
+	var art_clip := Control.new()
+	art_clip.clip_contents = true
+	_place(art_clip, ART_RECT)
+	root.add_child(art_clip)
+
+	var art := TextureRect.new()
+	art.texture = load_art(card["art"])
+	art.set_anchors_preset(Control.PRESET_FULL_RECT)
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	art_clip.add_child(art)
+
+	# Owner tint: three decks are merged into one, and this is how they stay
+	# tellable apart (DESIGN §7.5)
 	var tint := Panel.new()
-	_place(tint, Rect2(0.0, 0.0, 1.0, 1.0))
+	tint.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var tint_style := StyleBoxFlat.new()
 	tint_style.bg_color = Color(0, 0, 0, 0)
-	tint_style.border_color = Color(owner_colour, 0.9)
+	tint_style.border_color = Color(owner_colour, 0.95)
 	tint_style.set_border_width_all(3)
-	tint_style.set_corner_radius_all(7)
+	tint_style.set_corner_radius_all(9)
 	tint.add_theme_stylebox_override("panel", tint_style)
 	tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(tint)
 
-	var art := TextureRect.new()
-	art.texture = load_art(card["art"])
-	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_place(art, ART_RECT)
-	root.add_child(art)
-
-	# The frame's medallion socket overlaps the top-left of its own art window,
-	# so the badge has to go ON TOP of the illustration or the art buries it.
-	var badge := TextureRect.new()
-	badge.texture = load_art("card_cost_badge_blood" if is_blood else "card_cost_badge")
-	badge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	badge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_place(badge, COST_RECT)
-	root.add_child(badge)
-
-	var cost := Label.new()
-	cost.text = str(card["blood"]) if is_blood else str(card["energy"])
-	UiTheme.as_title(cost, 17, Color(1.0, 0.72, 0.72) if is_blood else Color(0.86, 0.95, 1.0))
-	cost.add_theme_color_override("font_outline_color", Color(0.05, 0.06, 0.1))
-	cost.add_theme_constant_override("outline_size", 5)
-	cost.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	cost.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_place(cost, COST_RECT)
-	root.add_child(cost)
+	# --- name ribbon ------------------------------------------------------
+	var ribbon := Panel.new()
+	var ribbon_style := StyleBoxFlat.new()
+	ribbon_style.bg_color = Color(0.86, 0.80, 0.65)
+	ribbon_style.border_color = EDGE
+	ribbon_style.set_border_width_all(2)
+	ribbon_style.set_corner_radius_all(4)
+	ribbon_style.shadow_color = Color(0, 0, 0, 0.35)
+	ribbon_style.shadow_size = 4
+	ribbon.add_theme_stylebox_override("panel", ribbon_style)
+	_place(ribbon, NAME_RECT)
+	root.add_child(ribbon)
 
 	var name_label := Label.new()
 	name_label.text = str(card["name"]).to_upper()
 	var name_box := card_size * NAME_RECT.size
 	UiTheme.as_title(name_label, fit_font_size(
-		UiTheme.title_font(), name_label.text, name_box, 13, 7, false),
-		Color(0.16, 0.11, 0.07))
+		UiTheme.title_font(), name_label.text, name_box * Vector2(0.94, 0.9), 15, 7, false), INK)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_place(name_label, NAME_RECT)
 	root.add_child(name_label)
 
+	# --- type tab ---------------------------------------------------------
+	var tag: Array = TYPE_TAG.get(int(card.get("type", -1)), ["", Color.GRAY])
+	if str(tag[0]) != "":
+		var tab := Panel.new()
+		var tab_style := StyleBoxFlat.new()
+		tab_style.bg_color = tag[1]
+		tab_style.border_color = EDGE
+		tab_style.set_border_width_all(2)
+		tab_style.corner_radius_bottom_left = 5
+		tab_style.corner_radius_bottom_right = 5
+		tab.add_theme_stylebox_override("panel", tab_style)
+		_place(tab, TYPE_RECT)
+		root.add_child(tab)
+
+		var tab_label := Label.new()
+		tab_label.text = str(tag[0])
+		UiTheme.as_title(tab_label, fit_font_size(UiTheme.title_font(), tab_label.text,
+			card_size * TYPE_RECT.size * Vector2(0.9, 0.9), 10, 6, false),
+			Color(0.97, 0.94, 0.88))
+		tab_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		tab_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_place(tab_label, TYPE_RECT)
+		root.add_child(tab_label)
+
+	# --- rules text -------------------------------------------------------
 	var text := Label.new()
 	text.text = card["text"]
 	var text_box := card_size * TEXT_RECT.size
-	text.add_theme_font_size_override("font_size", fit_font_size(
-		UiTheme.title_font(), text.text, text_box, 11, 7, true))
+	var text_size := fit_font_size(UiTheme.title_font(), text.text, text_box, 12, 7, true)
 	if UiTheme.title_font():
 		text.add_theme_font_override("font", UiTheme.title_font())
-	text.add_theme_color_override("font_color", Color(0.2, 0.16, 0.12))
+	text.add_theme_font_size_override("font_size", text_size)
+	text.add_theme_color_override("font_color", Color(0.21, 0.16, 0.12))
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_place(text, TEXT_RECT)
 	root.add_child(text)
+
+	# --- cost medallion, last so nothing covers it ------------------------
+	var badge := Panel.new()
+	var badge_style := StyleBoxFlat.new()
+	badge_style.bg_color = Color(0.62, 0.16, 0.18) if is_blood else Color(0.16, 0.28, 0.45)
+	badge_style.border_color = Color(0.93, 0.87, 0.72)
+	badge_style.set_border_width_all(3)
+	badge_style.set_corner_radius_all(64)  # a circle at any card size
+	badge_style.shadow_color = Color(0, 0, 0, 0.5)
+	badge_style.shadow_size = 5
+	badge.add_theme_stylebox_override("panel", badge_style)
+	_place(badge, COST_RECT)
+	root.add_child(badge)
+
+	var cost := Label.new()
+	cost.text = str(card["blood"]) if is_blood else str(card["energy"])
+	UiTheme.as_title(cost, int(card_size.y * 0.105), Color(1.0, 0.97, 0.92))
+	cost.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cost.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_place(cost, COST_RECT)
+	root.add_child(cost)
 
 	return root
 
 
-## Anchor a child to a fractional rect of the card, so every element keeps its
-## place on the frame at any card size.
 ## Largest size at which `text` still fits `box`, measured with the real font
 ## metrics. Card names range from "Сеча" to "Навий хлыст" — a fixed size either
 ## clips the long ones or wastes the short ones.
@@ -139,6 +198,8 @@ static func fit_font_size(font: Font, text: String, box: Vector2,
 	return min_size
 
 
+## Anchor a child to a fractional rect of the card, so every element keeps its
+## place at any card size.
 static func _place(node: Control, r: Rect2) -> void:
 	node.anchor_left = r.position.x
 	node.anchor_top = r.position.y
@@ -158,8 +219,7 @@ static func load_art(id: String) -> Texture2D:
 		return _tex_cache[id]
 	var path := ART_DIR + id + ".png"
 	var tex: Texture2D = null
-	# Check the file first: half the card art and the frame are not drawn yet,
-	# and Image.load on a missing path spams the log with hard errors.
+	# Check the file first: Image.load on a missing path spams hard errors.
 	if FileAccess.file_exists(path):
 		if ResourceLoader.exists(path):
 			tex = load(path) as Texture2D
@@ -168,6 +228,6 @@ static func load_art(id: String) -> Texture2D:
 			if img.load(path) == OK:
 				tex = ImageTexture.create_from_image(img)
 	if tex == null:
-		print("[CardTest] art not drawn yet: %s" % id)
+		print("[CardView] art not drawn yet: %s" % id)
 	_tex_cache[id] = tex
 	return tex

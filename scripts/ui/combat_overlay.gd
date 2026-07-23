@@ -53,6 +53,9 @@ var _hand_dirty := false
 ## Card face nodes by hand index, so a held card can be lifted WITHOUT rebuilding
 ## the row it lives in.
 var _card_views: Array = []
+## Hand index the cursor is over, so a card can lift and glow before it is
+## even picked up — the reference previews the card you are about to play.
+var _hover_card: int = -1
 ## Screen slashes left by enemy swings: {points, age}. Faded out in _process.
 var _slashes: Array = []
 var _shake := 0.0  ## camera kick when the party is hit
@@ -441,7 +444,15 @@ func _sync_world_sprites() -> void:
 		# Hide dead fully so living HP UI isn't buried under corpses
 		spr.visible = not dead
 		spr.transparency = 0.0
-		spr.modulate = Color(1.7, 1.55, 1.15) if i == hovered else Color.WHITE
+		# Targeted monster pulses hot and swells slightly — tinting it a flat
+		# brighter shade read as "lit", not as "this one takes the hit".
+		if i == hovered:
+			var pulse: float = 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.011)
+			spr.modulate = Color(1.5, 1.4, 1.05).lerp(Color(2.1, 1.85, 1.25), pulse)
+			node.scale = Vector3.ONE * (_form_scale_for(i) * (1.05 + 0.02 * pulse))
+		else:
+			spr.modulate = Color.WHITE
+			node.scale = Vector3.ONE * _form_scale_for(i)
 
 
 ## Living enemy indices only (hp > 0). Dead never get bars or aim slots.
@@ -626,6 +637,16 @@ func _play_events() -> void:
 		_reform_living()
 
 
+## Scale the formation gave this monster, so the hover swell can return to it
+## instead of snapping everyone back to 1.0.
+func _form_scale_for(_index: int) -> float:
+	var alive := 0
+	for e in _combat.enemies:
+		if int(e["hp"]) > 0:
+			alive += 1
+	return form_scale(maxi(1, alive))
+
+
 func _enemy_sprite(index: int) -> Sprite3D:
 	if index < 0 or index >= _enemy_nodes.size():
 		return null
@@ -721,27 +742,39 @@ func _draw_target_line() -> void:
 		return
 	var mouse := _line_layer.get_local_mouse_position()
 	var target := _hover_enemy()
-	var colour := Color(0.55, 0.95, 0.5) if target >= 0 else Color(0.78, 0.8, 0.82, 0.75)
+	var hot := target >= 0
+	var colour := Color(0.62, 1.0, 0.45) if hot else Color(0.98, 0.86, 0.45)
 
 	# Quadratic bend so the line arcs up out of the hand instead of cutting
 	# straight across the board
 	var lift: float = minf(190.0, _drag_from.distance_to(mouse) * 0.45)
 	var mid := _drag_from.lerp(mouse, 0.5) - Vector2(0.0, lift)
 
-	# A string of beads rather than a stroke — that is what the reference does,
-	# and it reads as an aimed throw instead of a drawn ruler line.
-	const BEADS := 16
-	for i in range(BEADS):
-		var t := float(i) / float(BEADS - 1)
-		var pos := _drag_from.lerp(mid, t).lerp(mid.lerp(mouse, t), t)
-		# grows toward the cursor, so the eye follows it to the target
-		var r: float = lerpf(3.0, 8.5, t)
-		_line_layer.draw_circle(pos, r + 2.0, Color(0.04, 0.05, 0.07, 0.65))
-		_line_layer.draw_circle(pos, r, colour)
-	# Head of the throw
-	_line_layer.draw_circle(mouse, 16.0, Color(colour, 0.28))
-	_line_layer.draw_circle(mouse, 10.0, Color(0.04, 0.05, 0.07, 0.7))
-	_line_layer.draw_circle(mouse, 7.5, colour)
+	# One tapered ribbon rather than a chain of beads: sample the curve, then
+	# stroke it segment by segment with the width growing toward the cursor.
+	const STEPS := 26
+	var pts: Array[Vector2] = []
+	for i in range(STEPS + 1):
+		var t := float(i) / float(STEPS)
+		pts.append(_drag_from.lerp(mid, t).lerp(mid.lerp(mouse, t), t))
+
+	var pulse: float = 0.85 + 0.15 * sin(float(Time.get_ticks_msec()) * 0.012)
+	for i in range(STEPS):
+		var t := float(i) / float(STEPS)
+		var w: float = lerpf(3.0, 13.0, t * t) * (pulse if hot else 1.0)
+		# dark liner first so the ribbon reads over pale rock as well as dark
+		_line_layer.draw_line(pts[i], pts[i + 1], Color(0.05, 0.05, 0.07, 0.55), w + 5.0, true)
+	for i in range(STEPS):
+		var t := float(i) / float(STEPS)
+		var w: float = lerpf(3.0, 13.0, t * t) * (pulse if hot else 1.0)
+		var c := Color(colour, lerpf(0.35, 1.0, t))
+		_line_layer.draw_line(pts[i], pts[i + 1], c, w, true)
+
+	# Head of the throw — a soft halo with a bright core
+	var head: float = 18.0 * pulse if hot else 13.0
+	_line_layer.draw_circle(mouse, head + 8.0, Color(colour, 0.18))
+	_line_layer.draw_circle(mouse, head, Color(colour, 0.42))
+	_line_layer.draw_circle(mouse, head * 0.45, Color(1.0, 1.0, 0.95, 0.95))
 
 
 func _render_hand() -> void:
@@ -765,29 +798,43 @@ func _make_hand_card(index: int) -> Control:
 	var holder := Control.new()
 	holder.custom_minimum_size = Vector2(CARD_W, CARD_H + DRAG_LIFT)
 
-	# Aura behind the held card, so it is obvious which one is in the air
-	if index == _dragging:
+	var raised := index == _dragging or index == _hover_card
+
+	# Glow behind a raised card. Drawn under the face so it reads as light
+	# spilling out, not as a border stuck on top.
+	if raised and playable:
 		var aura := Panel.new()
 		aura.set_anchors_preset(Control.PRESET_FULL_RECT)
-		aura.offset_left = -14
-		aura.offset_top = -14
-		aura.offset_right = 14
-		aura.offset_bottom = 14 - DRAG_LIFT
+		var pad := 18.0 if index == _dragging else 12.0
+		aura.offset_left = -pad
+		aura.offset_top = -pad
+		aura.offset_right = pad
+		aura.offset_bottom = pad - DRAG_LIFT
 		var glow := StyleBoxFlat.new()
-		glow.bg_color = Color(1.0, 0.88, 0.45, 0.22)
-		glow.border_color = Color(1.0, 0.9, 0.55, 0.9)
+		var strength := 1.0 if index == _dragging else 0.6
+		glow.bg_color = Color(1.0, 0.88, 0.45, 0.20 * strength)
+		glow.border_color = Color(1.0, 0.9, 0.55, 0.85 * strength)
 		glow.set_border_width_all(3)
-		glow.set_corner_radius_all(14)
-		glow.shadow_color = Color(1.0, 0.82, 0.35, 0.55)
-		glow.shadow_size = 16
+		glow.set_corner_radius_all(16)
+		glow.shadow_color = Color(1.0, 0.82, 0.35, 0.6 * strength)
+		glow.shadow_size = int(20 * strength) + 6
 		aura.add_theme_stylebox_override("panel", glow)
 		aura.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		holder.add_child(aura)
 
 	var view := CardView.build(card, owner_colour, Vector2(CARD_W, CARD_H))
-	# Unplayable cards grey out rather than vanish (§7.4); the held one lifts
+	# Unplayable cards grey out rather than vanish (§7.4)
 	view.modulate = Color.WHITE if playable else Color(0.5, 0.5, 0.55, 0.8)
-	view.position = Vector2(0.0, 0.0 if index == _dragging else DRAG_LIFT)
+	if raised and playable:
+		view.modulate = Color(1.12, 1.09, 1.02)
+	# A raised card grows a little and stands out of the row
+	var grow := 0.0
+	if playable:
+		grow = 12.0 if index == _dragging else (7.0 if index == _hover_card else 0.0)
+	view.custom_minimum_size = Vector2(CARD_W + grow, CARD_H + grow * 1.4)
+	view.size = view.custom_minimum_size
+	view.position = Vector2(-grow * 0.5,
+		(0.0 if raised else DRAG_LIFT) - grow * 0.9)
 	holder.add_child(view)
 	_card_views.append(view)
 
@@ -800,6 +847,8 @@ func _make_hand_card(index: int) -> Control:
 	hit.disabled = not playable or _combat.phase != Combat.Phase.PLAYER
 	hit.button_down.connect(func(): _start_drag(index, holder))
 	hit.button_up.connect(_finish_drag)
+	hit.mouse_entered.connect(func(): _set_hover_card(index))
+	hit.mouse_exited.connect(func(): _set_hover_card(-1))
 	holder.add_child(hit)
 
 	return holder
@@ -819,10 +868,22 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
+## Hovering only re-lays the row when nothing is held: rebuilding mid-drag frees
+## the pressed button and kills its release (see _hand_dirty).
+func _set_hover_card(index: int) -> void:
+	if _dragging >= 0:
+		return
+	if index == -1 and _hover_card == -1:
+		return
+	_hover_card = index
+	_hand_dirty = true
+
+
 func _start_drag(index: int, holder: Control) -> void:
 	if _combat == null or _combat.phase != Combat.Phase.PLAYER:
 		return
 	_dragging = index
+	_hover_card = -1
 	_drag_from = holder.global_position + holder.size * 0.5
 	if Sfx:
 		Sfx.play("card_pick", -6.0, 0.04)

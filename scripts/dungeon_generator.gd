@@ -1107,6 +1107,22 @@ func _spawn_torches() -> void:
 	print("[Dungeon] torches=%d" % placed)
 
 
+## Direction the corridor runs at this cell, as a unit world vector. Packs only
+## sit in corridors or dead ends (_is_corridor_or_dead_end), so there is always
+## a clear axis: the open run for a corridor, the single exit for a dead end.
+func _corridor_axis(cell: Vector2i) -> Vector3:
+	var ew := is_walkable_cell(cell.x - 1, cell.y) or is_walkable_cell(cell.x + 1, cell.y)
+	var ns := is_walkable_cell(cell.x, cell.y - 1) or is_walkable_cell(cell.x, cell.y + 1)
+	if ew and not ns:
+		return Vector3.RIGHT
+	if ns and not ew:
+		return Vector3.BACK
+	# Dead end or an odd cell: follow whichever single neighbour is open
+	if is_walkable_cell(cell.x - 1, cell.y) or is_walkable_cell(cell.x + 1, cell.y):
+		return Vector3.RIGHT
+	return Vector3.BACK
+
+
 ## Deepest bulge of the rock over the bracket + stick footprint.
 ##
 ## One sample at the mount point is not enough: the rock swings by ~0.2m across
@@ -1257,11 +1273,17 @@ func _spawn_encounter(world: Vector3, pack_name: String) -> void:
 			pack_name = "Страж этажа"
 		_:
 			pack = EnemySprites.pack_for(absi(cell.x * 31 + cell.y * 17), floor_i)
+	# In the world a pack queues up ALONG the corridor, one behind another —
+	# spreading them sideways put half the pack inside the rock of a one-tile
+	# tunnel. Combat re-forms them into a row across the view (_form_up).
 	var n := pack.size()
+	var along := _corridor_axis(cell)
+	var across := Vector3(-along.z, 0.0, along.x)
 	for i in range(n):
-		var side: float = 0.0 if n == 1 else (float(i) / float(n - 1) - 0.5) * 1.7
-		var depth: float = 0.0 if n < 3 else (0.35 if i == 1 else -0.2)
-		var spot := world + Vector3(side, 0.0, depth)
+		var back: float = 0.0 if n == 1 else (float(i) - float(n - 1) * 0.5) * 1.15
+		# A touch of sway so the file is not a perfectly hidden single silhouette
+		var lean: float = 0.0 if n == 1 else (0.22 if i % 2 == 0 else -0.22)
+		var spot := world + along * back + across * lean
 		var made := EnemySprites.make_enemy(area, spot - world, pack[i], _floor_height(spot.x, spot.z))
 		if made:
 			spawned.append(made)

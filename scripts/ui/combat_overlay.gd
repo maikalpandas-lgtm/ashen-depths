@@ -22,6 +22,7 @@ const CARD_W := 138
 const CARD_H := 193
 const DRAG_LIFT := 26.0  ## how far a held card rises out of the hand
 const FLASH_TIME := 0.22  ## how long a struck monster stays lit
+const POPUP_TIME := 1.1  ## how long a damage number lives
 
 var _combat: Combat = null
 var _source: Node3D = null  ## pack node in the world, freed on victory
@@ -45,6 +46,10 @@ var _shake := 0.0  ## camera kick when the party is hit
 ## exactly ONE writer (_update_enemy_visuals): a tween on modulate used to be
 ## wiped by the next _refresh in the same frame, so no hit ever flashed.
 var _enemy_flash: Dictionary = {}
+## Damage numbers rising off a monster: {world, text, age, crit, colour}.
+## Anchored to a WORLD point and re-projected each frame, so a number stays over
+## the monster it belongs to even while the camera shakes.
+var _popups: Array = []
 var _fx_layer: Control = null
 
 ## Combat framing: a dedicated camera and light, both dropped in for the fight
@@ -300,6 +305,11 @@ func _process(_delta: float) -> void:
 	_line_layer.queue_redraw()
 
 	_update_enemy_visuals(_delta)
+	if not _popups.is_empty():
+		for pop in _popups:
+			pop["age"] += _delta
+		_popups = _popups.filter(func(pop): return pop["age"] < POPUP_TIME)
+		_fx_layer.queue_redraw()
 	if not _slashes.is_empty():
 		for f in _slashes:
 			f["age"] += _delta
@@ -386,11 +396,11 @@ func _build_ui() -> void:
 
 	_end_button = Button.new()
 	_end_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_end_button.offset_left = -190
-	_end_button.offset_top = -120
+	_end_button.offset_left = -210
+	_end_button.offset_top = -126
 	_end_button.offset_right = -26
-	_end_button.offset_bottom = -62
-	UiTheme.style_button(_end_button, 18)
+	_end_button.offset_bottom = -58
+	UiTheme.cartoon_button(_end_button, 19, Color(0.20, 0.56, 0.46))
 	_end_button.pressed.connect(_on_end_turn)
 	_root.add_child(_end_button)
 
@@ -612,8 +622,49 @@ func _draw_world_overlay() -> void:
 				Color(0.7, 0.88, 1.0))
 
 
+## Damage numbers, rising and fading. Drawn manually rather than as Labels so
+## they cost nothing to spawn and cannot disturb the UI layout.
+func _draw_popups() -> void:
+	var cam := get_viewport().get_camera_3d()
+	var font := UiTheme.display_font()
+	if cam == null or font == null:
+		return
+	for pop in _popups:
+		var t: float = clampf(float(pop["age"]) / POPUP_TIME, 0.0, 1.0)
+		var world: Vector3 = pop["world"]
+		if cam.is_position_behind(world):
+			continue
+		var p := cam.unproject_position(world)
+		# Rise and drift, easing out so the number pops then floats
+		p.y -= 62.0 * (1.0 - pow(1.0 - t, 2.6))
+		p.x += float(pop["drift"]) * t * 34.0
+
+		var crit: bool = pop["crit"]
+		var size: int = 40 if crit else 26
+		# A crit punches in bigger, then settles
+		if crit and t < 0.18:
+			size = int(lerpf(58.0, 40.0, t / 0.18))
+		var alpha: float = 1.0 if t < 0.6 else (1.0 - (t - 0.6) / 0.4)
+		var text: String = str(pop["text"])
+		var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, size).x
+		var at := p - Vector2(w * 0.5, 0.0)
+		# Heavy outline so a number stays readable over pale rock or fire
+		for off in [Vector2(-2, 0), Vector2(2, 0), Vector2(0, -2), Vector2(0, 2),
+				Vector2(-2, -2), Vector2(2, -2), Vector2(-2, 2), Vector2(2, 2)]:
+			_fx_layer.draw_string(font, at + off, text,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(0.05, 0.03, 0.04, alpha))
+		_fx_layer.draw_string(font, at, text,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(pop["colour"], alpha))
+		if crit:
+			var tag := "КРИТ!"
+			var tw := font.get_string_size(tag, HORIZONTAL_ALIGNMENT_CENTER, -1, 18).x
+			_fx_layer.draw_string(font, p - Vector2(tw * 0.5, 22.0), tag,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(1.0, 0.85, 0.3, alpha))
+
+
 ## Slashes left on screen by an enemy swing, fading out.
 func _draw_fx() -> void:
+	_draw_popups()
 	for f in _slashes:
 		var t: float = clampf(float(f["age"]) / 0.45, 0.0, 1.0)
 		var a: float = (1.0 - t) * (1.0 - t)
@@ -650,6 +701,7 @@ func _play_events() -> void:
 		match ev["kind"]:
 			"enemy_hit":
 				_flinch_enemy(i)
+				_spawn_popup(i, int(ev["amount"]), bool(ev.get("crit", false)))
 				if Sfx:
 					var amt: int = int(ev.get("amount", 0))
 					Sfx.play("hit_heavy" if amt >= 10 else "hit", -1.0)
@@ -688,6 +740,28 @@ func _enemy_sprite(index: int) -> Sprite3D:
 	if not is_instance_valid(node):
 		return null
 	return node.get_node_or_null("Sprite") as Sprite3D
+
+
+## A damage number over the monster that took it.
+func _spawn_popup(index: int, amount: int, crit: bool) -> void:
+	if index < 0 or index >= _enemy_nodes.size():
+		return
+	var node := _enemy_nodes[index] as Node3D
+	if not is_instance_valid(node):
+		return
+	var text := str(amount)
+	var colour := Color(1.0, 0.86, 0.35) if crit else Color(1.0, 0.95, 0.9)
+	if amount <= 0:
+		text = "БЛОК"
+		colour = Color(0.65, 0.85, 1.0)
+	_popups.append({
+		"world": node.global_position + Vector3.UP * (_enemy_top(index) * 0.75),
+		"text": text,
+		"age": 0.0,
+		"crit": crit,
+		"colour": colour,
+		"drift": randf_range(-1.0, 1.0),
+	})
 
 
 ## Struck: flag the flash (drawn in _update_enemy_visuals) and knock the sprite

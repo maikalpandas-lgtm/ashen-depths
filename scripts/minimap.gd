@@ -189,41 +189,46 @@ func _draw_player(lx: int, ly: int) -> void:
 
 ## Skull marking a pack. Readable at 14px: dark outline first so the bone reads
 ## against parchment, then eye sockets, jaw and a green witch-fire tuft.
+## Skull marking a pack — deliberately drawn LARGER than its tile. A pack is the
+## thing a player actually navigates by, so it must be spottable at a glance in
+## a wall of identical corridor squares.
 func _draw_skull_icon(lx: int, ly: int) -> void:
 	var o := _tile_origin(lx, ly)
 	var cx := o.x + tile / 2
 	var cy := o.y + tile / 2 + 1
+	var s := maxf(1.0, float(tile) / 14.0) * 1.55  # scale with tile, then bigger
 
-	# outline
-	for py in range(-5, 5):
-		for px in range(-5, 6):
-			if px * px + py * py <= 20:
-				_put(cx + px, cy + py, COL_FIGHT_INK)
-	# cranium
-	for py in range(-4, 3):
-		for px in range(-4, 5):
-			if px * px + py * py <= 13:
-				_put(cx + px, cy + py, COL_FIGHT)
+	# dark outline first so bone reads against parchment
+	_disc(cx, cy, 7.4 * s, COL_FIGHT_INK)
+	_disc(cx, cy, 5.6 * s, COL_FIGHT)
 	# jaw
-	for px in range(-2, 3):
-		_put(cx + px, cy + 3, COL_FIGHT)
-	_put(cx - 3, cy + 2, COL_FIGHT)
-	_put(cx + 3, cy + 2, COL_FIGHT)
-	# eye sockets + nose
-	for py in range(-2, 0):
-		_put(cx - 2, cy + py, COL_FIGHT_INK)
-		_put(cx + 2, cy + py, COL_FIGHT_INK)
-	_put(cx - 3, cy - 1, COL_FIGHT_INK)
-	_put(cx + 3, cy - 1, COL_FIGHT_INK)
-	_put(cx, cy + 1, COL_FIGHT_INK)
-	# teeth
-	_put(cx - 1, cy + 3, COL_FIGHT_INK)
-	_put(cx + 1, cy + 3, COL_FIGHT_INK)
+	_rect(cx - int(3.0 * s), cy + int(3.2 * s), int(6.0 * s), int(2.2 * s), COL_FIGHT_INK)
+	_rect(cx - int(2.4 * s), cy + int(3.0 * s), int(4.8 * s), int(1.6 * s), COL_FIGHT)
+	# eye sockets
+	_disc(cx - 2.4 * s, cy - 1.2 * s, 1.9 * s, COL_FIGHT_INK)
+	_disc(cx + 2.4 * s, cy - 1.2 * s, 1.9 * s, COL_FIGHT_INK)
+	# nose + teeth
+	_rect(cx, cy + int(1.0 * s), maxi(1, int(1.2 * s)), maxi(1, int(1.6 * s)), COL_FIGHT_INK)
+	for t in [-1, 1]:
+		_rect(cx + int(float(t) * 1.4 * s), cy + int(3.0 * s),
+			maxi(1, int(0.9 * s)), maxi(1, int(1.6 * s)), COL_FIGHT_INK)
 	# witch-fire above
-	_put(cx, cy - 6, COL_FIGHT_GLOW)
-	_put(cx, cy - 7, COL_FIGHT_GLOW)
-	_put(cx - 1, cy - 5, COL_FIGHT_GLOW.darkened(0.2))
-	_put(cx + 1, cy - 5, COL_FIGHT_GLOW.darkened(0.2))
+	_disc(cx, cy - 8.2 * s, 1.5 * s, COL_FIGHT_GLOW)
+	_disc(cx, cy - 9.6 * s, 1.0 * s, COL_FIGHT_GLOW.lightened(0.3))
+
+
+func _disc(cx: float, cy: float, r: float, col: Color) -> void:
+	var ri := int(ceil(r))
+	for py in range(-ri, ri + 1):
+		for px in range(-ri, ri + 1):
+			if float(px * px + py * py) <= r * r:
+				_put(int(cx) + px, int(cy) + py, col)
+
+
+func _rect(x: int, y: int, w: int, h: int, col: Color) -> void:
+	for py in range(h):
+		for px in range(w):
+			_put(x + px, y + py, col)
 
 
 func _draw_campfire_icon(lx: int, ly: int) -> void:

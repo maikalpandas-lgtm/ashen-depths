@@ -195,6 +195,7 @@ func _build_ui() -> void:
 	var skip := Button.new()
 	skip.text = "Пропуск  ·  +%d 🪙" % SKIP_GOLD
 	skip.custom_minimum_size = Vector2(220, 40)
+	UiTheme.cartoon_button(skip, 17, Color(0.42, 0.34, 0.24))
 	skip.pressed.connect(_skip)
 	var center := CenterContainer.new()
 	center.add_child(skip)

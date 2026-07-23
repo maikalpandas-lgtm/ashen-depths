@@ -42,7 +42,53 @@ const TYPE_TAG := {
 	CardDB.Type.BLOOD: ["КРОВЬ", Color(0.55, 0.13, 0.18)],
 }
 
+## Keyword → colour. Rules text is scanned for these and they are tinted, so a
+## player can spot "this one pierces" without reading the whole card. Longer
+## phrases come first: "Пробой брони" must win over a bare "брони".
+const KEYWORDS := [
+	["Пробой брони", "6fd0ff"],
+	["по щиту", "9fd8ff"],
+	["вампиризм", "ff6f8a"],
+	["Остриё", "ffd166"],
+	["Эхо", "c9a4ff"],
+	["кость", "e8e2cf"],
+	["кости", "e8e2cf"],
+	["шип", "b0f0a0"],
+	["брони", "6fd0ff"],
+	["урона", "ff9b6a"],
+	["HP", "ff6f8a"],
+]
+
 static var _tex_cache: Dictionary = {}
+
+
+## Rules text with keywords wrapped in BBCode colour tags.
+static func colourise(text: String) -> String:
+	var out := text
+	for pair in KEYWORDS:
+		var word: String = pair[0]
+		# Skip anything already inside a tag from an earlier, longer keyword
+		if out.find("[color") >= 0 and out.find(word) >= 0:
+			var guarded := ""
+			var rest := out
+			while true:
+				var at := rest.find(word)
+				if at < 0:
+					guarded += rest
+					break
+				var before := rest.substr(0, at)
+				# inside a tag already if the last "[color" is unclosed
+				var open_at := before.rfind("[color")
+				var close_at := before.rfind("[/color]")
+				if open_at > close_at:
+					guarded += rest.substr(0, at + word.length())
+				else:
+					guarded += before + "[color=#%s]%s[/color]" % [pair[1], word]
+				rest = rest.substr(at + word.length())
+			out = guarded
+		else:
+			out = out.replace(word, "[color=#%s]%s[/color]" % [pair[1], word])
+	return out
 
 
 static func build(card: Dictionary, owner_colour: Color, card_size: Vector2) -> Control:
@@ -140,17 +186,18 @@ static func build(card: Dictionary, owner_colour: Color, card_size: Vector2) -> 
 		root.add_child(tab_label)
 
 	# --- rules text -------------------------------------------------------
-	var text := Label.new()
-	text.text = card["text"]
+	var raw_text := str(card["text"])
 	var text_box := card_size * TEXT_RECT.size
-	var text_size := fit_font_size(UiTheme.title_font(), text.text, text_box, 12, 7, true)
+	var text_size := fit_font_size(UiTheme.title_font(), raw_text, text_box, 12, 7, true)
+	var text := RichTextLabel.new()
+	text.bbcode_enabled = true
+	text.fit_content = false
+	text.scroll_active = false
+	text.text = "[center]%s[/center]" % colourise(raw_text)
 	if UiTheme.title_font():
-		text.add_theme_font_override("font", UiTheme.title_font())
-	text.add_theme_font_size_override("font_size", text_size)
-	text.add_theme_color_override("font_color", Color(0.21, 0.16, 0.12))
-	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		text.add_theme_font_override("normal_font", UiTheme.title_font())
+	text.add_theme_font_size_override("normal_font_size", text_size)
+	text.add_theme_color_override("default_color", Color(0.21, 0.16, 0.12))
 	_place(text, TEXT_RECT)
 	root.add_child(text)
 

@@ -204,6 +204,28 @@ func _test_combat_end() -> void:
 	check(atk.events.any(func(e): return e["kind"] == "enemy_attack"),
 		"an enemy swing is reported as an event")
 
+	# crit: rolled per card, multiplies, and is reported so the UI can show it
+	var never := _combat(["brute"])
+	never.deck.hand = [{"card": "slice", "owner": "vityaz"}]
+	var base_hp: int = never.enemies[0]["hp"]
+	var crit_seen := false
+	var plain_seen := false
+	for attempt in range(120):
+		var c2 := _combat(["brute"])
+		c2._rng.seed = attempt
+		c2.deck.hand = [{"card": "slice", "owner": "vityaz"}]
+		c2.play_card(0, 0)
+		for hit in c2.events:
+			if hit["kind"] == "enemy_hit":
+				if hit.get("crit", false):
+					crit_seen = true
+					check_silent(int(hit["amount"]) > 7, "a crit hits harder than the base 7")
+				else:
+					plain_seen = true
+	check(crit_seen, "crits do happen")
+	check(plain_seen, "plain hits still happen")
+	check(never.crit_chance() > 0.0 and never.crit_chance() < 1.0, "crit chance is a real probability")
+
 	var lose := _combat(["brute"])
 	for m in lose.party.members:
 		m["hp"] = 1

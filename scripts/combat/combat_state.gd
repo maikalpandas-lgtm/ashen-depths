@@ -14,6 +14,11 @@ const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 const START_ENERGY := 3  ## §7.4 — ⚡3 at the start of the player's turn
 const DRAW_PER_TURN := 5  ## §7.5
 
+## Critical hits. Rolled per card, not per enemy, so a Cleave crits on both
+## halves — a card either lands clean or it does not.
+const CRIT_CHANCE := 0.18
+const CRIT_MULT := 1.75
+
 enum Phase { PLAYER, ENEMY, WON, LOST }
 
 var party: RefCounted = null
@@ -226,13 +231,18 @@ func _resolve_damage(card: Dictionary, target: int) -> void:
 
 	if sigils.has(CardDB.Sigil.SHARP) and int(e["block"]) > 0:
 		amount += 2
+	# Rolled once per card: a Cleave should land clean on both halves or not at
+	# all, rather than critting one target and fizzling on its neighbour.
+	var crit := _rng.randf() < crit_chance()
+	if crit:
+		amount = int(round(float(amount) * CRIT_MULT))
 	var ignore_block: bool = sigils.has(CardDB.Sigil.PIERCE)
-	var dealt := _hit_enemy(target, amount, ignore_block)
+	var dealt := _hit_enemy(target, amount, ignore_block, crit)
 
 	if sigils.has(CardDB.Sigil.CLEAVE):
 		var neighbour := target + 1 if target + 1 < enemies.size() else target - 1
 		if neighbour >= 0 and neighbour != target:
-			_hit_enemy(neighbour, int(amount * 0.5), ignore_block)
+			_hit_enemy(neighbour, int(amount * 0.5), ignore_block, crit)
 
 	if sigils.has(CardDB.Sigil.DRAIN) and dealt > 0:
 		_heal_party(int(dealt * 0.5))
@@ -246,7 +256,11 @@ func _resolve_damage(card: Dictionary, target: int) -> void:
 		_log("оберег: +кость")
 
 
-func _hit_enemy(index: int, amount: int, ignore_block: bool) -> int:
+func crit_chance() -> float:
+	return clampf(CRIT_CHANCE + float(mods.get("crit_chance", 0.0)), 0.0, 0.95)
+
+
+func _hit_enemy(index: int, amount: int, ignore_block: bool, crit: bool = false) -> int:
 	var e := _enemy_at(index)
 	if e.is_empty() or int(e["hp"]) <= 0:
 		return 0
@@ -264,12 +278,13 @@ func _hit_enemy(index: int, amount: int, ignore_block: bool) -> int:
 	left = maxi(0, left)
 	var was_alive := int(e["hp"]) > 0
 	e["hp"] = maxi(0, int(e["hp"]) - left)
-	_event("enemy_hit", index, left)
+	_event("enemy_hit", index, left, crit)
 	if was_alive and int(e["hp"]) <= 0:
 		_event("enemy_died", index)
 		_log("%s убит!" % e["name"])
 	else:
-		_log("%s получает %d (%d/%d)" % [e["name"], left, e["hp"], e["max_hp"]])
+		_log("%s%s получает %d (%d/%d)" % [
+			"КРИТ! " if crit else "", e["name"], left, e["hp"], e["max_hp"]])
 	return left
 
 
@@ -354,8 +369,8 @@ func _enemy_at(index: int) -> Dictionary:
 	return enemies[index]
 
 
-func _event(kind: String, index: int, amount: int = 0) -> void:
-	events.append({"kind": kind, "index": index, "amount": amount})
+func _event(kind: String, index: int, amount: int = 0, crit: bool = false) -> void:
+	events.append({"kind": kind, "index": index, "amount": amount, "crit": crit})
 
 
 func _log(line: String) -> void:

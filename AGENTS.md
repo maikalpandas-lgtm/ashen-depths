@@ -48,6 +48,7 @@ godot --headless --script tests/formation_test.gd     # стая влезает 
 godot --headless --script tests/keyword_test.gd       # разметка текста карт не рвётся
 godot --headless --script tests/label_layout_test.gd  # полоски HP не налезают
 godot --headless --script tests/fan_layout_test.gd    # веер карт влезает в экран
+godot --headless --script tests/view_cone_test.gd     # конус обзора смотрит куда надо
 ```
 
 ⚠️ **Не импортировать `combat_overlay.gd` в headless-тест** — прогон зависает.

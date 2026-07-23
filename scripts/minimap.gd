@@ -20,6 +20,7 @@ const COL_PAPER := Color(0.36, 0.28, 0.22, 1)
 const COL_TILE := Color(0.72, 0.66, 0.55, 1)
 const COL_TILE_EDGE := Color(0.55, 0.48, 0.38, 1)
 const COL_PLAYER := Color(1.0, 0.88, 0.35, 1)
+const COL_VIEW_CONE := Color(1.0, 0.92, 0.55, 1)
 const COL_EXIT := Color(0.95, 0.45, 0.2, 1)
 const COL_CHEST := Color(0.95, 0.8, 0.25, 1)
 ## Skull bone, drawn ON a normal tile. It used to match the tile it sat on, so
@@ -132,9 +133,10 @@ func _redraw() -> void:
 				7:
 					_draw_merchant_icon(lx, ly)
 
-	# player (center of view)
+	# player (center of view) — cone first, so the marker sits on top of it
 	var plx := view_radius
 	var ply := view_radius
+	_draw_view_cone(plx, ply)
 	_draw_player(plx, ply)
 
 	_tex.update(_img)
@@ -161,6 +163,56 @@ func _draw_rounded_tile(lx: int, ly: int, col: Color) -> void:
 			_put(o.x + px, o.y + py, c)
 
 
+## Which way the crawler faces, snapped to the grid.
+func _facing_step() -> Vector2i:
+	if _player == null:
+		return Vector2i(0, -1)
+	var forward := -_player.global_transform.basis.z
+	if absf(forward.x) > absf(forward.z):
+		return Vector2i(1 if forward.x > 0.0 else -1, 0)
+	return Vector2i(0, 1 if forward.z > 0.0 else -1)
+
+
+## Warm cone of sight ahead of the player, like the reference. The old marker
+## put a single bright pixel three pixels out, which is not readable as a
+## direction at all — and direction is the one thing a corridor map has to tell
+## you, since every tile looks the same.
+func _draw_view_cone(lx: int, ly: int) -> void:
+	var f := _facing_step()
+	var o := _tile_origin(lx, ly)
+	var cx := o.x + tile / 2
+	var cy := o.y + tile / 2
+
+	var reach: float = float(tile) * 3.4  ## a bit over three tiles
+	var spread := 0.62  ## half-width per unit of depth
+	var span := int(ceil(reach))
+	for dy in range(-span, span + 1):
+		for dx in range(-span, span + 1):
+			# depth along the facing axis, offset across it
+			var depth: float = float(dx * f.x + dy * f.y)
+			var side: float = absf(float(dx * -f.y + dy * f.x))
+			if depth <= 1.0 or depth > reach:
+				continue
+			var half: float = depth * spread
+			if side > half:
+				continue
+			# fade out with depth, and soften towards the cone's edges
+			var t: float = 1.0 - depth / reach
+			var edge: float = 1.0 - (side / maxf(half, 0.001))
+			var a: float = 0.30 * t * t * clampf(edge * 1.6, 0.0, 1.0)
+			if a <= 0.01:
+				continue
+			_blend(cx + dx, cy + dy, COL_VIEW_CONE, a)
+
+
+func _blend(x: int, y: int, col: Color, a: float) -> void:
+	if _img == null:
+		return
+	if x < 0 or y < 0 or x >= _img.get_width() or y >= _img.get_height():
+		return
+	_img.set_pixel(x, y, _img.get_pixel(x, y).lerp(col, clampf(a, 0.0, 1.0)))
+
+
 func _draw_player(lx: int, ly: int) -> void:
 	var o := _tile_origin(lx, ly)
 	var cx := o.x + tile / 2
@@ -174,21 +226,15 @@ func _draw_player(lx: int, ly: int) -> void:
 		for px in range(-2, 3):
 			if px * px + py * py <= 4:
 				_put(cx + px, cy + py, COL_PLAYER)
-	# facing
-	if _player:
-		var forward := -_player.global_transform.basis.z
-		var fx := 0
-		var fy := 0
-		if absf(forward.x) > absf(forward.z):
-			fx = 1 if forward.x > 0.0 else -1
-		else:
-			fy = 1 if forward.z > 0.0 else -1
-		_put(cx + fx * 3, cy + fy * 3, Color(1, 1, 0.7))
-		_put(cx + fx * 4, cy + fy * 4, Color(1, 0.95, 0.5))
+	# Nose: a small wedge on the facing side, so the marker itself also reads
+	# as pointing somewhere when the cone falls on dark unexplored tiles.
+	var f := _facing_step()
+	for d in range(3, 6):
+		var w := 5 - d
+		for k in range(-w, w + 1):
+			_put(cx + f.x * d - f.y * k, cy + f.y * d + f.x * k, Color(1.0, 0.98, 0.78))
 
 
-## Skull marking a pack. Readable at 14px: dark outline first so the bone reads
-## against parchment, then eye sockets, jaw and a green witch-fire tuft.
 ## Skull marking a pack — deliberately drawn LARGER than its tile. A pack is the
 ## thing a player actually navigates by, so it must be spottable at a glance in
 ## a wall of identical corridor squares.

@@ -19,11 +19,19 @@ const UiTheme = preload("res://scripts/ui/ui_theme.gd")
 const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 const LabelLayout = preload("res://scripts/ui/label_layout.gd")
 
-const CARD_W := 138
-const CARD_H := 193
+## Smaller than they were: the hand was eating the lower third of the screen
+## while the monsters it targets sat tiny at the back.
+const CARD_W := 112
+const CARD_H := 157
+## Hearthstone-style fan. A flat row of upright cards reads as a spreadsheet;
+## an arc reads as cards held in a hand.
+const FAN_MAX_ANGLE := 15.0   ## degrees at the outermost card
+const FAN_ARC_LIFT := 26.0    ## how far the middle of the arc rises
+const FAN_OVERLAP := 0.80     ## fraction of a card width between neighbours
 const DRAG_LIFT := 26.0  ## how far a held card rises out of the hand
 const FLASH_TIME := 0.22  ## how long a struck monster stays lit
 const POPUP_TIME := 1.1  ## how long a damage number lives
+const IMPACT_TIME := 0.34  ## how long a hit burst lives
 
 var _combat: Combat = null
 var _source: Node3D = null  ## pack node in the world, freed on victory
@@ -51,6 +59,10 @@ var _enemy_flash: Dictionary = {}
 ## Anchored to a WORLD point and re-projected each frame, so a number stays over
 ## the monster it belongs to even while the camera shakes.
 var _popups: Array = []
+## Impact bursts at the point a card landed: {world, age, crit}. Every hit gets
+## one, mine included — a number appearing with nothing behind it reads as a
+## spreadsheet, not a blow.
+var _impacts: Array = []
 var _fx_layer: Control = null
 
 ## Combat framing: a dedicated camera and light, both dropped in for the fight
@@ -63,7 +75,7 @@ var _viewmodel: Node3D = null
 var _root: Control = null
 var _world_layer: Control = null  ## HP bars drawn over the 3D view
 var _line_layer: Control = null  ## the targeting line
-var _hand_row: HBoxContainer = null
+var _hand_row: Control = null
 var _status: Label = null
 var _banner: Label = null
 var _log: Label = null
@@ -237,8 +249,11 @@ func _enter_combat_view() -> void:
 
 	var n_pack: int = maxi(1, _enemy_nodes.size())
 	# Far enough that a 1.75m * 2 gap row still fits with margin
-	var dist: float = 5.0 if n_pack <= 2 else (6.2 if n_pack == 3 else 6.8)
-	var fov: float = 72.0 if n_pack <= 2 else 82.0
+	# Closer than before: the art is the reason these monsters were drawn, and
+	# at 5-7m they were postage stamps. A narrower FOV keeps a wide pack framed
+	# without having to back away from it.
+	var dist: float = 3.4 if n_pack <= 2 else (4.1 if n_pack == 3 else 4.7)
+	var fov: float = 60.0 if n_pack <= 2 else 68.0
 
 	if _cam and is_instance_valid(_cam):
 		_cam.queue_free()
@@ -247,8 +262,8 @@ func _enter_combat_view() -> void:
 	_cam.near = 0.05
 	_cam.far = 40.0
 	get_tree().current_scene.add_child(_cam)
-	_cam.global_position = pack + back * dist + Vector3.UP * 2.5
-	_cam.look_at(pack + Vector3.UP * 0.5, Vector3.UP)
+	_cam.global_position = pack + back * dist + Vector3.UP * 1.85
+	_cam.look_at(pack + Vector3.UP * 0.85, Vector3.UP)
 	_cam.current = true
 
 	if _stage_light and is_instance_valid(_stage_light):
@@ -306,6 +321,11 @@ func _process(_delta: float) -> void:
 	_line_layer.queue_redraw()
 
 	_update_enemy_visuals(_delta)
+	if not _impacts.is_empty():
+		for imp in _impacts:
+			imp["age"] += _delta
+		_impacts = _impacts.filter(func(imp): return imp["age"] < IMPACT_TIME)
+		_fx_layer.queue_redraw()
 	if not _popups.is_empty():
 		for pop in _popups:
 			pop["age"] += _delta
@@ -385,14 +405,15 @@ func _build_ui() -> void:
 	UiTheme.as_title(_status, 19, Color(0.95, 0.96, 1.0))
 	_root.add_child(_status)
 
-	_hand_row = HBoxContainer.new()
+	# Free positioning, not a box container: a fan needs per-card rotation and
+	# overlap, which no container will do.
+	_hand_row = Control.new()
 	_hand_row.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	_hand_row.offset_left = 200
-	_hand_row.offset_right = -210
-	_hand_row.offset_top = -CARD_H - 30
-	_hand_row.offset_bottom = -14
-	_hand_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	_hand_row.add_theme_constant_override("separation", 6)
+	_hand_row.offset_left = 190
+	_hand_row.offset_right = -200
+	_hand_row.offset_top = -CARD_H - 46
+	_hand_row.offset_bottom = 0
+	_hand_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_hand_row)
 
 	_end_button = Button.new()
@@ -631,6 +652,41 @@ func _draw_world_overlay() -> void:
 				Color(0.7, 0.88, 1.0))
 
 
+## Burst where a blow landed: an expanding ring plus a few slash strokes.
+func _draw_impacts() -> void:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	for imp in _impacts:
+		var t: float = clampf(float(imp["age"]) / IMPACT_TIME, 0.0, 1.0)
+		var world: Vector3 = imp["world"]
+		if cam.is_position_behind(world):
+			continue
+		var p := cam.unproject_position(world)
+		var crit: bool = imp["crit"]
+		var fade: float = 1.0 - t
+		var colour := Color(1.0, 0.78, 0.35) if crit else Color(1.0, 0.95, 0.88)
+
+		# Ring, opening fast and thinning as it goes
+		var r: float = lerpf(10.0, 92.0 if crit else 66.0, 1.0 - pow(1.0 - t, 2.2))
+		_fx_layer.draw_arc(p, r, 0.0, TAU, 28,
+			Color(colour, fade * 0.85), lerpf(7.0, 1.5, t), true)
+		# White core, gone almost immediately — the "spark" of contact
+		if t < 0.35:
+			var ct: float = t / 0.35
+			_fx_layer.draw_circle(p, lerpf(26.0, 4.0, ct),
+				Color(1.0, 1.0, 0.95, (1.0 - ct) * 0.85))
+		# Slash strokes, angled off the seed so repeats never match
+		var strokes: int = 4 if crit else 3
+		for k in range(strokes):
+			var a: float = float(imp["seed"]) + float(k) * (TAU / float(strokes))
+			var dir := Vector2(cos(a), sin(a))
+			var inner: float = r * 0.45
+			var outer: float = r * (1.25 if crit else 1.1)
+			_fx_layer.draw_line(p + dir * inner, p + dir * outer,
+				Color(colour, fade * 0.9), lerpf(9.0, 2.0, t), true)
+
+
 ## Damage numbers, rising and fading. Drawn manually rather than as Labels so
 ## they cost nothing to spawn and cannot disturb the UI layout.
 func _draw_popups() -> void:
@@ -673,6 +729,7 @@ func _draw_popups() -> void:
 
 ## Slashes left on screen by an enemy swing, fading out.
 func _draw_fx() -> void:
+	_draw_impacts()
 	_draw_popups()
 	for f in _slashes:
 		var t: float = clampf(float(f["age"]) / 0.45, 0.0, 1.0)
@@ -710,6 +767,7 @@ func _play_events() -> void:
 		match ev["kind"]:
 			"enemy_hit":
 				_flinch_enemy(i)
+				_spawn_impact(i, bool(ev.get("crit", false)))
 				_spawn_popup(i, int(ev["amount"]), bool(ev.get("crit", false)))
 				if Sfx:
 					var amt: int = int(ev.get("amount", 0))
@@ -749,6 +807,21 @@ func _enemy_sprite(index: int) -> Sprite3D:
 	if not is_instance_valid(node):
 		return null
 	return node.get_node_or_null("Sprite") as Sprite3D
+
+
+## Burst at chest height on the monster that was struck.
+func _spawn_impact(index: int, crit: bool) -> void:
+	if index < 0 or index >= _enemy_nodes.size():
+		return
+	var node := _enemy_nodes[index] as Node3D
+	if not is_instance_valid(node):
+		return
+	_impacts.append({
+		"world": node.global_position + Vector3.UP * (_enemy_top(index) * 0.55),
+		"age": 0.0,
+		"crit": crit,
+		"seed": randf() * TAU,
+	})
 
 
 ## A damage number over the monster that took it.
@@ -845,14 +918,14 @@ func _split_enemy(index: int) -> void:
 		var sprite_h := float(tex.get_height()) * spr.pixel_size
 		var edge := MeshInstance3D.new()
 		var quad := QuadMesh.new()
-		quad.size = Vector2(0.055, sprite_h * 0.92)
+		quad.size = Vector2(0.11, sprite_h * 0.96)
 		edge.mesh = quad
 		var emat := StandardMaterial3D.new()
 		emat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		emat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		emat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 		emat.cull_mode = BaseMaterial3D.CULL_DISABLED
-		emat.albedo_color = Color(1.0, 0.72, 0.42, 0.95)
+		emat.albedo_color = Color(1.0, 0.86, 0.6, 1.0)
 		emat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
 		emat.render_priority = 6
 		edge.material_override = emat
@@ -870,7 +943,7 @@ func _split_enemy(index: int) -> void:
 		tw.tween_property(piece, "transparency", 1.0, 0.55)
 		# The glow dies faster than the halves: a flare at the moment of the cut,
 		# not a torch carried off with the corpse.
-		tw.tween_property(emat, "albedo_color", Color(1.0, 0.45, 0.2, 0.0), 0.4)
+		tw.tween_property(emat, "albedo_color", Color(1.0, 0.4, 0.15, 0.0), 0.5)
 	get_tree().create_timer(0.7, true, false, true).timeout.connect(
 		func(): if is_instance_valid(holder): holder.queue_free())
 
@@ -900,17 +973,17 @@ func _draw_target_line() -> void:
 	var pulse: float = 0.85 + 0.15 * sin(float(Time.get_ticks_msec()) * 0.012)
 	for i in range(STEPS):
 		var t := float(i) / float(STEPS)
-		var w: float = lerpf(3.0, 13.0, t * t) * (pulse if hot else 1.0)
+		var w: float = lerpf(6.0, 24.0, t * t) * (pulse if hot else 1.0)
 		# dark liner first so the ribbon reads over pale rock as well as dark
-		_line_layer.draw_line(pts[i], pts[i + 1], Color(0.05, 0.05, 0.07, 0.55), w + 5.0, true)
+		_line_layer.draw_line(pts[i], pts[i + 1], Color(0.05, 0.05, 0.07, 0.6), w + 7.0, true)
 	for i in range(STEPS):
 		var t := float(i) / float(STEPS)
-		var w: float = lerpf(3.0, 13.0, t * t) * (pulse if hot else 1.0)
-		var c := Color(colour, lerpf(0.35, 1.0, t))
+		var w: float = lerpf(6.0, 24.0, t * t) * (pulse if hot else 1.0)
+		var c := Color(colour, lerpf(0.4, 1.0, t))
 		_line_layer.draw_line(pts[i], pts[i + 1], c, w, true)
 
 	# Head of the throw — a soft halo with a bright core
-	var head: float = 18.0 * pulse if hot else 13.0
+	var head: float = 26.0 * pulse if hot else 18.0
 	_line_layer.draw_circle(mouse, head + 8.0, Color(colour, 0.18))
 	_line_layer.draw_circle(mouse, head, Color(colour, 0.42))
 	_line_layer.draw_circle(mouse, head * 0.45, Color(1.0, 1.0, 0.95, 0.95))
@@ -921,11 +994,43 @@ func _render_hand() -> void:
 		_hand_row.remove_child(c)
 		c.queue_free()
 	_card_views.clear()
-	for i in range(_combat.deck.hand.size()):
-		_hand_row.add_child(_make_hand_card(i))
+	var n := _combat.deck.hand.size()
+	for i in range(n):
+		_hand_row.add_child(_make_hand_card(i, n))
 
 
-func _make_hand_card(index: int) -> Control:
+## Where card `index` of `n` sits in the fan: position, rotation, scale.
+## Pure geometry so the hit button, the glow and the face all agree.
+func _fan_slot(index: int, n: int) -> Dictionary:
+	var area := _hand_row.size
+	if area.x < 10.0:
+		area = Vector2(900.0, float(CARD_H) + 46.0)
+	var step: float = CARD_W * FAN_OVERLAP
+	# Squeeze the fan if a big hand would otherwise run off the strip
+	var span: float = step * float(maxi(0, n - 1))
+	if span > area.x - CARD_W:
+		step = (area.x - CARD_W) / float(maxi(1, n - 1))
+		span = step * float(maxi(0, n - 1))
+
+	var t: float = 0.0 if n <= 1 else (float(index) / float(n - 1)) * 2.0 - 1.0  # -1..1
+	var centre_x: float = area.x * 0.5
+	var x: float = centre_x + t * span * 0.5 - CARD_W * 0.5
+	# Arc: the middle of the hand rides higher than its ends
+	var y: float = area.y - CARD_H - 6.0 + (1.0 - cos(t * PI * 0.5)) * FAN_ARC_LIFT
+	var angle: float = t * FAN_MAX_ANGLE
+
+	var raised := index == _dragging or index == _hover_card
+	var scale_f := 1.0
+	if raised:
+		# Straighten, lift and grow — the reference pulls the read card out of
+		# the fan entirely rather than just tinting it
+		angle = 0.0
+		y -= 42.0
+		scale_f = 1.22 if index == _dragging else 1.14
+	return {"pos": Vector2(x, y), "angle": angle, "scale": scale_f, "raised": raised}
+
+
+func _make_hand_card(index: int, n: int) -> Control:
 	var entry: Dictionary = _combat.deck.hand[index]
 	var card: Dictionary = CardDB.resolve_entry(entry)
 	var owner_colour := Color(0.7, 0.7, 0.7)
@@ -934,46 +1039,45 @@ func _make_hand_card(index: int) -> Control:
 			owner_colour = m["colour"]
 
 	var playable := _combat.can_play(index)
+	var slot := _fan_slot(index, n)
+	var raised: bool = slot["raised"] and playable
+
 	var holder := Control.new()
-	holder.custom_minimum_size = Vector2(CARD_W, CARD_H + DRAG_LIFT)
+	holder.size = Vector2(CARD_W, CARD_H)
+	holder.custom_minimum_size = holder.size
+	holder.position = slot["pos"]
+	# Rotate about the bottom centre, the way a held card pivots in the fingers
+	holder.pivot_offset = Vector2(CARD_W * 0.5, CARD_H)
+	holder.rotation = deg_to_rad(float(slot["angle"]))
+	holder.scale = Vector2.ONE * float(slot["scale"])
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	var raised := index == _dragging or index == _hover_card
-
-	# Glow behind a raised card. Drawn under the face so it reads as light
-	# spilling out, not as a border stuck on top.
-	if raised and playable:
+	if raised:
 		var aura := Panel.new()
 		aura.set_anchors_preset(Control.PRESET_FULL_RECT)
-		var pad := 18.0 if index == _dragging else 12.0
+		var pad := 16.0 if index == _dragging else 11.0
 		aura.offset_left = -pad
 		aura.offset_top = -pad
 		aura.offset_right = pad
-		aura.offset_bottom = pad - DRAG_LIFT
+		aura.offset_bottom = pad
 		var glow := StyleBoxFlat.new()
-		var strength := 1.0 if index == _dragging else 0.6
-		glow.bg_color = Color(1.0, 0.88, 0.45, 0.20 * strength)
+		var strength := 1.0 if index == _dragging else 0.62
+		glow.bg_color = Color(1.0, 0.88, 0.45, 0.18 * strength)
 		glow.border_color = Color(1.0, 0.9, 0.55, 0.85 * strength)
 		glow.set_border_width_all(3)
-		glow.set_corner_radius_all(16)
+		glow.set_corner_radius_all(14)
 		glow.shadow_color = Color(1.0, 0.82, 0.35, 0.6 * strength)
-		glow.shadow_size = int(20 * strength) + 6
+		glow.shadow_size = int(20.0 * strength) + 6
 		aura.add_theme_stylebox_override("panel", glow)
 		aura.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		holder.add_child(aura)
 
 	var view := CardView.build(card, owner_colour, Vector2(CARD_W, CARD_H))
+	view.size = Vector2(CARD_W, CARD_H)
 	# Unplayable cards grey out rather than vanish (§7.4)
-	view.modulate = Color.WHITE if playable else Color(0.5, 0.5, 0.55, 0.8)
-	if raised and playable:
+	view.modulate = Color.WHITE if playable else Color(0.5, 0.5, 0.55, 0.85)
+	if raised:
 		view.modulate = Color(1.12, 1.09, 1.02)
-	# A raised card grows a little and stands out of the row
-	var grow := 0.0
-	if playable:
-		grow = 12.0 if index == _dragging else (7.0 if index == _hover_card else 0.0)
-	view.custom_minimum_size = Vector2(CARD_W + grow, CARD_H + grow * 1.4)
-	view.size = view.custom_minimum_size
-	view.position = Vector2(-grow * 0.5,
-		(0.0 if raised else DRAG_LIFT) - grow * 0.9)
 	holder.add_child(view)
 	_card_views.append(view)
 
@@ -984,11 +1088,16 @@ func _make_hand_card(index: int) -> Control:
 	# never fires on release over an enemy, so damage cards never resolve.
 	hit.keep_pressed_outside = true
 	hit.disabled = not playable or _combat.phase != Combat.Phase.PLAYER
+	hit.focus_mode = Control.FOCUS_NONE
 	hit.button_down.connect(func(): _start_drag(index, holder))
 	hit.button_up.connect(_finish_drag)
 	hit.mouse_entered.connect(func(): _set_hover_card(index))
 	hit.mouse_exited.connect(func(): _set_hover_card(-1))
 	holder.add_child(hit)
+
+	# A raised card must draw over its neighbours, not under them
+	if raised:
+		holder.z_index = 10
 
 	return holder
 

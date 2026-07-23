@@ -17,6 +17,7 @@ const Combat = preload("res://scripts/combat/combat_state.gd")
 const Party = preload("res://scripts/party.gd")
 const UiTheme = preload("res://scripts/ui/ui_theme.gd")
 const EnemySprites = preload("res://scripts/enemy_sprites.gd")
+const LabelLayout = preload("res://scripts/ui/label_layout.gd")
 
 const CARD_W := 138
 const CARD_H := 193
@@ -567,13 +568,14 @@ func _draw_world_overlay() -> void:
 		vp = get_viewport().get_visible_rect().size
 	var n := living.size()
 
+	# Bars are wider than the gap between three monsters standing shoulder to
+	# shoulder, so they collided. Project everyone FIRST, then push the labels
+	# apart along X before drawing any of them.
+	var bar_w: float = 112.0 if n <= 2 else 92.0
+	var min_gap := bar_w + 10.0
+	var spots: Array[Vector2] = []
 	for k in range(n):
 		var i: int = int(living[k])
-		var e: Dictionary = _combat.enemies[i]
-		# Belt-and-suspenders: never paint a corpse bar
-		if int(e.get("hp", 0)) <= 0:
-			continue
-
 		var p := Vector2.ZERO
 		var have_proj := false
 		if cam and i < _enemy_nodes.size():
@@ -584,15 +586,22 @@ func _draw_world_overlay() -> void:
 					p = cam.unproject_position(head)
 					have_proj = true
 		if not have_proj:
-			# Fallback slot among living only (no space reserved for dead)
 			var left_m := 220.0
 			var usable: float = maxf(160.0, vp.x - left_m - 40.0)
 			var t: float = 0.5 if n == 1 else float(k) / float(n - 1)
 			p = Vector2(left_m + usable * t, 110.0)
 		p.y = clampf(p.y, 88.0, vp.y - 280.0)
-		p.x = clampf(p.x, 230.0, vp.x - 50.0)
+		spots.append(p)
 
-		var bar_w := 112.0
+	LabelLayout.separate(spots, min_gap, 230.0, vp.x - 50.0)
+
+	for k in range(n):
+		var i: int = int(living[k])
+		var e: Dictionary = _combat.enemies[i]
+		# Belt-and-suspenders: never paint a corpse bar
+		if int(e.get("hp", 0)) <= 0:
+			continue
+		var p: Vector2 = spots[k]
 		var bar := Rect2(p.x - bar_w * 0.5, p.y - 10.0, bar_w, 14.0)
 		_world_layer.draw_rect(bar.grow(3.0), Color(0.02, 0.02, 0.04, 0.92))
 		_world_layer.draw_rect(bar, Color(0.18, 0.07, 0.08, 0.98))

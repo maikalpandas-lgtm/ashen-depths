@@ -45,7 +45,12 @@
 godot --headless --script tests/run_tests.gd          # правила боя, колоды
 godot --headless --script tests/click_through_test.gd # карта не глотает клики
 godot --headless --script tests/formation_test.gd     # стая влезает в коридор
+godot --headless --script tests/keyword_test.gd       # разметка текста карт не рвётся
+godot --headless --script tests/label_layout_test.gd  # полоски HP не налезают
 ```
+
+⚠️ **Не импортировать `combat_overlay.gd` в headless-тест** — прогон зависает.
+Чистую логику выносить в отдельный модуль без узлов (см. `scripts/ui/label_layout.gd`).
 
 ⚠️ **`Panel` по умолчанию `MOUSE_FILTER_STOP`**, `TextureRect` — `PASS`, `Label` — `IGNORE`.
 Любой `Panel` поверх интерактивного элемента съедает клик молча. Карта целиком

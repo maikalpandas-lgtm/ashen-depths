@@ -110,29 +110,31 @@ func _test_seed_is_deterministic() -> void:
 func _test_party() -> void:
 	print("party")
 	var p: Party = Party.new()
-	check(p.members.size() == 3, "MVP party has 3 heroes")
-	check(p.total_max_hp() == 88, "party HP sums to the 88 the HUD shows")
-	for m in p.members:
-		var n: int = (m["deck"] as Array).size()
-		check(n >= 8 and n <= 10, "%s starter deck is 8-10 cards (%d)" % [m["id"], n])
+	check(p.members.size() == 1, "a run is ONE hero")
+	check(p.hero()["id"] == Party.DEFAULT_HERO, "default hero is the one advertised")
+	for hid in Party.PLAYABLE:
+		var solo: Party = Party.of(str(hid))
+		var hp: int = solo.total_max_hp()
+		check_silent(hp >= 50 and hp <= 90, "%s solo HP is in range (%d)" % [hid, hp])
+		var n: int = (solo.hero()["deck"] as Array).size()
+		check_silent(n >= 10 and n <= 12, "%s starter deck is 10-12 cards (%d)" % [hid, n])
+	check(true, "every playable hero has sane HP and deck size")
 	p.members[0]["hp"] = 0
-	check(p.alive_members().size() == 2, "a downed hero drops out of alive_members")
+	check(p.alive_members().is_empty(), "a downed hero leaves nobody standing")
 
 
 func _test_combat_deck() -> void:
 	print("combat deck")
 	var p: Party = Party.new()
 	var deck: Deck = p.build_combat_deck(11)
-	var expected := 0
-	for m in p.members:
-		expected += (m["deck"] as Array).size()
-	check(deck.total() == expected, "all three decks merged (%d cards)" % expected)
+	var expected: int = (p.hero()["deck"] as Array).size()
+	check(deck.total() == expected, "combat deck is the hero's deck (%d cards)" % expected)
 
 	var owners := {}
 	for e in deck.draw_pile:
 		owners[e["owner"]] = true
 		check_silent(CardDB.has_card(e["card"]), "every entry is a real card")
-	check(owners.size() == 3, "every card carries an owner tag, all 3 present")
+	check(owners.size() == 1, "every card carries the single hero's owner tag")
 
 
 func _combat(pack: Array = ["grub"]) -> Combat:
@@ -156,7 +158,7 @@ func _test_combat_damage() -> void:
 	# Shade has enough HP that one slice does not end the fight
 	var c := _combat(["shade"])
 	# Force a known hand so the test does not depend on the shuffle
-	c.deck.hand = [{"card": "slice", "owner": "kael"}, {"card": "block", "owner": "kael"}]
+	c.deck.hand = [{"card": "slice", "owner": Party.DEFAULT_HERO}, {"card": "block", "owner": Party.DEFAULT_HERO}]
 	var hp_before: int = c.enemies[0]["hp"]
 	check(c.play_card(0, 0), "slice resolves")
 	check(c.enemies[0]["hp"] == hp_before - 7, "slice deals its 7")
@@ -168,13 +170,13 @@ func _test_combat_damage() -> void:
 
 	# Cannot pay what you do not have
 	var poor := _combat(["grub"])
-	poor.deck.hand = [{"card": "hack", "owner": "kael"}]
+	poor.deck.hand = [{"card": "hack", "owner": Party.DEFAULT_HERO}]
 	poor.energy = 1
 	check(not poor.can_play(0), "a 2-cost card is unplayable on 1 energy")
 
 	# Blood must never be able to wipe the party
 	var bleed := _combat(["grub"])
-	bleed.deck.hand = [{"card": "blood_lash", "owner": "sera"}]
+	bleed.deck.hand = [{"card": "blood_lash", "owner": Party.DEFAULT_HERO}]
 	for m in bleed.party.members:
 		m["hp"] = 1
 	check(not bleed.can_play(0), "a blood card cannot kill the party to pay for itself")
@@ -184,14 +186,14 @@ func _test_combat_end() -> void:
 	print("combat ends")
 	var c := _combat(["grub"])
 	c.enemies[0]["hp"] = 3
-	c.deck.hand = [{"card": "slice", "owner": "kael"}]
+	c.deck.hand = [{"card": "slice", "owner": Party.DEFAULT_HERO}]
 	c.play_card(0, 0)
 	check(c.phase == Combat.Phase.WON, "killing the last enemy wins")
 	check(c.alive_enemies().is_empty(), "no enemies left standing")
 
 	# events must describe what happened, the UI animates off them
 	var ev := _combat(["grub"])
-	ev.deck.hand = [{"card": "slice", "owner": "kael"}]
+	ev.deck.hand = [{"card": "slice", "owner": Party.DEFAULT_HERO}]
 	ev.enemies[0]["hp"] = 3
 	ev.play_card(0, 0)
 	var kinds: Array = ev.events.map(func(e): return e["kind"])
@@ -206,14 +208,14 @@ func _test_combat_end() -> void:
 
 	# crit: rolled per card, multiplies, and is reported so the UI can show it
 	var never := _combat(["brute"])
-	never.deck.hand = [{"card": "slice", "owner": "vityaz"}]
+	never.deck.hand = [{"card": "slice", "owner": Party.DEFAULT_HERO}]
 	var base_hp: int = never.enemies[0]["hp"]
 	var crit_seen := false
 	var plain_seen := false
 	for attempt in range(120):
 		var c2 := _combat(["brute"])
 		c2._rng.seed = attempt
-		c2.deck.hand = [{"card": "slice", "owner": "vityaz"}]
+		c2.deck.hand = [{"card": "slice", "owner": Party.DEFAULT_HERO}]
 		c2.play_card(0, 0)
 		for hit in c2.events:
 			if hit["kind"] == "enemy_hit":

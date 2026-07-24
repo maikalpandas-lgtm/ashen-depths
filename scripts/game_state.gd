@@ -11,7 +11,10 @@ var current_seed: int = 0
 var run_seed: int = 0
 var floor_index: int = 1
 var gold: int = 0
-## The three heroes of this run. Combat draws its deck from here.
+## ONE hero per run, chosen at the title screen (DESIGN §5, revised 22.07.2026).
+## Party still holds a `members` array so the dozen call sites that iterate it
+## keep working — it simply holds exactly one hero.
+var hero_id: String = Party.DEFAULT_HERO
 var party: Party = null
 ## Shared party backpack 5×4 (DESIGN §8).
 var backpack: Backpack = null
@@ -43,12 +46,12 @@ signal defeat_finished(choice: String)
 
 func _ready() -> void:
 	if party == null:
-		party = Party.new()
+		party = Party.of(hero_id)
 	if backpack == null:
 		backpack = Backpack.new()
 
 
-func new_run(seed_value: int = 0) -> void:
+func new_run(seed_value: int = 0, chosen_hero: String = "") -> void:
 	if seed_value == 0:
 		seed_value = randi()
 	run_seed = seed_value
@@ -60,7 +63,9 @@ func new_run(seed_value: int = 0) -> void:
 	pending_level_ups = 0
 	pending_loot.clear()
 	pending_floor_shop = false
-	party = Party.new()
+	if chosen_hero != "":
+		hero_id = chosen_hero
+	party = Party.of(hero_id)
 	backpack = Backpack.new()
 
 

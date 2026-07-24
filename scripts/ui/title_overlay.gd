@@ -47,10 +47,16 @@ func _start() -> void:
 		return
 	_started = true
 	_root.visible = false
-	get_tree().paused = false
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if Sfx:
 		Sfx.play("ui_click")
+	# Hero select owns the hand-off: a run cannot begin before a hero exists,
+	# so it starts the run itself and unpauses when a card is clicked.
+	var picker := get_tree().current_scene.get_node_or_null("HeroSelectOverlay")
+	if picker and picker.has_method("open"):
+		picker.open()
+		return
+	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if Music:
 		Music.play_explore(true)
 

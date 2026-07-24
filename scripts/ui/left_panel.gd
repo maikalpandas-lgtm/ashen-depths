@@ -44,8 +44,10 @@ func set_minimap_node(m: Control) -> void:
 func refresh() -> void:
 	var floor_i := 1
 	var gold := 0
-	var party_hp := 88
-	var party_max := 88
+	# Fallback only — a real run always has a hero. 88 was the old three-hero
+	# total; a solo run's pool is whatever that hero carries.
+	var party_hp := 82
+	var party_max := 82
 	var portrait_id := "hero_vityaz"
 	var name_s := "Витязь"
 	if GameState:

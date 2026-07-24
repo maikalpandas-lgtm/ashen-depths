@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3 uid="uid://bmain001ashen"]
+[gd_scene load_steps=20 format=3 uid="uid://bmain001ashen"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/dungeon_generator.gd" id="2_dungeon"]
@@ -14,6 +14,7 @@
 [ext_resource type="Script" path="res://scripts/ui/shop_overlay.gd" id="16_shop"]
 [ext_resource type="Script" path="res://scripts/ui/title_overlay.gd" id="17_title"]
 [ext_resource type="Script" path="res://scripts/ui/settings_overlay.gd" id="18_settings"]
+[ext_resource type="Script" path="res://scripts/ui/hero_select_overlay.gd" id="30_heroselect"]
 
 [sub_resource type="Environment" id="Environment_fog"]
 background_mode = 1
@@ -181,8 +182,8 @@ custom_minimum_size = Vector2(0, 14)
 layout_mode = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_hp")
 theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
-max_value = 88.0
-value = 88.0
+max_value = 82.0
+value = 82.0
 show_percentage = false
 
 [node name="StatsRow" type="HBoxContainer" parent="UI/LeftPanel/Margin/VBox"]
@@ -194,7 +195,7 @@ alignment = 1
 layout_mode = 2
 theme_override_colors/font_color = Color(0.95, 0.55, 0.55, 1)
 theme_override_font_sizes/font_size = 13
-text = "❤  88/88"
+text = "❤  82/82"
 
 [node name="GoldLabel" type="Label" parent="UI/LeftPanel/Margin/VBox/StatsRow"]
 layout_mode = 2
@@ -253,3 +254,6 @@ script = ExtResource("17_title")
 
 [node name="SettingsOverlay" type="CanvasLayer" parent="."]
 script = ExtResource("18_settings")
+
+[node name="HeroSelectOverlay" type="CanvasLayer" parent="."]
+script = ExtResource("30_heroselect")

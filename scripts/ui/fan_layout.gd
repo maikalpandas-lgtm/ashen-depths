@@ -27,8 +27,10 @@ static func slot(index: int, n: int, area: Vector2, raised: bool,
 
 	var t: float = 0.0 if n <= 1 else (float(index) / float(n - 1)) * 2.0 - 1.0
 	var x: float = area.x * 0.5 + t * span * 0.5 - CARD_W * 0.5
-	# Arc: the middle of the hand rides higher than its ends
-	var y: float = area.y - CARD_H - 6.0 + (1.0 - cos(t * PI * 0.5)) * ARC_LIFT
+	# Arc: the middle of the hand rides higher than its ends. The base sits a
+	# full ARC_LIFT up, or the OUTERMOST cards — the low ones — hang off the
+	# bottom of the strip and get clipped by the screen edge.
+	var y: float = area.y - CARD_H - 6.0 - ARC_LIFT + (1.0 - cos(t * PI * 0.5)) * ARC_LIFT
 	var angle: float = t * MAX_ANGLE
 	var scale_f := 1.0
 	if raised:

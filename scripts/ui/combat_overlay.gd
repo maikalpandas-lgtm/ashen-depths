@@ -252,7 +252,9 @@ func _enter_combat_view() -> void:
 	# Closer than before: the art is the reason these monsters were drawn, and
 	# at 5-7m they were postage stamps. A narrower FOV keeps a wide pack framed
 	# without having to back away from it.
-	var dist: float = 3.4 if n_pack <= 2 else (4.1 if n_pack == 3 else 4.7)
+	# A touch further back than the closest framing: at 3.4m a big monster fills
+	# the frame and its name/HP had nowhere to sit but on its own legs.
+	var dist: float = 4.1 if n_pack <= 2 else (4.8 if n_pack == 3 else 5.4)
 	var fov: float = 60.0 if n_pack <= 2 else 68.0
 
 	if _cam and is_instance_valid(_cam):
@@ -262,8 +264,10 @@ func _enter_combat_view() -> void:
 	_cam.near = 0.05
 	_cam.far = 40.0
 	get_tree().current_scene.add_child(_cam)
-	_cam.global_position = pack + back * dist + Vector3.UP * 1.85
-	_cam.look_at(pack + Vector3.UP * 0.85, Vector3.UP)
+	# Looking a little higher lifts the monsters up the frame, which is what
+	# leaves clear floor under them for the labels.
+	_cam.global_position = pack + back * dist + Vector3.UP * 2.1
+	_cam.look_at(pack + Vector3.UP * 1.15, Vector3.UP)
 	_cam.current = true
 
 	if _stage_light and is_instance_valid(_stage_light):
@@ -351,13 +355,8 @@ func _build_ui() -> void:
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
 
-	# Only a soft floor gradient — the corridor must stay visible
-	var shade := ColorRect.new()
-	shade.color = Color(0.02, 0.03, 0.05, 0.5)
-	shade.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	shade.offset_top = -212
-	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(shade)
+	# No shade strip behind the hand: the cards are opaque and carry their own
+	# outline, so a translucent band only muddied the corridor beneath them.
 
 	_world_layer = Control.new()
 	_world_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -410,10 +409,10 @@ func _build_ui() -> void:
 	# overlap, which no container will do.
 	_hand_row = Control.new()
 	_hand_row.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	_hand_row.offset_left = 190
-	_hand_row.offset_right = -200
-	_hand_row.offset_top = -CARD_H - 46
-	_hand_row.offset_bottom = 0
+	_hand_row.offset_left = 250
+	_hand_row.offset_right = -230
+	_hand_row.offset_top = -CARD_H - 64
+	_hand_row.offset_bottom = -8
 	_hand_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_hand_row)
 
@@ -622,7 +621,8 @@ func _draw_world_overlay() -> void:
 			p = Vector2(left_m + usable * t, 150.0)
 			head_y = p.y - 90.0
 		# Only a floor clamp: dragging the feet UP puts the labels on the sprite
-		p.y = minf(p.y, vp.y - 232.0)
+		# Only a floor clamp, and it must clear the hand strip below
+		p.y = minf(p.y, vp.y - 300.0)
 		spots.append(p)
 		head_ys.append(head_y)
 
@@ -635,8 +635,9 @@ func _draw_world_overlay() -> void:
 		if int(e.get("hp", 0)) <= 0:
 			continue
 		var p: Vector2 = spots[k]
-		# Clear of the feet, name above the bar (reference order)
-		var bar := Rect2(p.x - bar_w * 0.5, p.y + 34.0, bar_w, 15.0)
+		# Clear of the feet, name above the bar (reference order). The gap is
+		# generous because a sprite's paws and tail hang below its node origin.
+		var bar := Rect2(p.x - bar_w * 0.5, p.y + 46.0, bar_w, 15.0)
 		# Rounded pill, like the reference, rather than a flat rectangle
 		_pill(bar.grow(2.5), Color(0.06, 0.04, 0.05, 0.95))
 		_pill(bar, Color(0.30, 0.10, 0.12, 0.98))

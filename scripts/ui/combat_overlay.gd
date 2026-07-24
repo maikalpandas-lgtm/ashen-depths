@@ -523,6 +523,21 @@ func _update_enemy_visuals(delta: float) -> void:
 		if not is_instance_valid(node):
 			continue
 		var spr := node.get_node_or_null("Sprite") as Sprite3D
+		# Hover reads as a RIM, not as a brighter monster: blowing the sprite
+		# out to 2x white washed the art away and the pulse leaked onto the HP
+		# bar underneath, which is what looked like the bar shining through.
+		#
+		# Resolved BEFORE the early exit below. A killed enemy has its sprite
+		# hidden, so `continue` used to skip the rim entirely and leave a
+		# glowing outline hanging in the corridor with no monster inside it.
+		var alive: bool = int(_combat.enemies[i].get("hp", 0)) > 0
+		var rim := node.get_node_or_null("Outline") as Sprite3D
+		if rim:
+			rim.visible = alive and i == hovered and spr != null and spr.visible
+			if rim.visible:
+				var rim_mat := rim.material_override as ShaderMaterial
+				if rim_mat:
+					rim_mat.set_shader_parameter("pulse", pulse)
 		if spr == null or not spr.visible:
 			continue
 
@@ -533,16 +548,6 @@ func _update_enemy_visuals(delta: float) -> void:
 
 		var tint := Color.WHITE
 		var scale_f := base_scale
-		# Hover reads as a RIM, not as a brighter monster: blowing the sprite
-		# out to 2x white washed the art away and the pulse leaked onto the HP
-		# bar underneath, which is what looked like the bar shining through.
-		var rim := node.get_node_or_null("Outline") as Sprite3D
-		if rim:
-			rim.visible = i == hovered
-			if rim.visible:
-				var rim_mat := rim.material_override as ShaderMaterial
-				if rim_mat:
-					rim_mat.set_shader_parameter("pulse", pulse)
 		if i == hovered:
 			tint = Color(1.12, 1.10, 1.03)
 			scale_f *= 1.03
@@ -568,6 +573,11 @@ func _sync_world_visibility() -> void:
 		# Hide dead fully so living HP UI isn't buried under corpses
 		spr.visible = not dead
 		spr.transparency = 0.0
+		# The target rim is a SIBLING of the sprite, so hiding the sprite does
+		# not hide it. Belt and braces with _update_enemy_visuals.
+		var rim := node.get_node_or_null("Outline") as Sprite3D
+		if rim and dead:
+			rim.visible = false
 
 
 ## Living enemy indices only (hp > 0). Dead never get bars or aim slots.

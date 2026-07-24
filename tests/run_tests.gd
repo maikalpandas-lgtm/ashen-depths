@@ -10,6 +10,7 @@ const CardDB = preload("res://scripts/cards/card_db.gd")
 const Deck = preload("res://scripts/cards/deck.gd")
 const Party = preload("res://scripts/party.gd")
 const Combat = preload("res://scripts/combat/combat_state.gd")
+const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 
 var _passed := 0
 var _failed := 0
@@ -28,6 +29,7 @@ func _init() -> void:
 	_test_combat_end()
 	_test_party_add_card()
 	_test_floor_seed()
+	_test_biome_realms()
 	_test_card_upgrades()
 	_test_xp_level()
 	_test_backpack()
@@ -263,6 +265,24 @@ func _test_floor_seed() -> void:
 	var f3 := absi(run * 1664525 + 3 * 1013904223)
 	check(f2 != f3, "different floors get different layout seeds")
 	check(f2 == absi(run * 1664525 + 2 * 1013904223), "floor seed is deterministic")
+
+
+## The forest is a MAP TYPE, not a depth. Nav is picked by floor, the forest is
+## picked by the player, and mixing the two is how "I chose the forest and woke
+## up in a cave" happens.
+func _test_biome_realms() -> void:
+	print("biomes")
+	check(EnemySprites.realm_for(1, "mine") == "mine", "floor 1 of the mines is the mines")
+	check(EnemySprites.realm_for(5, "mine") == "nav", "deep mine floors are Nav")
+	check(EnemySprites.realm_for(1, "forest") == "forest", "forest floor 1 is forest")
+	check(EnemySprites.realm_for(9, "forest") == "forest",
+		"depth never turns the forest into Nav")
+	for h in range(8):
+		for id in EnemySprites.pack_for(h, 1, "forest"):
+			check(str(EnemySprites.ENEMIES[id]["realm"]) == "forest",
+				"forest pack holds only forest mobs (%s)" % id)
+	check(str(EnemySprites.ENEMIES[EnemySprites.floor_boss_pack(1, "forest")[0]]["realm"]) == "forest",
+		"forest boss is a forest mob")
 
 
 func _test_card_upgrades() -> void:

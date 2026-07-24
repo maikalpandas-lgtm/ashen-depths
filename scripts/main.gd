@@ -30,6 +30,9 @@ func _ready() -> void:
 		GameState.dungeon_ready.connect(_on_dungeon_ready)
 		if GameState.has_signal("floor_changed"):
 			GameState.floor_changed.connect(_on_floor_changed)
+	var picker := get_node_or_null("HeroSelectOverlay")
+	if picker and picker.has_signal("hero_chosen"):
+		picker.hero_chosen.connect(_on_hero_chosen)
 		if GameState.has_signal("draft_finished"):
 			GameState.draft_finished.connect(_on_draft_finished)
 		if GameState.has_signal("defeat_finished"):
@@ -154,6 +157,19 @@ func _on_dungeon_ready(start_world: Vector3) -> void:
 		minimap.setup(dungeon, player)
 	if minimap and minimap.has_method("clear_fog"):
 		minimap.clear_fog()
+	_update_hud()
+
+
+## The first layout is built at scene load — before the player has picked
+## anything — so it is always a mine on the default biome. Rebuild once the run
+## actually exists, or choosing the forest drops you in a cave with a forest
+## label on the HUD.
+func _on_hero_chosen(_hero_id: String) -> void:
+	if minimap and minimap.has_method("clear_fog"):
+		minimap.clear_fog()
+	var seed_val: int = GameState.current_seed if GameState else randi()
+	if dungeon.has_method("generate"):
+		dungeon.generate(seed_val)
 	_update_hud()
 
 

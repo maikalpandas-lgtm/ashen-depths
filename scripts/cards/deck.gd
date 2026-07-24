@@ -13,6 +13,10 @@ const HAND_CAP := 10  ## §7.5 — draw stops here rather than burning cards
 var draw_pile: Array = []
 var hand: Array = []
 var discard_pile: Array = []
+## Изгнание — out of the fight entirely, not shuffled back by _recycle_discard.
+## Kept as a real pile rather than dropped on the floor so `total()` stays
+## honest and the UI can show what has been burned.
+var exhaust_pile: Array = []
 
 var _rng := RandomNumberGenerator.new()
 
@@ -22,8 +26,24 @@ func _init(entries: Array = [], seed_value: int = 0) -> void:
 	_rng.seed = seed_value
 
 
+## Everything the deck started with, including burned cards.
 func total() -> int:
+	return draw_pile.size() + hand.size() + discard_pile.size() + exhaust_pile.size()
+
+
+## What can still be drawn this fight — this is the number the player cares
+## about, and the one the HUD shows.
+func live_total() -> int:
 	return draw_pile.size() + hand.size() + discard_pile.size()
+
+
+## Burn hand[index] for the rest of the fight. Returns false on a bad index.
+func exhaust_at(index: int) -> bool:
+	if index < 0 or index >= hand.size():
+		return false
+	exhaust_pile.append(hand[index])
+	hand.remove_at(index)
+	return true
 
 
 func shuffle() -> void:

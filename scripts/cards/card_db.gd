@@ -17,11 +17,18 @@ enum Type { STRIKE, GUARD, SKILL, SPELL, BLOOD }
 enum Sigil {
 	SHARP, PIERCE, SWEEP, DRAIN, FRAIL_HIT, BONE, SANGUINE, ECHO, WARD, CLEAVE,
 	POISON_HIT, WEAKEN, RAGE,
+	## Фаза B — «карта делает две вещи»
+	LEFTOVER,  ## перебитый урон переходит на следующего живого
+	OVERKILL,  ## перебитый урон становится бронёй
+	EXHAUST,   ## карта уходит из боя совсем
+	DRAW,      ## добор карты
 }
 
 ## energy = ⚡, blood = 🩸 HP paid on play.
 ## rarity: common | uncommon | rare — Layer 2 rare-pick uses uncommon+rare.
 const CARDS := {
+	# The basic strike stays plain ON PURPOSE. A starter deck needs one card with
+	# no rider, or a new player has nothing to read the others against.
 	"slice": {
 		"name": "Сеча", "type": Type.STRIKE, "energy": 1, "blood": 0,
 		"damage": 7, "block": 0, "sigils": [],
@@ -29,8 +36,8 @@ const CARDS := {
 	},
 	"hack": {
 		"name": "Рубка", "type": Type.STRIKE, "energy": 2, "blood": 0,
-		"damage": 10, "block": 0, "sigils": [Sigil.SHARP],
-		"text": "10 урона. Остриё: +2 по щиту", "art": "card_hack",
+		"damage": 10, "block": 0, "sigils": [Sigil.SHARP, Sigil.LEFTOVER],
+		"text": "10 урона. Остриё: +2 по щиту. Перенос", "art": "card_hack",
 		"rarity": "rare",
 	},
 	"block": {
@@ -40,8 +47,8 @@ const CARDS := {
 	},
 	"cleave_cut": {
 		"name": "Размах", "type": Type.STRIKE, "energy": 1, "blood": 0,
-		"damage": 5, "block": 0, "sigils": [Sigil.CLEAVE],
-		"text": "5 урона, 50% соседу", "art": "card_cleave_cut",
+		"damage": 5, "block": 0, "sigils": [Sigil.CLEAVE, Sigil.OVERKILL],
+		"text": "5 урона, 50% соседу. Перебор в броню", "art": "card_cleave_cut",
 		"rarity": "uncommon",
 	},
 	"blood_lash": {
@@ -52,8 +59,8 @@ const CARDS := {
 	},
 	"bone_rattle": {
 		"name": "Костогрем", "type": Type.STRIKE, "energy": 1, "blood": 0,
-		"damage": 4, "block": 0, "sigils": [Sigil.BONE],
-		"text": "4 урона. Добил — кость", "art": "card_bone_rattle",
+		"damage": 4, "block": 0, "sigils": [Sigil.BONE, Sigil.DRAW],
+		"text": "4 урона. Добил — кость. Добор", "art": "card_bone_rattle",
 		"rarity": "uncommon",
 	},
 	"echo_strike": {
@@ -64,8 +71,8 @@ const CARDS := {
 	},
 	"ward": {
 		"name": "Оберег", "type": Type.GUARD, "energy": 1, "blood": 0,
-		"damage": 0, "block": 4, "sigils": [Sigil.WARD],
-		"text": "4 брони и 1 шип", "art": "card_ward",
+		"damage": 0, "block": 4, "sigils": [Sigil.WARD, Sigil.DRAW],
+		"text": "4 брони и 1 шип. Добор", "art": "card_ward",
 		"rarity": "uncommon",
 	},
 	"offering": {
@@ -108,10 +115,60 @@ const CARDS := {
 		"text": "−3 HP → 8 урона. Ярость 1", "art": "card_blood_pact",
 		"rarity": "rare",
 	},
+	# --- батч 8: карты «две вещи» ---
+	"axe_swing": {
+		"name": "Секира", "type": Type.STRIKE, "energy": 2, "blood": 0,
+		"damage": 12, "block": 0, "sigils": [Sigil.LEFTOVER],
+		"text": "12 урона. Перенос", "art": "card_axe_swing", "rarity": "uncommon",
+	},
+	"spear_thrust": {
+		"name": "Копьё", "type": Type.STRIKE, "energy": 1, "blood": 0,
+		"damage": 6, "block": 0, "sigils": [Sigil.PIERCE, Sigil.SHARP],
+		"text": "6 урона. Пробой брони. Остриё: +2 по щиту",
+		"art": "card_spear_thrust", "rarity": "uncommon",
+	},
+	"dagger_pair": {
+		"name": "Двойня", "type": Type.STRIKE, "energy": 1, "blood": 0,
+		"damage": 4, "block": 0, "sigils": [Sigil.DRAW],
+		"text": "4 урона. Добор", "art": "card_dagger_pair", "rarity": "common",
+	},
+	"bear_claw": {
+		"name": "Медвежья лапа", "type": Type.STRIKE, "energy": 2, "blood": 0,
+		"damage": 9, "block": 0, "sigils": [Sigil.FRAIL_HIT, Sigil.OVERKILL],
+		"text": "9 урона. Порча 2. Перебор в броню",
+		"art": "card_bear_claw", "rarity": "rare",
+	},
+	"tower_shield": {
+		"name": "Червлёный щит", "type": Type.GUARD, "energy": 2, "blood": 0,
+		"damage": 0, "block": 11, "sigils": [Sigil.WARD],
+		"text": "11 брони и 1 шип", "art": "card_tower_shield", "rarity": "uncommon",
+	},
+	"chainmail": {
+		"name": "Кольчуга", "type": Type.GUARD, "energy": 1, "blood": 0,
+		"damage": 0, "block": 6, "sigils": [Sigil.DRAW],
+		"text": "6 брони. Добор", "art": "card_chainmail", "rarity": "common",
+	},
+	"lightning": {
+		"name": "Перунов бой", "type": Type.SPELL, "energy": 2, "blood": 0,
+		"damage": 8, "block": 0, "sigils": [Sigil.PIERCE, Sigil.EXHAUST],
+		"text": "8 урона. Пробой брони. Сгорает",
+		"art": "card_lightning", "rarity": "rare",
+	},
+	"raven": {
+		"name": "Ворон-вестник", "type": Type.SPELL, "energy": 0, "blood": 0,
+		"damage": 0, "block": 0, "sigils": [Sigil.DRAW, Sigil.EXHAUST],
+		"text": "Добор. Сгорает", "art": "card_raven", "rarity": "common",
+	},
+	"bone_crown": {
+		"name": "Костяной венец", "type": Type.BLOOD, "energy": 0, "blood": 2,
+		"damage": 5, "block": 0, "sigils": [Sigil.BONE, Sigil.SANGUINE],
+		"text": "−2 HP → 5 урона. Добил — кость. Ярость 1",
+		"art": "card_bone_crown", "rarity": "uncommon",
+	},
 	"firebolt": {
 		"name": "Огнестрел", "type": Type.SPELL, "energy": 1, "blood": 0,
-		"damage": 5, "block": 0, "sigils": [Sigil.PIERCE],
-		"text": "5 урона. Пробой брони", "art": "card_firebolt",
+		"damage": 5, "block": 0, "sigils": [Sigil.PIERCE, Sigil.POISON_HIT],
+		"text": "5 урона. Пробой брони. Отрава 3", "art": "card_firebolt",
 		"rarity": "common",
 	},
 }

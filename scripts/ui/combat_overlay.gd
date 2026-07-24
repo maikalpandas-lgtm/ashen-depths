@@ -911,6 +911,44 @@ func _update_motes(delta: float) -> void:
 	_fx_layer.queue_redraw()
 
 
+## Draw pile / discard counters in the bottom corners, like the reference.
+##
+## Without these the player cannot tell a nearly-empty deck from a full one,
+## which matters the moment cards start exhausting themselves — a burned card
+## never comes back, and that has to be visible.
+func _draw_piles() -> void:
+	if _combat == null or _combat.deck == null:
+		return
+	var font := UiTheme.title_font()
+	if font == null:
+		return
+	var area := _fx_layer.size
+	if area.x < 10.0:
+		area = get_viewport().get_visible_rect().size
+	var y := area.y - 42.0
+	_pile_badge(font, Vector2(232.0, y), _combat.deck.draw_pile.size(),
+		"колода", Color(0.30, 0.42, 0.62))
+	_pile_badge(font, Vector2(area.x - 74.0, y), _combat.deck.discard_pile.size(),
+		"сброс", Color(0.42, 0.34, 0.26))
+	var burned: int = _combat.deck.exhaust_pile.size()
+	if burned > 0:
+		_pile_badge(font, Vector2(area.x - 74.0, y - 40.0), burned,
+			"сгорело", Color(0.52, 0.20, 0.20))
+
+
+func _pile_badge(font: Font, at: Vector2, count: int, label: String,
+		col: Color) -> void:
+	var r := Rect2(at.x, at.y, 46.0, 30.0)
+	_fx_layer.draw_rect(r.grow(2.0), Color(0.06, 0.04, 0.05, 0.9), true)
+	_fx_layer.draw_rect(r, col, true)
+	_fx_layer.draw_string(font, Vector2(r.position.x, r.position.y + 21.0),
+		str(count), HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 17,
+		Color(0.98, 0.96, 0.92))
+	_fx_layer.draw_string(font, Vector2(r.position.x - 12.0, r.end.y + 13.0),
+		label, HORIZONTAL_ALIGNMENT_CENTER, r.size.x + 24.0, 11,
+		Color(0.70, 0.66, 0.62))
+
+
 func _draw_motes() -> void:
 	var area := _root.size
 	for m in _motes:
@@ -1007,6 +1045,7 @@ func _draw_popups() -> void:
 ## Slashes left on screen by an enemy swing, fading out.
 func _draw_fx() -> void:
 	_draw_motes()
+	_draw_piles()
 	_draw_impacts()
 	_draw_popups()
 	for f in _slashes:

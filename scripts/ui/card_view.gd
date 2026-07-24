@@ -53,6 +53,11 @@ const TYPE_TAG := {
 ## highlight.
 const KEYWORDS := [
 	# Statuses first — longest phrases win, and these must beat bare "урона"
+	# Фаза B riders — these tell the player the card does a SECOND thing
+	["Перебор в броню", "12557a"],
+	["Перенос", "8a3d0a"],
+	["Сгорает", "6b1f1f"],
+	["Добор", "1f5f4a"],
 	["Отрава", "2f7a1f"],
 	["Порча", "6b2f8a"],
 	["Немощь", "44506b"],

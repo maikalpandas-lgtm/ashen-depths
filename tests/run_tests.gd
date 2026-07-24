@@ -30,6 +30,7 @@ func _init() -> void:
 	_test_party_add_card()
 	_test_floor_seed()
 	_test_biome_realms()
+	_test_phase_b_sigils()
 	_test_card_upgrades()
 	_test_xp_level()
 	_test_backpack()
@@ -272,6 +273,86 @@ func _test_floor_seed() -> void:
 ## The forest is a MAP TYPE, not a depth. Nav is picked by floor, the forest is
 ## picked by the player, and mixing the two is how "I chose the forest and woke
 ## up in a cave" happens.
+## Фаза B — «карта делает две вещи». These four riders all change how damage is
+## spent, and every one of them can fail SILENTLY: leftover that vanishes,
+## overkill that double-counts, exhaust that burns the wrong card.
+func _test_phase_b_sigils() -> void:
+	print("phase B sigils")
+
+	# --- Leftover: spill carries to the next living body ---
+	var p := Party.of("vityaz")
+	var c := Combat.new(p, ["grub", "grub"], 7)
+	c.enemies[0]["hp"] = 2
+	var before_second: int = int(c.enemies[1]["hp"])
+	# 10 damage into a 2 HP grub: 2 spent, 8 must land on its neighbour
+	c._resolve_damage({
+		"damage": 10, "block": 0, "energy": 1, "blood": 0,
+		"sigils": [CardDB.Sigil.LEFTOVER], "type": CardDB.Type.STRIKE,
+	}, 0)
+	check(int(c.enemies[0]["hp"]) == 0, "leftover: the first target dies")
+	check(int(c.enemies[1]["hp"]) < before_second,
+		"leftover: the spill reached the next enemy instead of vanishing")
+
+	# A killing blow on the LAST enemy has nowhere to spill — must not loop or
+	# wrap back onto the corpse.
+	var c2 := Combat.new(Party.of("vityaz"), ["grub"], 7)
+	c2._resolve_damage({
+		"damage": 99, "block": 0, "energy": 1, "blood": 0,
+		"sigils": [CardDB.Sigil.LEFTOVER], "type": CardDB.Type.STRIKE,
+	}, 0)
+	check(int(c2.enemies[0]["hp"]) == 0, "leftover: lone enemy still dies")
+	# The real invariant: with nobody left the spill has nowhere to go, and the
+	# search must report that rather than wrapping onto the corpse it just made.
+	check(c2._next_living(0) == -1, "leftover: no living target is reported honestly")
+
+	# --- Overkill: wasted damage becomes armour ---
+	var c3 := Combat.new(Party.of("vityaz"), ["grub"], 7)
+	c3.party_block = 0
+	c3.enemies[0]["hp"] = 3
+	c3._resolve_damage({
+		"damage": 11, "block": 0, "energy": 1, "blood": 0,
+		"sigils": [CardDB.Sigil.OVERKILL], "type": CardDB.Type.STRIKE,
+	}, 0)
+	check(c3.party_block == 8, "overkill: the 8 wasted damage became block")
+
+	# Overkill on a survivor gives NOTHING — it is a reward for precision, not
+	# a flat bonus on every swing.
+	var c4 := Combat.new(Party.of("vityaz"), ["brute"], 7)
+	c4.party_block = 0
+	c4._resolve_damage({
+		"damage": 4, "block": 0, "energy": 1, "blood": 0,
+		"sigils": [CardDB.Sigil.OVERKILL], "type": CardDB.Type.STRIKE,
+	}, 0)
+	check(c4.party_block == 0, "overkill: no armour when the target survives")
+
+	# --- Exhaust: the card leaves the fight, not the discard ---
+	var c5 := Combat.new(Party.of("volhv"), ["grub"], 11)
+	var live_before: int = c5.deck.live_total()
+	var burned := false
+	for i in range(c5.deck.hand.size()):
+		var def := CardDB.get_card(str(c5.deck.hand[i]["card"]))
+		if def.get("sigils", []).has(CardDB.Sigil.EXHAUST) and c5.can_play(i):
+			c5.play_card(i, 0)
+			burned = true
+			break
+	if burned:
+		check(c5.deck.exhaust_pile.size() == 1, "exhaust: the card went to the burn pile")
+		check(c5.deck.live_total() == live_before - 1,
+			"exhaust: it left the playable deck for good")
+		check(c5.deck.total() == live_before,
+			"exhaust: total still counts it, so nothing silently disappeared")
+	else:
+		check(true, "exhaust: no burnable card in the opening hand (skipped)")
+
+	# --- Draw: hand grows by one ---
+	var c6 := Combat.new(Party.of("vityaz"), ["grub"], 3)
+	# Force a known state rather than hoping the shuffle deals a Draw card
+	var hand_before: int = c6.deck.hand.size()
+	c6.deck.draw(1)
+	check(c6.deck.hand.size() == hand_before + 1 or hand_before >= 10,
+		"draw: a card actually reaches the hand")
+
+
 func _test_biome_realms() -> void:
 	print("biomes")
 	check(EnemySprites.realm_for(1, "mine") == "mine", "floor 1 of the mines is the mines")

@@ -45,6 +45,8 @@ var _discount: int = 0  ## Offering: next card costs 1 less
 ## Backpack mods snapshot (DESIGN §8) — frozen at combat start
 var mods: Dictionary = {}
 var _first_strike_used: bool = false
+## Damage the last _hit_enemy spent past the target's final hit point.
+var last_overkill: int = 0
 var _bones_from_items: int = 0  ## bone_charm cap 3/fight
 
 
@@ -260,6 +262,10 @@ func play_card(hand_index: int, target: int) -> bool:
 			_log("эхо (−1 кость)")
 			_resolve_damage(card, target)
 
+	if sigils.has(CardDB.Sigil.DRAW):
+		var got := deck.draw(1)
+		if got > 0:
+			_log("+%d карта" % got)
 	if sigils.has(CardDB.Sigil.RAGE):
 		apply_status(-1, "rage", 1)
 		_log("+1 ярость")
@@ -273,7 +279,13 @@ func play_card(hand_index: int, target: int) -> bool:
 		_discount = 1
 		_log("следующая карта дешевле на 1")
 
-	deck.discard_at(hand_index)
+	# Exhaust must be the LAST thing: drawing or discarding first would shift
+	# hand_index out from under it and burn the wrong card.
+	if sigils.has(CardDB.Sigil.EXHAUST):
+		deck.exhaust_at(hand_index)
+		_log("карта сгорела")
+	else:
+		deck.discard_at(hand_index)
 	_check_victory()
 	return true
 
@@ -316,6 +328,20 @@ func _resolve_damage(card: Dictionary, target: int) -> void:
 		if neighbour >= 0 and neighbour != target:
 			_hit_enemy(neighbour, int(amount * 0.5), ignore_block, crit)
 
+	# Leftover: the swing carries on into the next living body instead of being
+	# wasted on a corpse. This is what makes a big hit on a nearly-dead grub a
+	# real choice rather than an obvious waste.
+	if sigils.has(CardDB.Sigil.LEFTOVER) and last_overkill > 0:
+		var spill := last_overkill
+		var next_alive := _next_living(target)
+		if next_alive >= 0:
+			_log("перенос: %d" % spill)
+			_hit_enemy(next_alive, spill, ignore_block, crit)
+	# Overkill: the same wasted damage becomes armour instead
+	elif sigils.has(CardDB.Sigil.OVERKILL) and last_overkill > 0:
+		party_block += last_overkill
+		_log("перебор в броню: +%d" % last_overkill)
+
 	# SWEEP hits the WHOLE row for half — Cleave's big brother, and the reason a
 	# pack of three grubs is a different problem from one brute.
 	if sigils.has(CardDB.Sigil.SWEEP):
@@ -343,6 +369,15 @@ func _resolve_damage(card: Dictionary, target: int) -> void:
 		_log("оберег: +кость")
 
 
+## Next living enemy after `from`, wrapping to the start. -1 if none is left.
+func _next_living(from: int) -> int:
+	for step in range(1, enemies.size()):
+		var i: int = (from + step) % enemies.size()
+		if int(enemies[i]["hp"]) > 0:
+			return i
+	return -1
+
+
 func crit_chance() -> float:
 	return clampf(CRIT_CHANCE + float(mods.get("crit_chance", 0.0)), 0.0, 0.95)
 
@@ -366,6 +401,9 @@ func _hit_enemy(index: int, amount: int, ignore_block: bool, crit: bool = false)
 		left -= absorbed2
 	left = maxi(0, left)
 	var was_alive := int(e["hp"]) > 0
+	# What the blow spent PAST the last hit point. Leftover and Overkill both
+	# need this, and it is only knowable here, before hp is clamped to zero.
+	last_overkill = maxi(0, left - int(e["hp"]))
 	e["hp"] = maxi(0, int(e["hp"]) - left)
 	_event("enemy_hit", index, left, crit)
 	if was_alive and int(e["hp"]) <= 0:

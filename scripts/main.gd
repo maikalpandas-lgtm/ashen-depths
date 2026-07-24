@@ -192,6 +192,10 @@ func _on_floor_changed(new_floor: int) -> void:
 	_update_hud()
 	var realm := "Рудники" if new_floor < 3 else "Навь"
 	hud_hint.text = "↓ Этаж %d · %s" % [new_floor, realm]
+	# Soundscape follows the realm — same boundary as the bestiary
+	# (EnemySprites.NAV_FROM_FLOOR), so the wood and the mobs change together.
+	if Sfx:
+		Sfx.set_biome("mine" if new_floor < 3 else "nav")
 
 
 func _update_hud() -> void:

@@ -618,6 +618,120 @@ slavic folklore motifs, carved wood and hammered iron, embroidered red ornament
 
 ---
 
+## 3.12. Батч 10 — иконки предметов рюкзака (фаза C, срочно)
+
+**Самое нужное из оставшегося.** Ряд реликвий в бою сейчас рисуется цветными
+плашками с первой буквой названия — заглушка, которую видно каждый бой.
+Рюкзак (`B`) тоже показывает предметы прямоугольниками.
+
+### Правила кадра (обязательно)
+
+- **Квадрат**, один предмет по центру, вид прямо
+- Читаться должно **в 30 пикселей** — это размер в бою. Никаких мелких деталей,
+  надписей, тонких линий: силуэт и 2–3 цвета
+- Предмет **не касается краёв**, поля ~10%
+- Фон `#FF00FF`
+- Тени под предметом не рисовать
+
+| Файл | Предмет | Что делает | Хвост промпта |
+|---|---|---|---|
+| `item_rusty_blade` | Ржавый клинок | Удар +1 | `a short rusted iron dagger, chipped edge, worn leather grip, seen from the side` |
+| `item_whetstone` | Точило | Усиливает соседний клинок | `a grey rectangular sharpening stone, worn hollow in the middle, a few metal filings on it` |
+| `item_shield_shard` | Осколок щита | Старт боя +4 брони | `a broken triangular fragment of a wooden shield with an iron rim, splintered edge` |
+| `item_poison_vial` | Фиал яда | Первый удар хода +2 | `a small stoppered glass vial of thick green liquid, cork sealed with wax` |
+| `item_mana_rune` | Руна ⚡ | 1 раз за бой +1 энергии | `a flat stone tablet carved with a single glowing amber lightning rune` |
+| `item_coin_pouch` | Мешок монет | +15% золота | `a small drawstring leather pouch, fat with coins, one gold coin spilling out` |
+| `item_bone_charm` | Костяной оберег | Убийство → кость | `a small charm of finger bones bound with red thread` |
+| `item_blood_charm` | Кровавый оберег | Кровавые карты дешевле | `a dark iron amulet with a deep red gem, a bead of blood on its lower edge` |
+| `item_iron_plating` | Железная обшивка | Старт +6 брони | `a rectangular riveted iron plate, dented, straps at the back` |
+| `item_hunter_fang` | Клык охотника | Удар +2 | `a single long curved yellowed fang on a leather cord` |
+| `item_ember_core` | Уголёк | Заклинания +2 | `a lump of charcoal with molten orange cracks glowing inside it` |
+| `item_seal_shard` | Осколок Зарока | +1 энергии каждый ход | `a shard of pale carved stone with faint blue slavic runes, radiating cold light` |
+
+---
+
+## 3.13. Батч 11 — иконки статусов (фаза A)
+
+Сейчас статусы рисуются цветными пилюлями с символом (`☠3`, `✜2`). Работает,
+но выглядит как отладка. Набор устоялся — можно рисовать.
+
+Те же правила, что в §3.12, но **ещё жёстче по читаемости: размер в бою 26×17
+пикселей.** Только силуэт, один-два цвета, никакой детализации.
+
+| Файл | Статус | Хвост промпта |
+|---|---|---|
+| `status_poison` | Отрава | `a simple flat icon of a skull inside a droplet, toxic green on transparent, thick outline, no detail` |
+| `status_frail` | Порча | `a simple flat icon of a cracked shield, violet, thick outline, no detail` |
+| `status_weak` | Немощь | `a simple flat icon of a downward broken arrow, cold grey-blue, thick outline` |
+| `status_rage` | Ярость | `a simple flat icon of an upward flame-shaped arrow, hot orange, thick outline` |
+
+---
+
+## 3.14. Батч 12 — фаза E: собираемое, расходники, трофеи
+
+Это арт под **ещё не написанную** фазу E (смысл коридора). Заказывать можно
+сразу — код будет подстраиваться под эти имена.
+
+### 3.14.1 Собираемое в коридоре (спрайты в мире)
+
+Правила как у лесных пропсов §3.9: **объект касается нижнего края кадра**
+(движок ставит его «ногами» на землю), **тень не рисовать**, фронтальный вид,
+фон `#FF00FF`. Это маленькие объекты — высота в игре 0.3–0.5 м.
+
+| Файл | Что | Где | Хвост промпта |
+|---|---|---|---|
+| `forage_glow_moss` | Светящийся мох | копи | `a patch of pale blue-green luminous moss growing on a small rock, base at the bottom edge` |
+| `forage_cave_mushroom` | Пещерный гриб | копи | `a cluster of three pale bulbous cave mushrooms with thick stems, base at the bottom edge` |
+| `forage_bone_pile` | Костяные обломки | копи | `a small pile of cracked yellowed bones and a broken skull fragment, resting on the ground` |
+| `forage_herbs` | Травы | лес | `a bundle of tall green medicinal herbs with small white flowers, growing from the ground` |
+| `forage_berries` | Ягоды | лес | `a low bush branch heavy with dark red berries and green leaves, base at the bottom edge` |
+| `forage_amanita` | Мухомор | лес | `three red fly agaric mushrooms with white spots, different heights, base at the bottom edge` |
+
+### 3.14.2 Расходники (иконки, 3 слота в панели)
+
+Правила §3.12 — квадрат, читается мелко.
+
+| Файл | Что | Эффект (план) | Хвост промпта |
+|---|---|---|---|
+| `consum_broth` | Отвар | Лечит | `a small wooden bowl of steaming brown broth with a sprig of herb` |
+| `consum_rage_draught` | Ярый настой | Ярость | `a clay flask of glowing orange liquid, stopper off, heat shimmer above the neck` |
+| `consum_antidote` | Противоядие | Снимает отраву | `a small glass bottle of clear blue liquid with a green leaf tied to the neck` |
+
+### 3.14.3 Трофеи с врагов (иконки, валюта лавки)
+
+| Файл | Что | Хвост промпта |
+|---|---|---|
+| `trophy_fang` | Клык | `a single sharp bloodied tooth, ivory white with a dark root` |
+| `trophy_hide` | Шкура | `a rolled scrap of coarse grey animal hide, tied with cord` |
+| `trophy_ichor` | Навья слизь | `a sealed jar of murky violet spectral fluid with faint wisps inside` |
+
+---
+
+## Сводка: что заказывать Гроку
+
+| Батч | Штук | Зачем | Срочность |
+|---|---|---|---|
+| §3.11 — портреты состояний | 6 | Портрет реагирует на HP | средняя (есть подкрас) |
+| §3.12 — предметы рюкзака | 12 | **Видно каждый бой** | 🔴 высокая |
+| §3.13 — статусы | 4 | Видно каждый бой | средняя |
+| §3.14 — фаза E | 12 | Под будущую фазу | низкая |
+
+**Всего 34 файла.** Порядок: §3.12 → §3.13 → §3.11 → §3.14.
+
+После получения **обязательно**:
+
+```bash
+python3 tools/sprite_cutter.py вход.jpg assets/textures/имя.png \
+  --tolerance 60 --pad 4 --ffmpeg --erode-light 2
+godot --headless --import
+godot --headless --script tests/art_import_test.gd
+```
+
+⚠️ `--import` не пропускать. Лес и карты батча 8 приезжали дважды и оба раза
+не появлялись в игре именно из-за этого.
+
+---
+
 ## 4. Куда класть готовое
 
 1. Исходник (что отдал Grok) → `assets/textures/masters/<id>_source.jpg`

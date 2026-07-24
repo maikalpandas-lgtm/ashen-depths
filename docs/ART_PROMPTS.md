@@ -355,6 +355,55 @@ harsh midday light on her despite the dark
 
 ---
 
+## 3.8. Батч 6 — аватары героев (только лицо)
+
+Текущие портреты — поясные, в круглой рамке половина кадра уходит на плечи и
+доспех, лицо мелкое. У конкурента в рамке **одна голова крупным планом**, она
+читается мгновенно. Перерисовываем под это.
+
+Общий хвост ко всем промптам батча (в дополнение к §0 и славянскому хвосту §3.7):
+
+```
+character face portrait, HEAD ONLY filling the frame edge to edge, chin to
+crown, no shoulders and no armour visible, facing the viewer straight on,
+big expressive eyes, bold thick outline, flat cel shading, strong silhouette
+readable at 120px, centred for a circular crop
+```
+
+⚠️ **Голова должна занимать почти весь кадр.** Если модель отдаёт бюст с
+плечами — перегенерить, иначе после круглой обрезки снова получится мелкое
+лицо. Проверка: глаза примерно на 45% высоты кадра, макушка почти касается
+верхнего края.
+
+| Файл | Кто |
+|---|---|
+| `face_vityaz` | Витязь — богатырь |
+| `face_polyanitsa` | Поляница — воительница |
+| `face_volhv` | Волхв — ведун |
+
+**`face_vityaz`**
+```
+a broad-faced Slavic bogatyr, thick dark beard covering the jaw, heavy brows,
+a small nasal helm rim just visible at the top of the frame, calm stubborn
+stare, weathered skin, a red embroidered band across the forehead
+```
+
+**`face_polyanitsa`**
+```
+a young Slavic warrior woman, one dark braid crossing her cheek, sharp green
+eyes, a thin scar over one eyebrow, red embroidered ribbon in her hair,
+confident half-smile
+```
+
+**`face_volhv`**
+```
+an old Slavic pagan sorcerer, long grey beard filling the lower frame, unbound
+grey hair, deep wrinkles, ONE milky blind eye and one pale blue eye, faint cold
+blue light on his face from below
+```
+
+---
+
 ## 4. Куда класть готовое
 
 1. Исходник (что отдал Grok) → `assets/textures/masters/<id>_source.jpg`

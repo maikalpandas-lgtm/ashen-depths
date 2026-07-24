@@ -5,6 +5,8 @@ const TorchSprites = preload("res://scripts/torch_sprites.gd")
 const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 const PropSprites = preload("res://scripts/prop_sprites.gd")
 const ForestProps = preload("res://scripts/forest_props.gd")
+const ForageSprites = preload("res://scripts/forage_sprites.gd")
+const ForageDB = preload("res://scripts/items/forage_db.gd")
 const ROCK_SHADER = preload("res://shaders/cave_rock.gdshader")
 const FOREST_GROUND_SHADER = preload("res://shaders/forest_ground.gdshader")
 
@@ -117,6 +119,7 @@ func generate(seed_value: int = 0) -> void:
 	_build_art_corridor()
 	_spawn_torches()
 	_spawn_decorations()
+	_spawn_forage()
 	_spawn_props_and_entities()
 
 	var start_world := cell_to_world(start_cell) + Vector3(0, 0.1, 0)
@@ -1319,6 +1322,33 @@ func _best_torch_dir(x: int, y: int, wall_dirs: Array[Vector2i]) -> Vector2i:
 func _add_torch(pos: Vector3, wall_dir: Vector2i) -> void:
 	## 2D cartoon torch sprite + soft glow halo + real 3D OmniLight.
 	TorchSprites.make_wall_torch(props_root, pos, wall_dir)
+
+
+## Фаза E — things worth stopping for. Skips the cells that already mean
+## something (start, exit, packs, chest): a herb growing on the exit stairs is
+## noise, and one growing inside a pack is unreachable until the fight is over.
+func _spawn_forage() -> void:
+	var placed := 0
+	for cell in floor_cells:
+		var t := _get_cell(cell.x, cell.y)
+		if t == Cell.START or t == Cell.EXIT or t == Cell.CHEST or t == Cell.MERCHANT:
+			continue
+		if encounter_kinds.has(cell):
+			continue
+		var h := absi(cell.x * 92837111 ^ cell.y * 689287499)
+		var id := ForageDB.roll_forage(h, _biome)
+		if id == "":
+			continue
+		var world := cell_to_world(cell)
+		# Off the walking line, like the undergrowth — a pickup in the middle of
+		# the corridor ends up inside the camera.
+		var side: float = cell_size * 0.3 * (1.0 if (h % 2) == 0 else -1.0)
+		var pos := world + (Vector3(side, 0.0, 0.0) if (h % 4) < 2
+			else Vector3(0.0, 0.0, side))
+		ForageSprites.make(props_root, pos, id, _floor_height(pos.x, pos.z))
+		placed += 1
+	if placed > 0:
+		print("[Forage] %d" % placed)
 
 
 func _spawn_decorations() -> void:

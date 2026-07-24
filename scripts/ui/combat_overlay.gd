@@ -20,6 +20,7 @@ const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 const LabelLayout = preload("res://scripts/ui/label_layout.gd")
 const Statuses = preload("res://scripts/combat/statuses.gd")
 const ItemDB = preload("res://scripts/items/item_db.gd")
+const ForageDB = preload("res://scripts/items/forage_db.gd")
 const FanLayout = preload("res://scripts/ui/fan_layout.gd")
 const CameraFraming = preload("res://scripts/ui/camera_framing.gd")
 
@@ -848,13 +849,24 @@ func _draw_status_row(font: Font, at: Vector2, bag: Dictionary) -> void:
 	var x := at.x - total * 0.5
 	for item in row:
 		var r := Rect2(x, at.y, w, 17.0)
-		_pill(r.grow(1.5), Color(0.06, 0.04, 0.05, 0.95))
-		_pill(r, item["colour"])
-		if font:
-			_world_layer.draw_string(font,
-				Vector2(r.position.x, r.position.y + 13.0),
-				"%s%d" % [item["icon"], int(item["stacks"])],
-				HORIZONTAL_ALIGNMENT_CENTER, w, 11, Color(0.07, 0.05, 0.06))
+		var tex: Texture2D = item.get("tex", null)
+		if tex != null:
+			# Icon plus the stack count beside it — the number is the half a
+			# player actually reads, so it never rides on top of the art.
+			var side := 17.0
+			_world_layer.draw_texture_rect(tex,
+				Rect2(r.position.x, r.position.y, side, side), false)
+			if font:
+				_outlined(font, Vector2(r.position.x + side - 2.0, r.position.y + 14.0),
+					str(int(item["stacks"])), w - side + 4.0, 13, item["colour"])
+		else:
+			_pill(r.grow(1.5), Color(0.06, 0.04, 0.05, 0.95))
+			_pill(r, item["colour"])
+			if font:
+				_world_layer.draw_string(font,
+					Vector2(r.position.x, r.position.y + 13.0),
+					"%s%d" % [item["icon"], int(item["stacks"])],
+					HORIZONTAL_ALIGNMENT_CENTER, w, 11, Color(0.07, 0.05, 0.06))
 		x += w + gap
 
 
@@ -919,6 +931,51 @@ func _update_motes(delta: float) -> void:
 			pos = Vector2(randf() * area.x, area.y * 0.78)
 		m["pos"] = pos
 	_fx_layer.queue_redraw()
+
+
+## Three consumable slots (фаза E), left of the hand.
+##
+## Clicked with the mouse OR pressed 1-3: mid-fight the hand already owns the
+## pointer, and reaching away from it to drink something is exactly when a
+## keyboard shortcut earns its keep.
+func _draw_consumables() -> void:
+	if GameState == null:
+		return
+	var font := UiTheme.title_font()
+	if font == null:
+		return
+	var area := _fx_layer.size
+	if area.x < 10.0:
+		area = get_viewport().get_visible_rect().size
+	var w := 38.0
+	var gap := 6.0
+	var x := 232.0
+	var y := area.y - 96.0
+	for i in range(ForageDB.CARRY_SLOTS):
+		var r := Rect2(x, y, w, 38.0)
+		var filled: bool = i < GameState.consumables.size()
+		_fx_layer.draw_rect(r.grow(2.0), Color(0.06, 0.04, 0.05, 0.9), true)
+		if filled:
+			var def: Dictionary = ForageDB.consumable(str(GameState.consumables[i]))
+			var tex: Texture2D = ForageDB.art(str(def.get("art", "")))
+			if tex != null:
+				_fx_layer.draw_texture_rect(tex, r, false)
+			else:
+				_fx_layer.draw_rect(r, def.get("colour", Color.GRAY), true)
+			_outlined_fx(font, Vector2(r.position.x, r.position.y + 13.0),
+				str(i + 1), w, 12, Color(1, 1, 1, 0.9))
+		else:
+			_fx_layer.draw_rect(r, Color(0.13, 0.12, 0.14, 0.75), true)
+		x += w + gap
+
+
+## Outlined text on the FX layer (the enemy version draws on _world_layer).
+func _outlined_fx(font: Font, at: Vector2, text: String, width: float, size: int,
+		col: Color) -> void:
+	for off in [Vector2(-1.5, 0), Vector2(1.5, 0), Vector2(0, -1.5), Vector2(0, 1.5)]:
+		_fx_layer.draw_string(font, at + off, text, HORIZONTAL_ALIGNMENT_CENTER,
+			width, size, Color(0.04, 0.03, 0.04, 0.95))
+	_fx_layer.draw_string(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, width, size, col)
 
 
 ## Backpack items along the top, like the reference's relic row.
@@ -1136,6 +1193,7 @@ func _draw_fx() -> void:
 	_draw_motes()
 	_draw_piles()
 	_draw_relics()
+	_draw_consumables()
 	_draw_impacts()
 	_draw_popups()
 	for f in _slashes:
@@ -1528,13 +1586,38 @@ func _make_hand_card(index: int, n: int) -> Control:
 ## Global mouse-up is the reliable finish: Button.button_up alone fails when the
 ## release lands outside the card (which is every real target drop).
 func _input(event: InputEvent) -> void:
-	if not _root.visible or _dragging < 0:
+	if not _root.visible:
+		return
+	# 1-3 drink a consumable. Handled before the drag guard below: reaching for
+	# a potion mid-drag is exactly when you want it, and the drag is unaffected.
+	if event is InputEventKey and event.pressed and not (event as InputEventKey).echo:
+		var k := (event as InputEventKey).keycode
+		if k >= KEY_1 and k <= KEY_3:
+			if _use_consumable(k - KEY_1):
+				get_viewport().set_input_as_handled()
+			return
+	if _dragging < 0:
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed:
 			_finish_drag()
 			get_viewport().set_input_as_handled()
+
+
+func _use_consumable(index: int) -> bool:
+	if _combat == null or GameState == null:
+		return false
+	if index < 0 or index >= GameState.consumables.size():
+		return false
+	if not _combat.use_consumable(index):
+		return false
+	if Sfx:
+		Sfx.play("draft_pick", -3.0)
+	_react_portrait("heal")
+	_play_events()
+	_refresh()
+	return true
 
 
 ## Hovering only re-lays the row when nothing is held: rebuilding mid-drag frees

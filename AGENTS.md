@@ -57,6 +57,7 @@ godot --headless --script tests/status_test.gd         # статусы: тик,
 godot --headless --script tests/deck_layout_test.gd    # книга колоды: группировка и индексы
 godot --headless --script tests/flourish_test.gd       # показ карты держится и не лезет на руку
 godot --headless --script tests/floor_scale_test.gd    # глубже = труднее, и никогда наоборот
+godot --headless --script tests/forage_test.gd         # сбор/расходники/трофеи не пропадают
 ```
 
 ⚠️ **Не импортировать `combat_overlay.gd` в headless-тест** — прогон зависает.

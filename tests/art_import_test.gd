@@ -17,6 +17,7 @@ const ForestProps = preload("res://scripts/forest_props.gd")
 const CardDB = preload("res://scripts/cards/card_db.gd")
 const Party = preload("res://scripts/party.gd")
 const ItemDB = preload("res://scripts/items/item_db.gd")
+const Statuses = preload("res://scripts/combat/statuses.gd")
 
 const DIR := "res://assets/textures/"
 
@@ -43,6 +44,10 @@ func _init() -> void:
 	# Backpack item icons — the relic row draws these every fight
 	for item_id in ItemDB.ids():
 		wanted[ItemDB.icon_id(str(item_id))] = "item %s" % item_id
+
+	# Status icons — drawn under every enemy HP bar
+	for st in Statuses.STATUSES.keys():
+		wanted["status_" + str(st)] = "status %s" % st
 
 	for hero_id in Party.HEROES.keys():
 		var def: Dictionary = Party.HEROES[hero_id]

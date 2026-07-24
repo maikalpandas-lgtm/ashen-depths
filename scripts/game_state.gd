@@ -3,6 +3,7 @@ extends Node
 
 const Party = preload("res://scripts/party.gd")
 const Backpack = preload("res://scripts/items/backpack.gd")
+const ForageDB = preload("res://scripts/items/forage_db.gd")
 const ItemDB = preload("res://scripts/items/item_db.gd")
 
 ## Layout seed for the CURRENT floor (changes every descent).
@@ -14,6 +15,13 @@ var floor_index: int = 1
 ## ground). NOT derived from floor_index — the forest is a different kind of
 ## map, not a deeper one, and the bestiary keys off this (EnemySprites.realm_for).
 var biome: String = "mine"
+## Фаза E: three consumable slots and a trophy pouch. Carried across floors —
+## the whole point is that exploring one floor pays off in the next fight.
+var consumables: Array = []
+var trophies: Dictionary = {}
+## Bones picked up in the corridor. Combat starts with these, so a bone pile
+## found while walking pays off in the next fight rather than nowhere.
+var bones_carried: int = 0
 var gold: int = 0
 ## ONE hero per run, chosen at the title screen (DESIGN §5, revised 22.07.2026).
 ## Party still holds a `members` array so the dozen call sites that iterate it
@@ -62,6 +70,9 @@ func new_run(seed_value: int = 0, chosen_hero: String = "", chosen_biome: String
 	current_seed = seed_value
 	floor_index = 1
 	biome = chosen_biome
+	consumables.clear()
+	trophies.clear()
+	bones_carried = 0
 	gold = 0
 	xp = 0
 	level = 1
@@ -187,3 +198,52 @@ func backpack_mods() -> Dictionary:
 	if backpack == null:
 		return {}
 	return backpack.compute_mods()
+
+
+# ------------------------------------------------------------------- фаза E
+
+signal consumables_changed()
+signal trophy_taken(id: String)
+
+
+func add_consumable(id: String) -> bool:
+	var ok: bool = ForageDB.add_consumable(consumables, id)
+	if ok:
+		consumables_changed.emit()
+	return ok
+
+
+func use_consumable(index: int) -> Dictionary:
+	if index < 0 or index >= consumables.size():
+		return {}
+	var def: Dictionary = ForageDB.consumable(str(consumables[index]))
+	if def.is_empty():
+		return {}
+	consumables.remove_at(index)
+	consumables_changed.emit()
+	return def
+
+
+func add_trophy(id: String, count: int = 1) -> void:
+	if not ForageDB.TROPHIES.has(id) or count <= 0:
+		return
+	trophies[id] = int(trophies.get(id, 0)) + count
+	trophy_taken.emit(id)
+
+
+## Everything in the pouch, at its sell price. Trophies exist to be sold — they
+## have no use in a fight, which is what keeps them from competing with the
+## three consumable slots.
+func trophy_value() -> int:
+	var sum := 0
+	for id in trophies.keys():
+		sum += int(ForageDB.trophy(str(id)).get("sell", 0)) * int(trophies[id])
+	return sum
+
+
+func sell_all_trophies() -> int:
+	var got := trophy_value()
+	if got > 0:
+		gold += got
+		trophies.clear()
+	return got

@@ -1,4 +1,6 @@
 extends CharacterBody3D
+
+const ForageDB = preload("res://scripts/items/forage_db.gd")
 ## Grid crawler ONLY: step cell-to-cell, 90° turns (A/D), camera locked forward.
 ## No free-look mouse yaw — props can stay fixed on walls without billboards.
 ## Y is always locked — cannot fall through the world.
@@ -207,7 +209,63 @@ func _on_move_done() -> void:
 	if dungeon:
 		global_position = _cell_world_pos(cell)
 	global_position.y = feet_y
+	_pick_up_forage()
 	_check_exit_cell()
+
+
+## Фаза E — anything growing on the cell just stepped onto is taken.
+##
+## Automatic rather than a keypress: a grid crawler already spends E on chests
+## and stairs, and asking for a second confirmation to pick a mushroom is a
+## button press that never has a wrong answer. The pouch being FULL is the only
+## interesting case, and that gets said out loud.
+func _pick_up_forage() -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	var reach: float = 1.9
+	for node in tree.get_nodes_in_group("forage"):
+		var n := node as Node3D
+		if not is_instance_valid(n):
+			continue
+		if n.global_position.distance_to(global_position) > reach:
+			continue
+		_take_forage(n)
+		return  # one per step, so a dense patch does not vanish in one stride
+
+
+func _take_forage(node: Node3D) -> void:
+	var id := str(node.get_meta("forage_id", ""))
+	var def: Dictionary = ForageDB.forage(id)
+	if def.is_empty() or GameState == null:
+		return
+	var gives := str(def.get("gives", ""))
+	var msg := ""
+	if gives == "bones":
+		GameState.bones_carried = int(GameState.get("bones_carried") or 0) + ForageDB.BONE_YIELD
+		msg = "%s: +%d кости" % [def.get("name", id), ForageDB.BONE_YIELD]
+	elif GameState.add_consumable(gives):
+		msg = "%s → %s" % [def.get("name", id),
+			ForageDB.consumable(gives).get("name", gives)]
+	else:
+		# Refused, and the player has to know WHY — a pickup that silently does
+		# nothing reads as a bug.
+		_hud_hint("Сумка полна (%d/%d)" % [
+			GameState.consumables.size(), ForageDB.CARRY_SLOTS])
+		return
+	if Sfx:
+		Sfx.play("chest", -6.0)
+	_hud_hint(msg)
+	node.queue_free()
+
+
+func _hud_hint(text: String) -> void:
+	var main := get_tree().current_scene
+	if main == null:
+		return
+	var lbl = main.get_node_or_null("UI/BottomBar/Margin/HintLabel")
+	if lbl:
+		lbl.text = text
 
 
 ## EXIT campfire tile — descend one floor (run continues, new labyrinth).

@@ -192,6 +192,20 @@ func _card_remove() -> void:
 	_refresh()
 
 
+func _sell_trophies() -> void:
+	if GameState == null:
+		return
+	var got: int = GameState.sell_all_trophies()
+	if got <= 0:
+		if Sfx:
+			Sfx.play("miss")
+		return
+	if Sfx:
+		Sfx.play("gold", -2.0)
+	_title.text = "Трофеи проданы: +%d🪙" % got
+	_refresh()
+
+
 func _card_upgrade() -> void:
 	if GameState == null or GameState.party == null:
 		return
@@ -302,6 +316,15 @@ func _build() -> void:
 	rem.text = "Удалить карту  %d🪙" % REMOVE_COST
 	rem.pressed.connect(_card_remove)
 	tools.add_child(rem)
+
+	# Trophies are pure income: they do nothing in a fight, so selling is not a
+	# trade-off and the button can say exactly what it pays.
+	var sell_all := Button.new()
+	var worth: int = GameState.trophy_value() if GameState else 0
+	sell_all.text = "Продать трофеи  +%d🪙" % worth
+	sell_all.disabled = worth <= 0
+	sell_all.pressed.connect(_sell_trophies)
+	tools.add_child(sell_all)
 
 	var up := Button.new()
 	up.text = "Улучшить (случайную)  %d🪙" % UPGRADE_COST

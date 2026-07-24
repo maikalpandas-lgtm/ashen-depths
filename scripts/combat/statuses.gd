@@ -45,6 +45,23 @@ const FRAIL_MULT := 1.5
 const WEAK_MULT := 0.75
 
 
+const ART_DIR := "res://assets/textures/"
+static var _tex_cache: Dictionary = {}
+
+
+## Icon texture, or null while the art is outstanding — the HUD falls back to a
+## coloured pill with a symbol, which is what shipped before batch 11.
+static func icon(id: String) -> Texture2D:
+	if _tex_cache.has(id):
+		return _tex_cache[id]
+	var path := ART_DIR + "status_" + id + ".png"
+	var tex: Texture2D = null
+	if ResourceLoader.exists(path):
+		tex = ResourceLoader.load(path, "Texture2D") as Texture2D
+	_tex_cache[id] = tex
+	return tex
+
+
 static func exists(id: String) -> bool:
 	return STATUSES.has(id)
 
@@ -120,6 +137,7 @@ static func to_row(bag: Dictionary) -> Array:
 			continue
 		out.append({
 			"id": str(id),
+			"tex": icon(str(id)),
 			"stacks": int(bag[id]),
 			"icon": str(def["icon"]),
 			"name": str(def["name"]),

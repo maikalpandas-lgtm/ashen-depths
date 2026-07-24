@@ -12,6 +12,7 @@ const Deck = preload("res://scripts/cards/deck.gd")
 const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 const Statuses = preload("res://scripts/combat/statuses.gd")
 const FloorScale = preload("res://scripts/combat/floor_scale.gd")
+const ForageDB = preload("res://scripts/items/forage_db.gd")
 
 const START_ENERGY := 3  ## §7.4 — ⚡3 at the start of the player's turn
 const DRAW_PER_TURN := 5  ## §7.5
@@ -51,6 +52,9 @@ var last_overkill: int = 0
 ## Depth this fight happens at, snapshotted at the start (GameState may change
 ## under a long fight, and a monster must not grow mid-combat).
 var floor_index: int = 1
+## Trophies earned this fight, banked into GameState when it is won — a fight
+## the party loses should not pay out.
+var trophies_taken: Dictionary = {}
 var _bones_from_items: int = 0  ## bone_charm cap 3/fight
 
 
@@ -74,6 +78,12 @@ func _init(party_ref: RefCounted, pack: Array, seed_value: int) -> void:
 			"intent": {},
 			"status": {},
 		})
+	# Bones foraged in the corridor come into the fight (фаза E)
+	var gs = _game_state()
+	if gs != null and int(gs.get("bones_carried") or 0) > 0:
+		bones += int(gs.bones_carried)
+		gs.bones_carried = 0
+		_log("кости из похода: %d" % bones)
 	begin_player_turn()
 
 
@@ -414,6 +424,56 @@ func _next_living(from: int) -> int:
 	return -1
 
 
+## A body part from a kill (фаза E). Not every kill: a guaranteed drop is just
+## a slower gold trickle, while a chance makes the shop trip feel earned.
+func _take_trophy(e: Dictionary) -> void:
+	var def: Dictionary = EnemySprites.ENEMIES.get(str(e.get("id", "")), {})
+	var realm := str(def.get("realm", "mine"))
+	var chance: float = 0.85 if bool(def.get("boss", false)) else 0.3
+	if _rng.randf() >= chance:
+		return
+	var id := ForageDB.trophy_for_realm(realm)
+	trophies_taken[id] = int(trophies_taken.get(id, 0)) + 1
+	_event("trophy", enemies.find(e), 1, false, id)
+	_log("трофей: %s" % ForageDB.trophy(id).get("name", id))
+
+
+## Spend a carried consumable. Index is into GameState.consumables; the state
+## object owns the list, so combat asks rather than holding its own copy.
+func use_consumable(index: int) -> bool:
+	if phase != Phase.PLAYER:
+		return false
+	var gs = _game_state()
+	if gs == null:
+		return false
+	var def: Dictionary = gs.use_consumable(index)
+	if def.is_empty():
+		return false
+	events.clear()
+	match str(def.get("effect", "")):
+		"heal":
+			_heal_party(int(def.get("value", 0)))
+			_log("%s: +%d HP" % [def.get("name", "?"), int(def.get("value", 0))])
+		"status":
+			apply_status(-1, str(def.get("status", "rage")), int(def.get("value", 1)))
+			_log("%s выпит" % def.get("name", "?"))
+		"cleanse":
+			# Only the harmful ones — a cleanse that stripped Ярость would be a
+			# trap disguised as a cure.
+			Statuses.apply(party_status, "poison", -99)
+			Statuses.apply(party_status, "frail", -99)
+			_log("%s: хвори сняты" % def.get("name", "?"))
+	_event("consumable", -1, 0)
+	return true
+
+
+func _game_state():
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree and tree.root:
+		return tree.root.get_node_or_null("GameState")
+	return null
+
+
 func crit_chance() -> float:
 	return clampf(CRIT_CHANCE + float(mods.get("crit_chance", 0.0)), 0.0, 0.95)
 
@@ -445,6 +505,7 @@ func _hit_enemy(index: int, amount: int, ignore_block: bool, crit: bool = false)
 	if was_alive and int(e["hp"]) <= 0:
 		_event("enemy_died", index)
 		_log("%s убит!" % e["name"])
+		_take_trophy(e)
 	else:
 		_log("%s%s получает %d (%d/%d)" % [
 			"КРИТ! " if crit else "", e["name"], left, e["hp"], e["max_hp"]])
@@ -517,6 +578,19 @@ func _check_victory() -> void:
 	if alive_enemies().is_empty() and phase != Phase.LOST:
 		phase = Phase.WON
 		_log("стая побита")
+		_bank_trophies()
+
+
+## Trophies only pay out on a WIN. Banking them per kill would let a party that
+## wipes on the last enemy still walk away with the pouch.
+func _bank_trophies() -> void:
+	if trophies_taken.is_empty():
+		return
+	var gs = _game_state()
+	if gs != null and gs.has_method("add_trophy"):
+		for id in trophies_taken.keys():
+			gs.add_trophy(str(id), int(trophies_taken[id]))
+	trophies_taken.clear()
 
 
 func _card_at(hand_index: int) -> Dictionary:

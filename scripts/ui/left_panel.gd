@@ -61,15 +61,18 @@ func refresh() -> void:
 			var lead: Dictionary = GameState.party.members[0]
 			portrait_id = str(lead.get("portrait", portrait_id))
 			name_s = str(lead.get("name", name_s))
+	var forest := GameState and str(GameState.biome) == "forest"
 	if _title:
-		_title.text = "Навьи Копи"
+		_title.text = "Заповедный Лес" if forest else "Навьи Копи"
 	if _floor:
-		var realm := "Рудники" if floor_i < 3 else "Навь"
+		var realm := "Лес" if forest else ("Рудники" if floor_i < 3 else "Навь")
 		var lvl := 1
 		var xp_s := ""
 		if GameState:
 			lvl = GameState.level
-			xp_s = "  ·  ур.%d" % lvl
+			# "ур." is the HERO level, not the floor. Both numbers sat side by
+			# side unlabelled and read as "floor 1, floor 2".
+			xp_s = "  ·  герой ур.%d" % lvl
 		_floor.text = "%s  ·  этаж %d%s" % [realm, floor_i, xp_s]
 	if _hp_bar:
 		_hp_bar.max_value = party_max

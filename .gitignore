@@ -22,3 +22,6 @@ build/
 
 build/
 shots/auto/
+
+# Raw generator output — masters/ holds the copies we keep
+assets/textures/raw/

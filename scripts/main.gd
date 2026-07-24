@@ -2,6 +2,7 @@ extends Node3D
 ## Main scene: fog world + dungeon + player + left HUD / minimap.
 
 @onready var dungeon: Node3D = $Dungeon
+@onready var world_env: WorldEnvironment = $WorldEnvironment
 @onready var player: CharacterBody3D = $Player
 @onready var left_panel: PanelContainer = $UI/LeftPanel
 @onready var hud_hint: Label = $UI/BottomBar/Margin/HintLabel
@@ -9,6 +10,7 @@ extends Node3D
 
 const SHOT_DIR := "res://shots"
 const LeftPanelScript = preload("res://scripts/ui/left_panel.gd")
+const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 
 var minimap: Control = null
 
@@ -140,6 +142,11 @@ func _save_shot() -> void:
 
 
 func _on_dungeon_ready(start_world: Vector3) -> void:
+	# Every rebuild, not just a floor change — the first layout of a run is
+	# generated before floor_changed ever fires, and it was coming up with cave
+	# fog over a forest.
+	_apply_biome_environment()
+	_apply_biome_sound()
 	if player.has_method("setup_dungeon"):
 		player.setup_dungeon(dungeon)
 	_place_player(start_world)
@@ -183,19 +190,56 @@ func _on_defeat_finished(choice: String) -> void:
 	_update_hud()
 
 
+## The cave's fog is a near-black teal that swallows everything past 11m — in a
+## forest that reads as walking inside a bin bag. The wood gets a cooler, LONGER
+## fog so the treeline on the horizon stays visible, which is the whole reason
+## it is there.
+func _apply_biome_environment() -> void:
+	if world_env == null or world_env.environment == null:
+		return
+	var env := world_env.environment
+	var forest := GameState and str(GameState.biome) == "forest"
+	if forest:
+		env.background_color = Color(0.05, 0.07, 0.13)
+		env.ambient_light_color = Color(0.34, 0.45, 0.62)
+		env.ambient_light_energy = 1.35
+		env.fog_light_color = Color(0.10, 0.16, 0.26)
+		env.fog_depth_begin = 6.0
+		env.fog_depth_end = 34.0
+	else:
+		env.background_color = Color(0.012, 0.03, 0.055)
+		env.ambient_light_color = Color(0.2, 0.45, 0.62)
+		env.ambient_light_energy = 1.05
+		env.fog_light_color = Color(0.07, 0.19, 0.31)
+		env.fog_depth_begin = 2.0
+		env.fog_depth_end = 11.0
+
+
 func _on_floor_changed(new_floor: int) -> void:
 	if minimap and minimap.has_method("clear_fog"):
 		minimap.clear_fog()
 	var seed_val: int = GameState.current_seed if GameState else randi()
+	_apply_biome_environment()
 	if dungeon.has_method("generate"):
 		dungeon.generate(seed_val)
 	_update_hud()
-	var realm := "Рудники" if new_floor < 3 else "Навь"
-	hud_hint.text = "↓ Этаж %d · %s" % [new_floor, realm]
-	# Soundscape follows the realm — same boundary as the bestiary
-	# (EnemySprites.NAV_FROM_FLOOR), so the wood and the mobs change together.
-	if Sfx:
-		Sfx.set_biome("mine" if new_floor < 3 else "nav")
+	hud_hint.text = "↓ Этаж %d · %s" % [new_floor, _realm_name(new_floor)]
+	_apply_biome_sound()
+
+
+## Realm label. The forest is a map type, so it wins over the depth rule.
+func _realm_name(floor_i: int) -> String:
+	if GameState and str(GameState.biome) == "forest":
+		return "Лес"
+	return "Рудники" if floor_i < 3 else "Навь"
+
+
+## Soundscape follows the same realm split as the bestiary, so the wood and the
+## mobs change together (EnemySprites.realm_for).
+func _apply_biome_sound() -> void:
+	if Sfx == null or GameState == null:
+		return
+	Sfx.set_biome(EnemySprites.realm_for(GameState.floor_index, str(GameState.biome)))
 
 
 func _update_hud() -> void:

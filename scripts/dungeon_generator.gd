@@ -4,6 +4,7 @@ extends Node3D
 const TorchSprites = preload("res://scripts/torch_sprites.gd")
 const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 const PropSprites = preload("res://scripts/prop_sprites.gd")
+const ForestProps = preload("res://scripts/forest_props.gd")
 const ROCK_SHADER = preload("res://shaders/cave_rock.gdshader")
 
 ## How far rock may bulge into the corridor. Keeps the walking line clear —
@@ -52,6 +53,10 @@ var floor_cells: Array[Vector2i] = []
 ## Cell → "normal" | "mini_boss" | "floor_boss"
 var encounter_kinds: Dictionary = {}
 
+## Which biome this layout renders as. Read once per generate() so a mid-build
+## change cannot produce half a cave and half a wood.
+var _biome: String = "mine"
+
 var _floor_mat: ShaderMaterial
 var _wall_mat: ShaderMaterial
 var _ceiling_mat: ShaderMaterial
@@ -79,6 +84,7 @@ func generate(seed_value: int = 0) -> void:
 		if GameState.run_seed == 0:
 			GameState.run_seed = seed_value
 
+	_biome = str(GameState.biome) if GameState else "mine"
 	# Rebuild cave textures/materials so R regenerates new rock look
 	_build_materials()
 	_clear_children(geometry_root)
@@ -608,6 +614,9 @@ func _temp_collect() -> Array[Vector2i]:
 
 ## Sealed tunnel: single merged floor/ceiling (no cell seams) + wall panels.
 func _build_art_corridor() -> void:
+	if _biome == "forest":
+		_build_forest()
+		return
 	var skirt_mat := _make_skirting_mat()
 	_build_merged_floor()
 	_build_merged_ceiling()
@@ -622,6 +631,48 @@ func _build_art_corridor() -> void:
 			_maybe_cave_wall(x, y, -1, 0, world, skirt_mat)
 			_maybe_cave_wall(x, y, 0, 1, world, skirt_mat)
 			_maybe_cave_wall(x, y, 0, -1, world, skirt_mat)
+
+
+## Forest layout: same grid, different clothing.
+##
+## Ground stays 3D (the one 3D thing in the concept) and is the SAME undulating
+## mesh the cave uses, so floor_height_at keeps working and sprites keep landing
+## on the real surface. No ceiling — a lid over a forest is the one thing that
+## would instantly give the reuse away.
+##
+## A "wall" cell becomes a stand of trees plus the collision box that cell
+## always had. The player is stopped by the same geometry as before; only what
+## they see changed.
+func _build_forest() -> void:
+	_build_merged_floor()
+	var stands := 0
+	for y in range(grid_height):
+		for x in range(grid_width):
+			var world := cell_to_world(Vector2i(x, y))
+			var h := absi(x * 73856093 ^ y * 19349663)
+			if _is_walkable(_get_cell(x, y)):
+				# Floor collision only. No ceiling box: nothing overhead.
+				_add_solid_box(world + Vector3(0, -0.3, 0),
+					Vector3(cell_size * 1.05, 0.55, cell_size * 1.05))
+				continue
+			if not _touches_walkable(x, y):
+				continue  # deep inside the wood, never seen — do not build it
+			ForestProps.make_tree_stand(geometry_root, world,
+				_floor_height(world.x, world.z), cell_size, h)
+			_add_solid_box(world + Vector3(0, wall_height * 0.5, 0),
+				Vector3(cell_size * 1.02, wall_height + 0.35, cell_size * 1.02))
+			stands += 1
+	var centre := cell_to_world(Vector2i(grid_width / 2, grid_height / 2))
+	ForestProps.make_horizon(geometry_root, centre,
+		float(maxi(grid_width, grid_height)) * cell_size * 0.55)
+	print("[Forest] tree stands=%d" % stands)
+
+
+## Is any 4-neighbour walkable? Wall cells buried in the wood are never visible,
+## and building them would multiply the sprite count for nothing.
+func _touches_walkable(x: int, y: int) -> bool:
+	return (_is_walkable(_get_cell(x + 1, y)) or _is_walkable(_get_cell(x - 1, y))
+		or _is_walkable(_get_cell(x, y + 1)) or _is_walkable(_get_cell(x, y - 1)))
 
 
 ## One continuous cave floor — rocky undulation, world UV (seamless tex + large scale).
@@ -1080,6 +1131,9 @@ func _add_box(parent: Node3D, pos: Vector3, size: Vector3, mat: Material, collis
 
 
 func _spawn_torches() -> void:
+	if _biome == "forest":
+		_spawn_forest_lights()
+		return
 	var placed := 0
 	var dirs: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 	for y in range(grid_height):
@@ -1105,6 +1159,47 @@ func _spawn_torches() -> void:
 			_add_torch(pos, d)
 			placed += 1
 	print("[Dungeon] torches=%d" % placed)
+
+
+## Lanterns and glowing mushrooms instead of wall torches. Placed on WALKABLE
+## cells beside the wood, not on the wall itself: a lantern needs a pole in the
+## ground, and there is no wall to bracket it to any more.
+func _spawn_forest_lights() -> void:
+	var lanterns := 0
+	var shrooms := 0
+	for y in range(grid_height):
+		for x in range(grid_width):
+			if not _is_walkable(_get_cell(x, y)):
+				continue
+			if not _touches_walkable(x, y):
+				continue
+			var h := absi(x * 7 + y * 13)
+			if torch_spacing > 1 and h % torch_spacing != 0:
+				continue
+			var d := _lit_edge_dir(x, y)
+			if d == Vector2i.ZERO:
+				continue
+			var world := cell_to_world(Vector2i(x, y))
+			# Hard against the treeline, out of the walking lane
+			var off := Vector3(float(d.x), 0.0, float(d.y)) * (cell_size * 0.36)
+			var pos := world + off
+			var ground := _floor_height(pos.x, pos.z)
+			# Mostly lanterns; mushrooms break the amber up with something cold
+			if h % 5 == 0:
+				ForestProps.make_glowshroom(props_root, pos, ground)
+				shrooms += 1
+			else:
+				ForestProps.make_lantern(props_root, pos, ground)
+				lanterns += 1
+	print("[Forest] lanterns=%d glowshrooms=%d" % [lanterns, shrooms])
+
+
+## A neighbouring direction that is WOOD, so a light can stand against it.
+func _lit_edge_dir(x: int, y: int) -> Vector2i:
+	for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		if not _is_walkable(_get_cell(x + d.x, y + d.y)):
+			return d
+	return Vector2i.ZERO
 
 
 ## Direction the corridor runs at this cell, as a unit world vector. Packs only
@@ -1164,6 +1259,17 @@ func _add_torch(pos: Vector3, wall_dir: Vector2i) -> void:
 
 
 func _spawn_decorations() -> void:
+	if _biome == "forest":
+		for cell in floor_cells:
+			var h := absi(cell.x * 31 + cell.y * 17)
+			# Sparse: clutter on every cell hides the enemy sprites the player
+			# has to read in a fight.
+			if h % 3 != 0:
+				continue
+			var world := cell_to_world(cell)
+			ForestProps.make_undergrowth(props_root, world,
+				_floor_height(world.x, world.z), cell_size, h)
+		return
 	## No free-floating white planes (billboards looked like “empty 3D junk”).
 	## Only sparse wall braziers at dead-ends.
 	var n := 0

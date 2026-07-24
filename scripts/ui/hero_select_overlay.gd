@@ -17,8 +17,18 @@ const MINI_CARD := Vector2(74, 104)
 
 signal hero_chosen(hero_id: String)
 
+## Where the run happens. A second map type (open forest) sits on the SAME grid
+## as the mines, so this is a one-word choice, not a different game mode.
+const BIOMES := [
+	{"id": "mine", "name": "НАВЬИ КОПИ", "blurb": "Тесные штольни. Тьма в двух шагах."},
+	{"id": "forest", "name": "ЗАПОВЕДНЫЙ ЛЕС", "blurb": "Открытый лес под луной. Видно далеко."},
+]
+
 var _root: Control = null
 var _row: HBoxContainer = null
+var _biome_row: HBoxContainer = null
+var _biome_note: Label = null
+var _biome := "mine"
 var _picked := false
 
 
@@ -48,7 +58,7 @@ func _choose(hero_id: String) -> void:
 	if Sfx:
 		Sfx.play("ui_click")
 	if GameState:
-		GameState.new_run(0, hero_id)
+		GameState.new_run(0, hero_id, _biome)
 	_root.visible = false
 	get_tree().paused = false
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -85,6 +95,16 @@ func _build() -> void:
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(sub)
 
+	_biome_row = HBoxContainer.new()
+	_biome_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_biome_row.add_theme_constant_override("separation", 14)
+	col.add_child(_biome_row)
+
+	_biome_note = Label.new()
+	UiTheme.as_title(_biome_note, 14, Color(0.66, 0.64, 0.6))
+	_biome_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(_biome_note)
+
 	_row = HBoxContainer.new()
 	_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	_row.add_theme_constant_override("separation", 26)
@@ -92,7 +112,35 @@ func _build() -> void:
 	col.add_child(_row)
 
 
+func _choose_biome(id: String) -> void:
+	if _biome == id:
+		return
+	_biome = id
+	if Sfx:
+		Sfx.play("ui_click")
+	_render_biomes()
+
+
+func _render_biomes() -> void:
+	for c in _biome_row.get_children():
+		_biome_row.remove_child(c)
+		c.queue_free()
+	for entry in BIOMES:
+		var id := str(entry["id"])
+		var btn := Button.new()
+		btn.text = str(entry["name"])
+		btn.focus_mode = Control.FOCUS_NONE
+		var on := id == _biome
+		UiTheme.cartoon_button(btn, 16,
+			Color(0.30, 0.52, 0.40) if on else Color(0.17, 0.15, 0.19))
+		btn.pressed.connect(func(): _choose_biome(id))
+		_biome_row.add_child(btn)
+		if on and _biome_note:
+			_biome_note.text = str(entry["blurb"])
+
+
 func _render() -> void:
+	_render_biomes()
 	for c in _row.get_children():
 		_row.remove_child(c)
 		c.queue_free()

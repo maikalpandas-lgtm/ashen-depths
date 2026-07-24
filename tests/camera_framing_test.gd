@@ -8,11 +8,13 @@ const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 
 func _init() -> void:
 	var packs := {}
-	for floor_i in [1, 3, 5]:
-		for h in range(8):
-			packs[str(EnemySprites.pack_for(h, floor_i))] = EnemySprites.pack_for(h, floor_i)
-		packs["mini%d" % floor_i] = EnemySprites.mini_boss_pack(floor_i)
-		packs["boss%d" % floor_i] = EnemySprites.floor_boss_pack(floor_i)
+	for biome in ["mine", "forest"]:
+		for floor_i in [1, 3, 5]:
+			for h in range(8):
+				var p: Array = EnemySprites.pack_for(h, floor_i, biome)
+				packs[str(p)] = p
+			packs["mini_%s%d" % [biome, floor_i]] = EnemySprites.mini_boss_pack(floor_i, biome)
+			packs["boss_%s%d" % [biome, floor_i]] = EnemySprites.floor_boss_pack(floor_i, biome)
 
 	var failed := 0
 	for key in packs:

@@ -130,8 +130,24 @@ python3 tools/sprite_cutter.py path/to/raw.jpg assets/textures/out.png \
 | **card_echo_strike** | `card_echo_strike.png` | `masters/card_echo_strike.png` | `masters/card_echo_strike_source.jpg` | Echo Strike — ghost blade |
 | **card_ward** | `card_ward.png` | `masters/card_ward.png` | `masters/card_ward_source.jpg` | Ward — spiked shield |
 | **card_offering** | `card_offering.png` | `masters/card_offering.png` | `masters/card_offering_source.jpg` | Offering — burning card |
+| **card_axe_swing** | `card_axe_swing.png` | `masters/card_axe_swing.png` | `masters/card_axe_swing_source.jpg` | Секира — тяжёлый удар |
+| **card_spear_thrust** | `card_spear_thrust.png` | `masters/card_spear_thrust.png` | `masters/card_spear_thrust_source.jpg` | Копьё — пробой |
+| **card_flail** | `card_flail.png` | `masters/card_flail.png` | `masters/card_flail_source.jpg` | Кистень — AoE |
+| **card_dagger_pair** | `card_dagger_pair.png` | `masters/card_dagger_pair.png` | `masters/card_dagger_pair_source.jpg` | Двойной нож |
+| **card_bear_claw** | `card_bear_claw.png` | `masters/card_bear_claw.png` | `masters/card_bear_claw_source.jpg` | Медвежья лапа |
+| **card_tower_shield** | `card_tower_shield.png` | `masters/card_tower_shield.png` | `masters/card_tower_shield_source.jpg` | Червлёный щит |
+| **card_chainmail** | `card_chainmail.png` | `masters/card_chainmail.png` | `masters/card_chainmail_source.jpg` | Кольчуга |
+| **card_herbs** | `card_herbs.png` | `masters/card_herbs.png` | `masters/card_herbs_source.jpg` | Травы — heal |
+| **card_kvass** | `card_kvass.png` | `masters/card_kvass.png` | `masters/card_kvass_source.jpg` | Ковш — energy |
+| **card_frost** | `card_frost.png` | `masters/card_frost.png` | `masters/card_frost_source.jpg` | Стужа |
+| **card_lightning** | `card_lightning.png` | `masters/card_lightning.png` | `masters/card_lightning_source.jpg` | Перун — молния |
+| **card_curse_doll** | `card_curse_doll.png` | `masters/card_curse_doll.png` | `masters/card_curse_doll_source.jpg` | Куколка — порча |
+| **card_raven** | `card_raven.png` | `masters/card_raven.png` | `masters/card_raven_source.jpg` | Ворон — вестник |
+| **card_wolf_howl** | `card_wolf_howl.png` | `masters/card_wolf_howl.png` | `masters/card_wolf_howl_source.jpg` | Волчий вой |
+| **card_blood_pact** | `card_blood_pact.png` | `masters/card_blood_pact.png` | `masters/card_blood_pact_source.jpg` | Уговор — blood cost |
+| **card_bone_crown** | `card_bone_crown.png` | `masters/card_bone_crown.png` | `masters/card_bone_crown_source.jpg` | Костяной венец |
 
-Промпты: `docs/ART_PROMPTS.md` §2 + §3.6 (батч 4).  
+Промпты: `docs/ART_PROMPTS.md` §2 + §3.6 (батч 4) + §3.10 (батч 8, 16 карт).  
 Качество cut (bright edge): batch1 ≤0.3%; batch4 ≤0.6%.
 
 ---

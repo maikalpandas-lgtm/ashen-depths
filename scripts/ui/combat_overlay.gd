@@ -19,6 +19,7 @@ const UiTheme = preload("res://scripts/ui/ui_theme.gd")
 const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 const LabelLayout = preload("res://scripts/ui/label_layout.gd")
 const FanLayout = preload("res://scripts/ui/fan_layout.gd")
+const CameraFraming = preload("res://scripts/ui/camera_framing.gd")
 
 ## Fan geometry lives in FanLayout so the test can exercise the real maths.
 const CARD_W := int(FanLayout.CARD_W)
@@ -252,10 +253,13 @@ func _enter_combat_view() -> void:
 	# Closer than before: the art is the reason these monsters were drawn, and
 	# at 5-7m they were postage stamps. A narrower FOV keeps a wide pack framed
 	# without having to back away from it.
-	# A touch further back than the closest framing: at 3.4m a big monster fills
-	# the frame and its name/HP had nowhere to sit but on its own legs.
-	var dist: float = 4.1 if n_pack <= 2 else (4.8 if n_pack == 3 else 5.4)
-	var fov: float = 60.0 if n_pack <= 2 else 68.0
+	# Framing lives in CameraFraming so a test can hold it to the reference:
+	# monsters in the upper half, clear floor beneath for name, HP and the hand.
+	var pack_ids: Array = []
+	for e in _combat.enemies:
+		pack_ids.append(e["id"])
+	var dist := CameraFraming.distance(pack_ids)
+	var fov := CameraFraming.fov(n_pack)
 
 	if _cam and is_instance_valid(_cam):
 		_cam.queue_free()
@@ -264,10 +268,9 @@ func _enter_combat_view() -> void:
 	_cam.near = 0.05
 	_cam.far = 40.0
 	get_tree().current_scene.add_child(_cam)
-	# Looking a little higher lifts the monsters up the frame, which is what
-	# leaves clear floor under them for the labels.
-	_cam.global_position = pack + back * dist + Vector3.UP * 2.1
-	_cam.look_at(pack + Vector3.UP * 1.15, Vector3.UP)
+	# Aiming LOW raises the pack up the frame; that is what frees the floor.
+	_cam.global_position = pack + back * dist + Vector3.UP * CameraFraming.height()
+	_cam.look_at(pack + Vector3.UP * CameraFraming.look_height(), Vector3.UP)
 	_cam.current = true
 
 	if _stage_light and is_instance_valid(_stage_light):

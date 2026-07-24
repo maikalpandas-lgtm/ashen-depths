@@ -22,11 +22,14 @@ const UiTheme = preload("res://scripts/ui/ui_theme.gd")
 const ART_DIR := "res://assets/textures/"
 
 ## Zones as fractions of the card.
-const ART_RECT := Rect2(0.0, 0.0, 1.0, 0.60)
-const COST_RECT := Rect2(0.02, 0.015, 0.26, 0.185)
-const NAME_RECT := Rect2(0.05, 0.535, 0.90, 0.105)
-const TYPE_RECT := Rect2(0.30, 0.645, 0.40, 0.070)
-const TEXT_RECT := Rect2(0.07, 0.735, 0.86, 0.235)
+## Reference order, top to bottom: name banner, art, type tab, rules text.
+## The name used to sit in the MIDDLE of the card, which is not where a player
+## looks for it — every card game puts the title at the top.
+const NAME_RECT := Rect2(0.03, 0.022, 0.94, 0.105)
+const COST_RECT := Rect2(0.015, 0.005, 0.235, 0.165)
+const ART_RECT := Rect2(0.045, 0.145, 0.91, 0.44)
+const TYPE_RECT := Rect2(0.31, 0.605, 0.38, 0.062)
+const TEXT_RECT := Rect2(0.055, 0.685, 0.89, 0.29)
 
 const PARCHMENT := Color(0.91, 0.86, 0.73)
 const INK := Color(0.16, 0.11, 0.07)
@@ -45,18 +48,21 @@ const TYPE_TAG := {
 ## Keyword → colour. Rules text is scanned for these and they are tinted, so a
 ## player can spot "this one pierces" without reading the whole card. Longer
 ## phrases come first: "Пробой брони" must win over a bare "брони".
+## Colours are DARK on purpose: the card face is pale parchment, and the pastel
+## set these started as was unreadable on it. Each is a saturated ink, not a
+## highlight.
 const KEYWORDS := [
-	["Пробой брони", "6fd0ff"],
-	["по щиту", "9fd8ff"],
-	["вампиризм", "ff6f8a"],
-	["Остриё", "ffd166"],
-	["Эхо", "c9a4ff"],
-	["кость", "e8e2cf"],
-	["кости", "e8e2cf"],
-	["шип", "b0f0a0"],
-	["брони", "6fd0ff"],
-	["урона", "ff9b6a"],
-	["HP", "ff6f8a"],
+	["Пробой брони", "0f5f8a"],
+	["по щиту", "1a5d80"],
+	["вампиризм", "9c1230"],
+	["Остриё", "8a5a08"],
+	["Эхо", "5a3a8f"],
+	["кость", "5a5138"],
+	["кости", "5a5138"],
+	["шип", "2f6b25"],
+	["брони", "12557a"],
+	["урона", "a33c10"],
+	["HP", "9c1230"],
 ]
 
 static var _tex_cache: Dictionary = {}
@@ -102,6 +108,9 @@ static func build(card: Dictionary, owner_colour: Color, card_size: Vector2) -> 
 	var body := Panel.new()
 	body.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var body_style := StyleBoxFlat.new()
+	# Fully opaque: a translucent card let the cave show through and turned the
+	# rules text to mush. Unplayable cards are dimmed by DARKENING, never by
+	# alpha (see the hand in combat_overlay).
 	body_style.bg_color = PARCHMENT
 	body_style.border_color = EDGE
 	body_style.set_border_width_all(3)
@@ -112,6 +121,16 @@ static func build(card: Dictionary, owner_colour: Color, card_size: Vector2) -> 
 	# --- illustration, bleeding across the top ----------------------------
 	# Clipped by its own frame so KEEP_ASPECT_COVERED can crop instead of
 	# letterboxing the art into a stamp.
+	var art_frame := Panel.new()
+	var art_style := StyleBoxFlat.new()
+	art_style.bg_color = Color(0.80, 0.74, 0.60)
+	art_style.border_color = EDGE
+	art_style.set_border_width_all(2)
+	art_style.set_corner_radius_all(4)
+	art_frame.add_theme_stylebox_override("panel", art_style)
+	_place(art_frame, ART_RECT)
+	root.add_child(art_frame)
+
 	var art_clip := Control.new()
 	art_clip.clip_contents = true
 	_place(art_clip, ART_RECT)
@@ -138,10 +157,11 @@ static func build(card: Dictionary, owner_colour: Color, card_size: Vector2) -> 
 	tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(tint)
 
-	# --- name ribbon ------------------------------------------------------
+	# --- name banner, coloured by type like the reference ------------------
+	var type_tag: Array = TYPE_TAG.get(int(card.get("type", -1)), ["", Color(0.55, 0.5, 0.42)])
 	var ribbon := Panel.new()
 	var ribbon_style := StyleBoxFlat.new()
-	ribbon_style.bg_color = Color(0.86, 0.80, 0.65)
+	ribbon_style.bg_color = (type_tag[1] as Color).lerp(PARCHMENT, 0.62)
 	ribbon_style.border_color = EDGE
 	ribbon_style.set_border_width_all(2)
 	ribbon_style.set_corner_radius_all(4)
@@ -162,7 +182,7 @@ static func build(card: Dictionary, owner_colour: Color, card_size: Vector2) -> 
 	root.add_child(name_label)
 
 	# --- type tab ---------------------------------------------------------
-	var tag: Array = TYPE_TAG.get(int(card.get("type", -1)), ["", Color.GRAY])
+	var tag: Array = type_tag
 	if str(tag[0]) != "":
 		var tab := Panel.new()
 		var tab_style := StyleBoxFlat.new()
@@ -188,7 +208,7 @@ static func build(card: Dictionary, owner_colour: Color, card_size: Vector2) -> 
 	# --- rules text -------------------------------------------------------
 	var raw_text := str(card["text"])
 	var text_box := card_size * TEXT_RECT.size
-	var text_size := fit_font_size(UiTheme.title_font(), raw_text, text_box, 12, 7, true)
+	var text_size := fit_font_size(UiTheme.title_font(), raw_text, text_box, 14, 8, true)
 	var text := RichTextLabel.new()
 	text.bbcode_enabled = true
 	text.fit_content = false
@@ -197,7 +217,7 @@ static func build(card: Dictionary, owner_colour: Color, card_size: Vector2) -> 
 	if UiTheme.title_font():
 		text.add_theme_font_override("normal_font", UiTheme.title_font())
 	text.add_theme_font_size_override("normal_font_size", text_size)
-	text.add_theme_color_override("default_color", Color(0.21, 0.16, 0.12))
+	text.add_theme_color_override("default_color", Color(0.14, 0.10, 0.07))
 	_place(text, TEXT_RECT)
 	root.add_child(text)
 

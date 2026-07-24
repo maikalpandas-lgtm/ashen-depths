@@ -18,16 +18,11 @@ const Party = preload("res://scripts/party.gd")
 const UiTheme = preload("res://scripts/ui/ui_theme.gd")
 const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 const LabelLayout = preload("res://scripts/ui/label_layout.gd")
+const FanLayout = preload("res://scripts/ui/fan_layout.gd")
 
-## Smaller than they were: the hand was eating the lower third of the screen
-## while the monsters it targets sat tiny at the back.
-const CARD_W := 112
-const CARD_H := 157
-## Hearthstone-style fan. A flat row of upright cards reads as a spreadsheet;
-## an arc reads as cards held in a hand.
-const FAN_MAX_ANGLE := 15.0   ## degrees at the outermost card
-const FAN_ARC_LIFT := 26.0    ## how far the middle of the arc rises
-const FAN_OVERLAP := 0.80     ## fraction of a card width between neighbours
+## Fan geometry lives in FanLayout so the test can exercise the real maths.
+const CARD_W := int(FanLayout.CARD_W)
+const CARD_H := int(FanLayout.CARD_H)
 const DRAG_LIFT := 26.0  ## how far a held card rises out of the hand
 const FLASH_TIME := 0.22  ## how long a struck monster stays lit
 const POPUP_TIME := 1.1  ## how long a damage number lives
@@ -601,27 +596,35 @@ func _draw_world_overlay() -> void:
 	var bar_w: float = 112.0 if n <= 2 else 92.0
 	var min_gap := bar_w + 10.0
 	var spots: Array[Vector2] = []
+	var head_ys: Array[float] = []
 	for k in range(n):
 		var i: int = int(living[k])
 		var p := Vector2.ZERO
+		var head_y := 0.0
 		var have_proj := false
 		if cam and i < _enemy_nodes.size():
 			var node := _enemy_nodes[i] as Node3D
 			if is_instance_valid(node) and node.visible:
-				# Anchor at the FEET: the reference puts the name and bar under
-				# its monsters, which keeps the art clear and stops tall
-				# enemies pushing their labels into the banner.
-				var feet: Vector3 = node.global_position + Vector3.UP * 0.05
+				# Anchor at the FEET: the reference puts name and bar UNDER its
+				# monsters. Project the head separately rather than subtracting
+				# a guessed height — a brute and a grub need very different
+				# offsets, and guessing put the intent up by the ceiling.
+				var feet: Vector3 = node.global_position
+				var head: Vector3 = feet + Vector3.UP * _enemy_top(i)
 				if not cam.is_position_behind(feet):
 					p = cam.unproject_position(feet)
 					have_proj = true
+					head_y = cam.unproject_position(head).y if not cam.is_position_behind(head) else p.y - 90.0
 		if not have_proj:
-			var left_m := 220.0
+			var left_m := 240.0
 			var usable: float = maxf(160.0, vp.x - left_m - 40.0)
 			var t: float = 0.5 if n == 1 else float(k) / float(n - 1)
-			p = Vector2(left_m + usable * t, 110.0)
-		p.y = clampf(p.y, 88.0, vp.y - 280.0)
+			p = Vector2(left_m + usable * t, 150.0)
+			head_y = p.y - 90.0
+		# Only a floor clamp: dragging the feet UP puts the labels on the sprite
+		p.y = minf(p.y, vp.y - 232.0)
 		spots.append(p)
+		head_ys.append(head_y)
 
 	LabelLayout.separate(spots, min_gap, 230.0, vp.x - 50.0)
 
@@ -632,37 +635,61 @@ func _draw_world_overlay() -> void:
 		if int(e.get("hp", 0)) <= 0:
 			continue
 		var p: Vector2 = spots[k]
-		var bar := Rect2(p.x - bar_w * 0.5, p.y + 22.0, bar_w, 13.0)
-		_world_layer.draw_rect(bar.grow(3.0), Color(0.02, 0.02, 0.04, 0.92))
-		_world_layer.draw_rect(bar, Color(0.18, 0.07, 0.08, 0.98))
+		# Clear of the feet, name above the bar (reference order)
+		var bar := Rect2(p.x - bar_w * 0.5, p.y + 34.0, bar_w, 15.0)
+		# Rounded pill, like the reference, rather than a flat rectangle
+		_pill(bar.grow(2.5), Color(0.06, 0.04, 0.05, 0.95))
+		_pill(bar, Color(0.30, 0.10, 0.12, 0.98))
 		var frac: float = clampf(float(e["hp"]) / maxf(1.0, float(e["max_hp"])), 0.0, 1.0)
-		_world_layer.draw_rect(Rect2(bar.position, Vector2(bar.size.x * frac, bar.size.y)),
-			Color(0.85, 0.28, 0.3))
+		if frac > 0.001:
+			_pill(Rect2(bar.position, Vector2(maxf(bar.size.y, bar.size.x * frac), bar.size.y)),
+				Color(0.88, 0.30, 0.31))
 		if i == hovered:
-			_world_layer.draw_rect(bar.grow(5.0), Color(1.0, 0.88, 0.35), false, 2.5)
+			_pill(bar.grow(5.0), Color(1.0, 0.88, 0.35, 0.35))
 
 		if font == null:
 			continue
-		# Numbers sit ON the bar, name above it
-		_world_layer.draw_string(font, Vector2(bar.position.x, bar.position.y + 11.0),
+		# Numbers on the bar
+		_world_layer.draw_string(font, Vector2(bar.position.x, bar.position.y + 12.0),
 			"%d/%d" % [e["hp"], e["max_hp"]],
 			HORIZONTAL_ALIGNMENT_CENTER, bar_w, 12, Color(1.0, 0.96, 0.93))
-		# Name directly above its bar
-		_world_layer.draw_string(font, Vector2(bar.position.x, bar.position.y - 6.0),
-			str(e["name"]),
-			HORIZONTAL_ALIGNMENT_CENTER, bar_w, 13, Color(0.94, 0.9, 0.84))
-		# Intent stays up by the monster's head, where it telegraphs the swing
+		# Name between the feet and the bar, outlined so it survives dark rock
+		_outlined(font, Vector2(bar.position.x, bar.position.y - 8.0), str(e["name"]),
+			bar_w, 14, Color(0.97, 0.94, 0.88))
+		# Intent just over the real head, not a guessed offset
 		var it: Dictionary = e["intent"]
 		var is_block: bool = it.get("type", "attack") == "block"
-		var head_y: float = p.y - _enemy_screen_height(i) - 14.0
-		_world_layer.draw_string(font, Vector2(bar.position.x, head_y),
+		var intent_y: float = maxf(72.0, float(head_ys[k]) - 8.0)
+		_outlined(font, Vector2(bar.position.x, intent_y),
 			("🛡 %d" if is_block else "🗡 %d") % it.get("value", 0),
-			HORIZONTAL_ALIGNMENT_CENTER, bar_w, 20,
-			Color(0.6, 0.85, 1.0) if is_block else Color(1.0, 0.62, 0.42))
+			bar_w, 21, Color(0.65, 0.88, 1.0) if is_block else Color(1.0, 0.66, 0.45))
 		if int(e["block"]) > 0:
 			_world_layer.draw_string(font, Vector2(bar.end.x + 4.0, bar.position.y + 12.0),
 				"🛡%d" % e["block"], HORIZONTAL_ALIGNMENT_LEFT, -1, 13,
 				Color(0.7, 0.88, 1.0))
+
+
+## Rounded-end bar. draw_rect gives hard corners, which read as a debug widget
+## next to painted art.
+func _pill(r: Rect2, col: Color) -> void:
+	var radius: float = r.size.y * 0.5
+	if r.size.x <= r.size.y:
+		_world_layer.draw_circle(r.position + r.size * 0.5, radius, col)
+		return
+	_world_layer.draw_rect(Rect2(r.position.x + radius, r.position.y,
+		r.size.x - radius * 2.0, r.size.y), col)
+	_world_layer.draw_circle(Vector2(r.position.x + radius, r.position.y + radius), radius, col)
+	_world_layer.draw_circle(Vector2(r.end.x - radius, r.position.y + radius), radius, col)
+
+
+## Text with a dark outline — labels sit over rock, fire and monsters at once.
+func _outlined(font: Font, at: Vector2, text: String, width: float, size: int,
+		col: Color) -> void:
+	for off in [Vector2(-1.5, 0), Vector2(1.5, 0), Vector2(0, -1.5), Vector2(0, 1.5),
+			Vector2(-1.5, -1.5), Vector2(1.5, -1.5), Vector2(-1.5, 1.5), Vector2(1.5, 1.5)]:
+		_world_layer.draw_string(font, at + off, text,
+			HORIZONTAL_ALIGNMENT_CENTER, width, size, Color(0.04, 0.03, 0.04, 0.95))
+	_world_layer.draw_string(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, width, size, col)
 
 
 ## How tall this monster looks on screen right now, so labels can sit above its
@@ -1086,35 +1113,14 @@ func _render_hand() -> void:
 		_hand_row.add_child(_make_hand_card(i, n))
 
 
-## Where card `index` of `n` sits in the fan: position, rotation, scale.
-## Pure geometry so the hit button, the glow and the face all agree.
 func _fan_slot(index: int, n: int) -> Dictionary:
 	var area := _hand_row.size
 	if area.x < 10.0:
-		area = Vector2(900.0, float(CARD_H) + 46.0)
-	var step: float = CARD_W * FAN_OVERLAP
-	# Squeeze the fan if a big hand would otherwise run off the strip
-	var span: float = step * float(maxi(0, n - 1))
-	if span > area.x - CARD_W:
-		step = (area.x - CARD_W) / float(maxi(1, n - 1))
-		span = step * float(maxi(0, n - 1))
-
-	var t: float = 0.0 if n <= 1 else (float(index) / float(n - 1)) * 2.0 - 1.0  # -1..1
-	var centre_x: float = area.x * 0.5
-	var x: float = centre_x + t * span * 0.5 - CARD_W * 0.5
-	# Arc: the middle of the hand rides higher than its ends
-	var y: float = area.y - CARD_H - 6.0 + (1.0 - cos(t * PI * 0.5)) * FAN_ARC_LIFT
-	var angle: float = t * FAN_MAX_ANGLE
-
+		area = Vector2(900.0, FanLayout.CARD_H + 46.0)
 	var raised := index == _dragging or index == _hover_card
-	var scale_f := 1.0
-	if raised:
-		# Straighten, lift and grow — the reference pulls the read card out of
-		# the fan entirely rather than just tinting it
-		angle = 0.0
-		y -= 42.0
-		scale_f = 1.22 if index == _dragging else 1.14
-	return {"pos": Vector2(x, y), "angle": angle, "scale": scale_f, "raised": raised}
+	var slot := FanLayout.slot(index, n, area, raised, index == _dragging)
+	slot["raised"] = raised
+	return slot
 
 
 func _make_hand_card(index: int, n: int) -> Control:
@@ -1162,7 +1168,8 @@ func _make_hand_card(index: int, n: int) -> Control:
 	var view := CardView.build(card, owner_colour, Vector2(CARD_W, CARD_H))
 	view.size = Vector2(CARD_W, CARD_H)
 	# Unplayable cards grey out rather than vanish (§7.4)
-	view.modulate = Color.WHITE if playable else Color(0.5, 0.5, 0.55, 0.85)
+	# Darkened, never faded: alpha let the cave show through the card face
+	view.modulate = Color.WHITE if playable else Color(0.52, 0.50, 0.54)
 	if raised:
 		view.modulate = Color(1.12, 1.09, 1.02)
 	holder.add_child(view)

@@ -950,11 +950,19 @@ func _draw_relics() -> void:
 	var x := centre - total * 0.5
 	for it in items:
 		var r := Rect2(x, 8.0, w, 30.0)
-		_fx_layer.draw_rect(r.grow(2.0), Color(0.06, 0.04, 0.05, 0.92), true)
-		_fx_layer.draw_rect(r, it["colour"], true)
-		_fx_layer.draw_string(font, Vector2(r.position.x, r.position.y + 21.0),
-			str(it["initial"]), HORIZONTAL_ALIGNMENT_CENTER, w, 16,
-			Color(0.06, 0.05, 0.05))
+		# Rarity ring stays even with art: it is the only thing telling a common
+		# trinket from a relic at a glance.
+		_fx_layer.draw_rect(r.grow(3.0), Color(0.06, 0.04, 0.05, 0.92), true)
+		_fx_layer.draw_rect(r.grow(1.0), it["colour"], true)
+		var tex: Texture2D = it.get("tex", null)
+		if tex != null:
+			_fx_layer.draw_texture_rect(tex, r, false, Color(1, 1, 1, 1))
+		else:
+			# No art yet — the letter plate this replaced
+			_fx_layer.draw_rect(r, it["colour"], true)
+			_fx_layer.draw_string(font, Vector2(r.position.x, r.position.y + 21.0),
+				str(it["initial"]), HORIZONTAL_ALIGNMENT_CENTER, w, 16,
+				Color(0.06, 0.05, 0.05))
 		x += w + gap
 
 
@@ -985,6 +993,7 @@ func _relic_list() -> Array:
 		var nm := str(def.get("name", "?"))
 		out.append({
 			"initial": nm.substr(0, 1).to_upper(),
+			"tex": ItemDB.icon(id),
 			"colour": RELIC_COLOURS.get(str(def.get("rarity", "common")),
 				RELIC_COLOURS["common"]),
 		})

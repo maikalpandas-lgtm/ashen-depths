@@ -16,6 +16,7 @@ const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 const ForestProps = preload("res://scripts/forest_props.gd")
 const CardDB = preload("res://scripts/cards/card_db.gd")
 const Party = preload("res://scripts/party.gd")
+const ItemDB = preload("res://scripts/items/item_db.gd")
 
 const DIR := "res://assets/textures/"
 
@@ -38,6 +39,10 @@ func _init() -> void:
 		var card: Dictionary = CardDB.get_card(str(card_id))
 		if card.has("art"):
 			wanted[str(card["art"])] = "card %s" % card_id
+
+	# Backpack item icons — the relic row draws these every fight
+	for item_id in ItemDB.ids():
+		wanted[ItemDB.icon_id(str(item_id))] = "item %s" % item_id
 
 	for hero_id in Party.HEROES.keys():
 		var def: Dictionary = Party.HEROES[hero_id]

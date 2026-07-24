@@ -5,6 +5,30 @@ extends RefCounted
 ## tags: adjacency keys (blade, whetstone, guard, …).
 ## base / adj: combat modifier keys (see Backpack.compute_mods).
 
+## Icon art id for an item. Derived rather than stored: every icon is
+## `item_<id>.png` by convention (docs/ART_PROMPTS.md §3.12), and a second copy
+## of the name in the table is a second thing to keep in sync.
+static func icon_id(item_id: String) -> String:
+	return "item_" + item_id
+
+
+const ICON_DIR := "res://assets/textures/"
+static var _icon_cache: Dictionary = {}
+
+
+## Icon texture, or null when the art has not been drawn. Callers fall back to
+## a coloured plate — the game must stay playable between art batches.
+static func icon(item_id: String) -> Texture2D:
+	if _icon_cache.has(item_id):
+		return _icon_cache[item_id]
+	var path := ICON_DIR + icon_id(item_id) + ".png"
+	var tex: Texture2D = null
+	if ResourceLoader.exists(path):
+		tex = ResourceLoader.load(path, "Texture2D") as Texture2D
+	_icon_cache[item_id] = tex
+	return tex
+
+
 const ITEMS := {
 	"rusty_blade": {
 		"name": "Ржавый клинок", "rarity": "common",

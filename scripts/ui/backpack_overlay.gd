@@ -81,11 +81,22 @@ func _refresh() -> void:
 				var p: Dictionary = bp.placed[uid]
 				var def: Dictionary = ItemDB.get_item(str(p["id"]))
 				var is_origin: bool = int(p["x"]) == x and int(p["y"]) == y
-				btn.text = str(def.get("name", "?")) if is_origin else "·"
+				# Icon on the origin cell, nothing on the cells a 2x1 spills
+				# into — the art is one picture, not one per cell.
+				var tex: Texture2D = ItemDB.icon(str(p["id"])) if is_origin else null
+				btn.icon = tex
+				btn.expand_icon = tex != null
+				if tex != null:
+					btn.text = ""
+					btn.tooltip_text = "%s — %s" % [def.get("name", "?"), def.get("text", "")]
+				else:
+					# Art not drawn yet: the name still has to be readable
+					btn.text = str(def.get("name", "?")) if is_origin else "·"
 				btn.disabled = false
 				btn.modulate = Color(1.15, 1.05, 0.75) if uid == _selected_uid else Color(0.85, 0.78, 0.55)
 			else:
 				btn.text = ""
+				btn.icon = null
 				btn.disabled = false
 				btn.modulate = Color(0.35, 0.4, 0.45) if _selected_uid.is_empty() else Color(0.4, 0.55, 0.45)
 

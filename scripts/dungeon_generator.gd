@@ -703,7 +703,8 @@ func _touches_walkable(x: int, y: int) -> bool:
 		or _is_walkable(_get_cell(x, y + 1)) or _is_walkable(_get_cell(x, y - 1)))
 
 
-## One continuous cave floor — rocky undulation, world UV (seamless tex + large scale).
+## One continuous floor mesh — undulating heightfield, world UV (m).
+## Material is cave rock or forest soil depending on `_biome` (`_build_materials`).
 func _build_merged_floor() -> void:
 	var mi := MeshInstance3D.new()
 	var st := SurfaceTool.new()

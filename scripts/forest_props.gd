@@ -101,6 +101,9 @@ static func make_tree_stand(parent: Node3D, world: Vector3, ground_y: float,
 		if spr:
 			var shade := 0.55 + 0.12 * float(i)
 			spr.modulate = Color(shade, shade * 1.02, shade * 0.94)
+			# A 7m trunk right behind the player is a wall across the fight —
+			# combat hides occluders near its camera (combat_overlay).
+			spr.add_to_group("combat_occluder")
 
 
 ## Sparse clutter on a walkable cell. Kept OFF the centre line: a fern where the
@@ -112,7 +115,9 @@ static func make_undergrowth(parent: Node3D, world: Vector3, ground_y: float,
 	var off := cell_size * (0.30 + float(h % 7) / 60.0) * side
 	var along := (float(h % 11) / 11.0 - 0.5) * cell_size * 0.5
 	var pos := world + (Vector3(off, 0.0, along) if (h % 4) < 2 else Vector3(along, 0.0, off))
-	make_sprite(parent, str(pick["art"]), float(pick["height"]), pos, ground_y)
+	var spr := make_sprite(parent, str(pick["art"]), float(pick["height"]), pos, ground_y)
+	if spr:
+		spr.add_to_group("combat_occluder")
 
 
 ## Lantern on a pole — the forest's torch. Carries the same warm light so the

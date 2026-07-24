@@ -76,6 +76,7 @@ var _viewmodel: Node3D = null
 ## anything closer starts eating the frame. See _clear_torches_off_the_lens.
 const TORCH_CLEAR_RADIUS := 1.8
 var _muted_torches: Array = []
+var _muted_occluders: Array = []
 
 var _root: Control = null
 var _world_layer: Control = null  ## HP bars drawn over the 3D view
@@ -278,6 +279,7 @@ func _enter_combat_view() -> void:
 	_cam.current = true
 
 	_clear_torches_off_the_lens()
+	_clear_occluders_off_the_lens()
 
 	if _stage_light and is_instance_valid(_stage_light):
 		_stage_light.queue_free()
@@ -318,11 +320,53 @@ func _clear_torches_off_the_lens() -> void:
 			_muted_torches.append(vis)
 
 
+## Forest trees stand in the wall cells, and the combat camera backs into one.
+## Unlike a torch a tree carries no light to preserve, so the whole sprite goes.
+##
+## Hidden when it is IN FRONT of the camera (a tree behind the lens is already
+## off-screen) and either close to the lens or close to the camera→pack line,
+## so a trunk dead-centre disappears but the wood flanking the pack stays as a
+## backdrop.
+func _clear_occluders_off_the_lens() -> void:
+	_muted_occluders.clear()
+	if _cam == null or not is_instance_valid(_cam) or not is_instance_valid(_source):
+		return
+	var cam_pos := _cam.global_position
+	var pack := _source.global_position
+	var to_pack := pack - cam_pos
+	to_pack.y = 0.0
+	var pack_dist := to_pack.length()
+	if pack_dist < 0.1:
+		return
+	var fwd := to_pack / pack_dist
+	for node in get_tree().get_nodes_in_group("combat_occluder"):
+		var spr := node as Node3D
+		if not is_instance_valid(spr) or not spr.visible:
+			continue
+		var rel := spr.global_position - cam_pos
+		rel.y = 0.0
+		var ahead := rel.dot(fwd)
+		# Behind the lens, or past the monsters — leave it, it isn't in the way
+		if ahead < 0.2 or ahead > pack_dist - 0.3:
+			continue
+		var lateral := (rel - fwd * ahead).length()
+		# Wider allowance up close (the trunk fills the frame) than near the pack
+		var allow: float = lerpf(2.4, 0.6, clampf(ahead / pack_dist, 0.0, 1.0))
+		if lateral > allow:
+			continue
+		spr.visible = false
+		_muted_occluders.append(spr)
+
+
 func _restore_torches() -> void:
 	for vis in _muted_torches:
 		if is_instance_valid(vis):
 			(vis as VisualInstance3D).visible = true
 	_muted_torches.clear()
+	for occ in _muted_occluders:
+		if is_instance_valid(occ):
+			(occ as Node3D).visible = true
+	_muted_occluders.clear()
 
 
 func _exit_combat_view() -> void:

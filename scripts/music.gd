@@ -103,9 +103,11 @@ func _swap_track(stream: AudioStream, target_db: float) -> void:
 	if _player.playing and _player.stream == stream:
 		_player.volume_db = target_db
 		return
-	# Quick cross: dip out, swap, rise
-	_fade_tw = create_tween()
+	# Quick cross: dip out, swap, rise. The tween is created ONLY in the branch
+	# that fills it — creating it first meant that starting from silence began a
+	# tween with no tweeners, which Godot reports as an error every time.
 	if _player.playing:
+		_fade_tw = create_tween()
 		_fade_tw.tween_property(_player, "volume_db", -36.0, 0.35)
 		_fade_tw.tween_callback(func():
 			_player.stop()

@@ -30,14 +30,22 @@ static var _flame_shader: Shader
 static var _soft_glow_tex: Texture2D
 
 
+## Imported resource FIRST, raw file only as a fallback.
+##
+## It used to be the other way round, and Image.load() on a res:// path does not
+## work in an exported build — the files live inside the .pck, not on disk. That
+## meant the torch, the hands and the knife, i.e. everything the player looks at
+## while walking, would have been MISSING in the exported demo while looking
+## fine in the editor. Godot warns about exactly this on every load.
 static func _load_png(path: String) -> Texture2D:
+	if ResourceLoader.exists(path):
+		var res: Resource = ResourceLoader.load(path, "Texture2D")
+		if res is Texture2D:
+			return res as Texture2D
+	# Editor-only path: an asset dropped in but not yet imported
 	var img := Image.new()
 	var err := img.load(path)
 	if err != OK:
-		if ResourceLoader.exists(path):
-			var res: Resource = ResourceLoader.load(path, "Texture2D", ResourceLoader.CACHE_MODE_IGNORE)
-			if res is Texture2D:
-				return res as Texture2D
 		push_warning("[TorchSprites] failed to load %s err=%s" % [path, err])
 		return null
 	if img.get_format() != Image.FORMAT_RGBA8:

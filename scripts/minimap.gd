@@ -34,8 +34,9 @@ const COL_DOOR := Color(0.55, 0.38, 0.25, 1)
 func setup(dungeon: Node, player: Node3D) -> void:
 	_dungeon = dungeon
 	_player = player
+	# custom_minimum_size only — setting `size` on a node whose parent lays it
+	# out is overridden right after _ready anyway, and Godot warns about it.
 	custom_minimum_size = Vector2(panel_size, panel_size)
-	size = Vector2(panel_size, panel_size)
 
 	if _texture_rect == null:
 		_texture_rect = TextureRect.new()

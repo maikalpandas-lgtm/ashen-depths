@@ -315,3 +315,20 @@ Id = `art` / filename stem в `scripts/items/item_db.gd`.
 
 Промпты: `docs/ART_PROMPTS.md` §3.12. Cut: `--ffmpeg --erode-light 2`.  
 После drop: `godot --headless --import` + `tests/art_import_test.gd`.
+
+---
+
+## Status icons (батч 11 — §3.13)
+
+Пилюли статусов в бою ~**26×17 px**. Один-два цвета, толстый outline.  
+Id = `status_poison` / `status_frail` / `status_weak` / `status_rage`  
+(см. `scripts/combat/statuses.gd`).
+
+| ID | Файл в игре | Master PNG | Source | Статус |
+|----|-------------|------------|--------|--------|
+| **status_poison** | `status_poison.png` | `masters/status_poison.png` | `masters/status_poison_source.jpg` | Отрава — череп в капле |
+| **status_frail** | `status_frail.png` | `masters/status_frail.png` | `masters/status_frail_source.jpg` | Порча — треснувший щит |
+| **status_weak** | `status_weak.png` | `masters/status_weak.png` | `masters/status_weak_source.jpg` | Немощь — сломанная стрела вниз |
+| **status_rage** | `status_rage.png` | `masters/status_rage.png` | `masters/status_rage_source.jpg` | Ярость — огненная стрела вверх |
+
+Промпты: `docs/ART_PROMPTS.md` §3.13.

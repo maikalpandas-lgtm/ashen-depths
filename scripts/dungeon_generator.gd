@@ -10,6 +10,9 @@ const FOREST_GROUND_SHADER = preload("res://shaders/forest_ground.gdshader")
 
 ## How far rock may bulge into the corridor. Keeps the walking line clear —
 ## see wall_push().
+## Resolution of ground built purely as scenery (forest cells you never walk on).
+const FILL_SEGS := 2
+
 const PUSH_SOFT_KNEE := 0.3
 const PUSH_LIMIT := 0.5
 
@@ -672,7 +675,7 @@ func _build_art_corridor() -> void:
 ## always had. The player is stopped by the same geometry as before; only what
 ## they see changed.
 func _build_forest() -> void:
-	_build_merged_floor()
+	_build_merged_floor(true)
 	var stands := 0
 	for y in range(grid_height):
 		for x in range(grid_width):
@@ -705,7 +708,16 @@ func _touches_walkable(x: int, y: int) -> bool:
 
 ## One continuous floor mesh — undulating heightfield, world UV (m).
 ## Material is cave rock or forest soil depending on `_biome` (`_build_materials`).
-func _build_merged_floor() -> void:
+## `fill_all` covers the WHOLE grid, not just the walkable cells.
+##
+## A cave only needs ground where you walk — the rock hides everything else. A
+## forest does not: you see between the trunks, and the unbuilt cells read as
+## holes cut out of the wood.
+##
+## Ground under the trees is built at a fraction of the resolution. Nobody walks
+## on it and it is seen at a distance through trunks, but at full detail it
+## would take the floor from ~50k triangles to ~215k for scenery.
+func _build_merged_floor(fill_all: bool = false) -> void:
 	var mi := MeshInstance3D.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -713,22 +725,36 @@ func _build_merged_floor() -> void:
 	var segs := int(ceil(5.0 * cell_size / 3.0))
 	var half := cell_size * 0.5
 	var uv_s := _world_uv_scale()
-	for cell in floor_cells:
+	var cells: Array = []
+	if fill_all:
+		for gy in range(grid_height):
+			for gx in range(grid_width):
+				cells.append(Vector2i(gx, gy))
+	else:
+		for c in floor_cells:
+			cells.append(c)
+	for cell in cells:
+		var walk: bool = _is_walkable(_get_cell(cell.x, cell.y))
+		var segs_here: int = segs if walk else FILL_SEGS
 		var world := cell_to_world(cell)
-		for j in range(segs):
-			for i in range(segs):
-				var u0 := float(i) / float(segs)
-				var v0 := float(j) / float(segs)
-				var u1 := float(i + 1) / float(segs)
-				var v1 := float(j + 1) / float(segs)
+		for j in range(segs_here):
+			for i in range(segs_here):
+				var u0 := float(i) / float(segs_here)
+				var v0 := float(j) / float(segs_here)
+				var u1 := float(i + 1) / float(segs_here)
+				var v1 := float(j + 1) / float(segs_here)
 				var p00 := _floor_pt(world, u0, v0, half)
 				var p10 := _floor_pt(world, u1, v0, half)
 				var p11 := _floor_pt(world, u1, v1, half)
 				var p01 := _floor_pt(world, u0, v1, half)
-				var a00 := _floor_ao(world, u0, v0, half)
-				var a10 := _floor_ao(world, u1, v0, half)
-				var a11 := _floor_ao(world, u1, v1, half)
-				var a01 := _floor_ao(world, u0, v1, half)
+				# Wall-proximity AO bottoms out at 0.16, which is right beside
+				# rock but pitch black for a whole cell of forest floor. Under
+				# the trees it is only shade, so give it a floor.
+				var ao_min: float = 0.0 if walk else 0.45
+				var a00: float = maxf(_floor_ao(world, u0, v0, half), ao_min)
+				var a10: float = maxf(_floor_ao(world, u1, v0, half), ao_min)
+				var a11: float = maxf(_floor_ao(world, u1, v1, half), ao_min)
+				var a01: float = maxf(_floor_ao(world, u0, v1, half), ao_min)
 				_tri_ao(st, p00, p10, p11, Vector3.UP,
 					p00.x * uv_s, p00.z * uv_s, p10.x * uv_s, p10.z * uv_s, p11.x * uv_s, p11.z * uv_s,
 					a00, a10, a11)

@@ -134,13 +134,19 @@ static func make_wall_torch(parent: Node3D, pos: Vector3, wall_dir: Vector2i) ->
 		return Node3D.new()
 
 	var holder := Node3D.new()
-	holder.name = "WallTorch"
 	holder.position = pos
 	if wall_dir.x != 0:
 		holder.rotation.y = PI * 0.5 if wall_dir.x > 0.0 else -PI * 0.5
 	else:
 		holder.rotation.y = 0.0 if wall_dir.y > 0.0 else PI
 	parent.add_child(holder)
+	# AFTER add_child, or Godot renames every duplicate to @Node3D@N and the
+	# torches become unfindable — a live scene had 406 torches and exactly ONE
+	# still called WallTorch. Same trap as the enemy holders.
+	holder.name = "WallTorch"
+	# Combat parks its camera behind the player, sometimes 40cm from a torch;
+	# the group is how it finds the ones it has to get out of the way.
+	holder.add_to_group("wall_torch")
 
 	# Soft radial halo — procedural falloff, so no hard quad edge on the rock
 	# X stays centred: the sprite mirrors depending on which side the wall lands

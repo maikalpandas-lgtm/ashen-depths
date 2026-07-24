@@ -72,6 +72,10 @@ var _fx_layer: Control = null
 var _cam: Camera3D = null
 var _stage_light: OmniLight3D = null
 var _viewmodel: Node3D = null
+## Torch flame is ~0.6m tall; at 1.8m it still reads as a torch (~215px), and
+## anything closer starts eating the frame. See _clear_torches_off_the_lens.
+const TORCH_CLEAR_RADIUS := 1.8
+var _muted_torches: Array = []
 
 var _root: Control = null
 var _world_layer: Control = null  ## HP bars drawn over the 3D view
@@ -273,6 +277,8 @@ func _enter_combat_view() -> void:
 	_cam.look_at(pack + Vector3.UP * CameraFraming.look_height(), Vector3.UP)
 	_cam.current = true
 
+	_clear_torches_off_the_lens()
+
 	if _stage_light and is_instance_valid(_stage_light):
 		_stage_light.queue_free()
 	_stage_light = OmniLight3D.new()
@@ -284,7 +290,43 @@ func _enter_combat_view() -> void:
 	_stage_light.global_position = pack + Vector3.UP * 2.8 + back * 1.4
 
 
+## Combat drops a fresh camera BEHIND the player, and the corridor it backs into
+## has torches on its walls. Measured on a live map: 35 of 480 possible camera
+## spots land within 1.5m of a torch and the worst is 0.39m — at near = 0.05 that
+## flame is not a torch any more, it is a wall of fire over half the screen.
+##
+## Only the VISUALS go. The lights stay, so the corridor keeps its warmth and the
+## fight does not happen in a suddenly darker cave.
+func _clear_torches_off_the_lens() -> void:
+	_muted_torches.clear()
+	if _cam == null or not is_instance_valid(_cam):
+		return
+	for holder in get_tree().get_nodes_in_group("wall_torch"):
+		var node := holder as Node3D
+		if not is_instance_valid(node):
+			continue
+		if node.global_position.distance_to(_cam.global_position) > TORCH_CLEAR_RADIUS:
+			continue
+		for child in node.get_children():
+			# Light3D is a VisualInstance3D too — keep it, drop the rest
+			if child is Light3D or not (child is VisualInstance3D):
+				continue
+			var vis := child as VisualInstance3D
+			if not vis.visible:
+				continue
+			vis.visible = false
+			_muted_torches.append(vis)
+
+
+func _restore_torches() -> void:
+	for vis in _muted_torches:
+		if is_instance_valid(vis):
+			(vis as VisualInstance3D).visible = true
+	_muted_torches.clear()
+
+
 func _exit_combat_view() -> void:
+	_restore_torches()
 	if _viewmodel and is_instance_valid(_viewmodel):
 		_viewmodel.visible = true
 	_viewmodel = null

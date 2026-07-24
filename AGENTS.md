@@ -52,10 +52,18 @@ godot --headless --script tests/view_cone_test.gd     # конус обзора 
 godot --headless --script tests/camera_framing_test.gd # монстры не мелкие и не в пол-экрана
 godot --headless --script tests/sfx_biome_test.gd      # биомный звук не проваливается в тишину
 godot --headless --script tests/hero_card_layout_test.gd # карточка героя влезает в экран
+godot --headless --script tests/art_import_test.gd     # все спрайты на месте И импортированы
 ```
 
 ⚠️ **Не импортировать `combat_overlay.gd` в headless-тест** — прогон зависает.
 Чистую логику выносить в отдельный модуль без узлов (см. `scripts/ui/label_layout.gd`).
+
+⚠️ **После каждого батча арта — `godot --headless --import`.** PNG, брошенный в
+`assets/textures/`, невидим для `ResourceLoader`, пока Godot не создаст рядом
+`.import`. Лес в первой сборке был ПУСТОЙ ровно поэтому: 14 пропсов не
+импортированы. Волки при этом рисовались — у `EnemySprites` есть запасной
+`Image.load`, у `ForestProps` нет. Запасной путь не спасает: в экспорте
+`Image.load` не работает вообще. Проверка — `tests/art_import_test.gd`.
 
 ⚠️ **Грузить текстуры через `ResourceLoader`, не `Image.load()`.** `Image.load()`
 по `res://` **не работает в собранной игре** — файлы лежат в `.pck`, а не на

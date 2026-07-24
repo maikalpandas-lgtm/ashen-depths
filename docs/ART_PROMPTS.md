@@ -444,6 +444,82 @@ no robe
 
 ---
 
+## 3.9. Батч 7 — Сказочный лес (второй уровень)
+
+Второй тип карты: **открытая местность**, не коридоры. Концепт тот же —
+**3D только земля**, всё остальное 2D-спрайты (§ AGENTS.md).
+
+### Стилевой хвост для леса
+
+Вместо `dark teal-and-ember dungeon world` из §0 подставлять:
+
+```
+moonlit slavic fairy-tale forest at dusk, deep blue-green and violet shadows,
+warm amber glow accents, birch and fir, folklore mood
+```
+
+### Правила кадра (обязательно)
+
+- **Точка опоры — по нижнему краю.** Дерево / куст / камень должны касаться
+  низа кадра стволом или основанием: движок ставит спрайт «ногами» на землю.
+  Пустое поле под объектом = объект будет висеть в воздухе.
+- **Не рисовать тень на земле** — контактную тень кладёт движок (иначе будет
+  две, и вторая не совпадёт с рельефом).
+- Фронтальный вид, без сильной перспективы сверху: спрайты билбордятся к
+  камере, вид «сверху-вбок» на них ломается.
+- Фон **строго `#FF00FF`**, как везде.
+
+### 3.9.1 Деревья и растительность
+
+| Файл | Что | Хвост промпта |
+|---|---|---|
+| `forest_pine` | Высокая ель | `a tall slender fir tree, dark blue-green needles, narrow silhouette, trunk visible at the bottom, full height of frame` |
+| `forest_birch` | Берёза | `a white birch tree with black bark marks, sparse golden autumn leaves, slightly curved trunk, trunk base at the bottom edge` |
+| `forest_oak_old` | Старый дуб-великан | `an ancient massive oak, gnarled twisted trunk, thick moss on the bark, broad heavy crown, roots spreading at the bottom edge` |
+| `forest_bush` | Куст | `a low round bush with dense dark leaves and a few red berries, base at the bottom edge` |
+| `forest_fern` | Папоротник | `a cluster of tall ferns, layered fronds, cool green, base at the bottom edge` |
+| `forest_stump` | Пень | `an old mossy tree stump with a small toadstool growing on it, cut top, base at the bottom edge` |
+| `forest_log` | Лежащее бревно | `a fallen mossy log lying horizontally, hollow dark end facing the viewer, wide not tall` |
+
+### 3.9.2 Свет (замена настенным факелам)
+
+В лесу нет стен, поэтому источники света — стоячие / висячие.
+
+| Файл | Что | Хвост промпта |
+|---|---|---|
+| `forest_lantern` | Фонарь на шесте | `a lit iron lantern hanging from a wooden pole stuck in the ground, warm amber flame inside glass, pole base at the bottom edge` |
+| `forest_glowshroom` | Светящиеся грибы | `a cluster of large glowing mushrooms, pale cyan bioluminescent caps casting light, base at the bottom edge` |
+| `forest_campfire` | Костёр | `a small campfire of crossed logs with bright warm flames, ring of stones around it, wide not tall` |
+
+### 3.9.3 Дальний план
+
+| Файл | Что | Хвост промпта |
+|---|---|---|
+| `forest_treeline` | Полоса леса вдали | `a distant treeline silhouette, flat dark blue-violet shapes of fir tops, no detail, very wide horizontal strip, no ground` |
+
+⚠️ `forest_treeline` — **широкая горизонтальная полоса** (примерно 4:1), она
+идёт кольцом по горизонту и закрывает край карты. Единственный ассет батча,
+который не «стоит на земле».
+
+### 3.9.4 Земля (3D)
+
+Земля — единственное, что 3D, и ей нужна **бесшовная** текстура; Grok бесшовность
+не держит. Поэтому земля пока **процедурная**, как скала в копях
+(`cave_rock.gdshader` → лесной вариант). Отдельного ассета не просить.
+
+### 3.9.5 Обитатели леса (опционально, решает юзер)
+
+Если лес получает свой бестиарий, а не мобов копей — фронтально, в полный рост,
+по правилам §3 (`realm: "forest"` в `scripts/enemy_sprites.gd`):
+
+| Файл | Кто | Хвост промпта |
+|---|---|---|
+| `enemy_leshy` | Леший | `a forest spirit made of bark and moss, long beard of hanging lichen, glowing green eyes, tall and stooped` |
+| `enemy_kikimora` | Кикимора | `a small hunched swamp crone in ragged wet cloth, tangled hair with twigs, spindly limbs` |
+| `enemy_wolf` | Волк | `a large shaggy grey wolf, bared fangs, hackles raised, standing on all fours` |
+
+---
+
 ## 4. Куда класть готовое
 
 1. Исходник (что отдал Grok) → `assets/textures/masters/<id>_source.jpg`

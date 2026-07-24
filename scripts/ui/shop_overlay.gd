@@ -304,7 +304,10 @@ func _build() -> void:
 	tools.add_child(rem)
 
 	var up := Button.new()
-	up.text = "Улучшить карту  %d🪙" % UPGRADE_COST
+	up.text = "Улучшить (случайную)  %d🪙" % UPGRADE_COST
+	# Says "случайную" out loud now that C offers a CHOSEN upgrade at the same
+	# price: a blind roll for the same gold has to admit it is a blind roll.
+	up.tooltip_text = "Выбрать конкретную карту — книга колоды (C)"
 	up.pressed.connect(_card_upgrade)
 	tools.add_child(up)
 

@@ -53,6 +53,7 @@ godot --headless --script tests/camera_framing_test.gd # монстры не м�
 godot --headless --script tests/sfx_biome_test.gd      # биомный звук не проваливается в тишину
 godot --headless --script tests/hero_card_layout_test.gd # карточка героя влезает в экран
 godot --headless --script tests/art_import_test.gd     # все спрайты на месте И импортированы
+godot --headless --script tests/status_test.gd         # статусы: тик, стаки, множители
 ```
 
 ⚠️ **Не импортировать `combat_overlay.gd` в headless-тест** — прогон зависает.

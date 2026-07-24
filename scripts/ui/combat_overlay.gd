@@ -18,6 +18,7 @@ const Party = preload("res://scripts/party.gd")
 const UiTheme = preload("res://scripts/ui/ui_theme.gd")
 const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 const LabelLayout = preload("res://scripts/ui/label_layout.gd")
+const Statuses = preload("res://scripts/combat/statuses.gd")
 const FanLayout = preload("res://scripts/ui/fan_layout.gd")
 const CameraFraming = preload("res://scripts/ui/camera_framing.gd")
 
@@ -518,6 +519,21 @@ func _build_ui() -> void:
 
 # ------------------------------------------------------------------- rendering
 
+## Hero statuses appended to the bar. Text rather than the pill row the enemies
+## get: this line is already a text label, and a second drawing system for four
+## characters is not worth the divergence.
+func _party_status_text() -> String:
+	if _combat == null:
+		return ""
+	var row: Array = Statuses.to_row(_combat.party_status)
+	if row.is_empty():
+		return ""
+	var parts: Array = []
+	for item in row:
+		parts.append("%s%d" % [item["icon"], int(item["stacks"])])
+	return "    " + "  ".join(parts)
+
+
 func _refresh() -> void:
 	if _combat == null:
 		return
@@ -526,9 +542,9 @@ func _refresh() -> void:
 
 	var hp_now := _party_hp()
 	var hp_max := _party_max_hp()
-	_status.text = "⚡ %d/%d    🛡 %d    🦴 %d    ❤ %d/%d" % [
+	_status.text = "⚡ %d/%d    🛡 %d    🦴 %d    ❤ %d/%d%s" % [
 		_combat.energy, Combat.START_ENERGY, _combat.party_block,
-		_combat.bones, hp_now, hp_max,
+		_combat.bones, hp_now, hp_max, _party_status_text(),
 	]
 	_log.text = "   ·   ".join(_combat.log_lines.slice(maxi(0, _combat.log_lines.size() - 2)))
 	# Keep left HUD in sync — party HP lives on GameState.party (same ref)
@@ -792,9 +808,44 @@ func _draw_world_overlay() -> void:
 			("🛡 %d" if is_block else "🗡 %d") % it.get("value", 0),
 			bar_w, 21, Color(0.65, 0.88, 1.0) if is_block else Color(1.0, 0.66, 0.45))
 		if int(e["block"]) > 0:
-			_world_layer.draw_string(font, Vector2(bar.end.x + 4.0, bar.position.y + 12.0),
-				"🛡%d" % e["block"], HORIZONTAL_ALIGNMENT_LEFT, -1, 13,
-				Color(0.7, 0.88, 1.0))
+			# Shield pill sitting ON the left end of the bar, like the reference
+			# — the old floating "🛡N" off to the right read as loose debris.
+			var sh := Rect2(bar.position.x - 9.0, bar.position.y - 3.0, 21.0, 21.0)
+			_pill(sh.grow(2.0), Color(0.06, 0.04, 0.05, 0.95))
+			_pill(sh, Color(0.30, 0.52, 0.72))
+			_world_layer.draw_string(font, Vector2(sh.position.x, sh.position.y + 15.0),
+				str(int(e["block"])), HORIZONTAL_ALIGNMENT_CENTER, sh.size.x, 13,
+				Color(0.95, 0.98, 1.0))
+
+		_draw_status_row(font, Vector2(bar.position.x + bar_w * 0.5, bar.position.y + 26.0),
+			e.get("status", {}))
+
+
+## Status icons under the HP bar, centred on `at`.
+##
+## Drawn as a row of small pills rather than art: statuses are still being
+## balanced, and a table of PNGs would have to be regenerated on every change.
+## Swap for icons once the set stops moving.
+func _draw_status_row(font: Font, at: Vector2, bag: Dictionary) -> void:
+	if bag == null or bag.is_empty():
+		return
+	var row: Array = Statuses.to_row(bag)
+	if row.is_empty():
+		return
+	var w := 26.0
+	var gap := 3.0
+	var total: float = float(row.size()) * w + float(row.size() - 1) * gap
+	var x := at.x - total * 0.5
+	for item in row:
+		var r := Rect2(x, at.y, w, 17.0)
+		_pill(r.grow(1.5), Color(0.06, 0.04, 0.05, 0.95))
+		_pill(r, item["colour"])
+		if font:
+			_world_layer.draw_string(font,
+				Vector2(r.position.x, r.position.y + 13.0),
+				"%s%d" % [item["icon"], int(item["stacks"])],
+				HORIZONTAL_ALIGNMENT_CENTER, w, 11, Color(0.07, 0.05, 0.06))
+		x += w + gap
 
 
 ## Rounded-end bar. draw_rect gives hard corners, which read as a debug widget
@@ -1013,6 +1064,17 @@ func _play_events() -> void:
 			"enemy_block":
 				if Sfx:
 					Sfx.play("block", -4.0)
+			"status_tick":
+				# Poison has no attacker and no impact burst, so without a
+				# number the HP just silently drops and reads as a bug.
+				if i >= 0:
+					_spawn_popup(i, int(ev["amount"]), false,
+						Statuses.STATUSES["poison"]["colour"])
+				else:
+					_shake = maxf(_shake, 0.05)
+			"status_applied":
+				if i >= 0:
+					_flinch_enemy(i)
 	_combat.events.clear()
 	if any_died:
 		_reform_living()
@@ -1052,7 +1114,10 @@ func _spawn_impact(index: int, crit: bool) -> void:
 
 
 ## A damage number over the monster that took it.
-func _spawn_popup(index: int, amount: int, crit: bool) -> void:
+## `tint` overrides the damage colour — poison ticks come up green so they are
+## not mistaken for a hit the player just landed.
+func _spawn_popup(index: int, amount: int, crit: bool,
+		tint: Variant = null) -> void:
 	if index < 0 or index >= _enemy_nodes.size():
 		return
 	var node := _enemy_nodes[index] as Node3D
@@ -1060,6 +1125,8 @@ func _spawn_popup(index: int, amount: int, crit: bool) -> void:
 		return
 	var text := str(amount)
 	var colour := Color(1.0, 0.92, 0.72) if crit else Color(1.0, 0.98, 0.95)
+	if tint != null:
+		colour = tint as Color
 	var tag := "КРИТ!" if crit else ""
 	if amount <= 0:
 		text = "0"

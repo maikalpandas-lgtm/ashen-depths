@@ -49,7 +49,9 @@ func check(ok: bool, what: String) -> void:
 
 func _test_card_db() -> void:
 	print("card db")
-	check(CardDB.ids().size() == 10, "10 MVP cards defined")
+	# Not a fixed count any more — the deck is meant to grow. What matters is
+	# that every card is WELL FORMED, which the loop below actually checks.
+	check(CardDB.ids().size() >= 16, "the card pool has grown past the MVP ten")
 	check(CardDB.has_card("slice"), "slice exists")
 	check(not CardDB.has_card("nope"), "unknown id reports missing")
 	var a := CardDB.get_card("slice")

@@ -11,7 +11,13 @@ extends RefCounted
 enum Type { STRIKE, GUARD, SKILL, SPELL, BLOOD }
 
 ## Sigils are tags; the rules live in DESIGN.md §7.3 and land in Phase 3.
-enum Sigil { SHARP, PIERCE, SWEEP, DRAIN, FRAIL_HIT, BONE, SANGUINE, ECHO, WARD, CLEAVE }
+## SWEEP / FRAIL_HIT / SANGUINE were declared here for months and implemented
+## nowhere — three dead enum values. They resolve now (combat_state).
+## POISON_HIT / WEAKEN / RAGE arrived with statuses (docs/COMPETITOR_PLAN.md A).
+enum Sigil {
+	SHARP, PIERCE, SWEEP, DRAIN, FRAIL_HIT, BONE, SANGUINE, ECHO, WARD, CLEAVE,
+	POISON_HIT, WEAKEN, RAGE,
+}
 
 ## energy = ⚡, blood = 🩸 HP paid on play.
 ## rarity: common | uncommon | rare — Layer 2 rare-pick uses uncommon+rare.
@@ -67,6 +73,40 @@ const CARDS := {
 		"damage": 0, "block": 0, "sigils": [],
 		"text": "Сбрось карту: −1 к цене", "art": "card_offering",
 		"rarity": "uncommon",
+	},
+	# --- статусные карты (фаза A) ---
+	# Art is batch 8 (docs/ART_PROMPTS.md §3.10); until Grok delivers these fall
+	# back to an existing illustration rather than showing a hole.
+	"rot_touch": {
+		"name": "Порча", "type": Type.SPELL, "energy": 1, "blood": 0,
+		"damage": 3, "block": 0, "sigils": [Sigil.FRAIL_HIT],
+		"text": "3 урона. Порча 2", "art": "card_curse_doll", "rarity": "uncommon",
+	},
+	"venom_dart": {
+		"name": "Зелейный шип", "type": Type.SKILL, "energy": 1, "blood": 0,
+		"damage": 2, "block": 0, "sigils": [Sigil.POISON_HIT],
+		"text": "2 урона. Отрава 3", "art": "card_herbs", "rarity": "uncommon",
+	},
+	"sap_will": {
+		"name": "Немочь", "type": Type.SPELL, "energy": 1, "blood": 0,
+		"damage": 2, "block": 0, "sigils": [Sigil.WEAKEN],
+		"text": "2 урона. Немощь 2", "art": "card_frost", "rarity": "uncommon",
+	},
+	"war_cry": {
+		"name": "Ярый клич", "type": Type.SKILL, "energy": 1, "blood": 0,
+		"damage": 0, "block": 3, "sigils": [Sigil.RAGE],
+		"text": "3 брони. Ярость 1", "art": "card_wolf_howl", "rarity": "uncommon",
+	},
+	"wide_swing": {
+		"name": "Круговая", "type": Type.STRIKE, "energy": 2, "blood": 0,
+		"damage": 6, "block": 0, "sigils": [Sigil.SWEEP],
+		"text": "6 урона, полстолько ВСЕМ", "art": "card_flail", "rarity": "rare",
+	},
+	"blood_pact": {
+		"name": "Уговор", "type": Type.BLOOD, "energy": 0, "blood": 3,
+		"damage": 8, "block": 0, "sigils": [Sigil.SANGUINE],
+		"text": "−3 HP → 8 урона. Ярость 1", "art": "card_blood_pact",
+		"rarity": "rare",
 	},
 	"firebolt": {
 		"name": "Огнестрел", "type": Type.SPELL, "energy": 1, "blood": 0,

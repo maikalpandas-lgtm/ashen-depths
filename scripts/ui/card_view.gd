@@ -52,6 +52,11 @@ const TYPE_TAG := {
 ## set these started as was unreadable on it. Each is a saturated ink, not a
 ## highlight.
 const KEYWORDS := [
+	# Statuses first — longest phrases win, and these must beat bare "урона"
+	["Отрава", "2f7a1f"],
+	["Порча", "6b2f8a"],
+	["Немощь", "44506b"],
+	["Ярость", "a3521a"],
 	["Пробой брони", "0f5f8a"],
 	["по щиту", "1a5d80"],
 	["вампиризм", "9c1230"],

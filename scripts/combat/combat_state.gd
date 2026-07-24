@@ -10,6 +10,7 @@ extends RefCounted
 const CardDB = preload("res://scripts/cards/card_db.gd")
 const Deck = preload("res://scripts/cards/deck.gd")
 const EnemySprites = preload("res://scripts/enemy_sprites.gd")
+const Statuses = preload("res://scripts/combat/statuses.gd")
 
 const START_ENERGY := 3  ## §7.4 — ⚡3 at the start of the player's turn
 const DRAW_PER_TURN := 5  ## §7.5
@@ -27,6 +28,8 @@ var enemies: Array = []  ## [{id, name, hp, max_hp, block, intent}]
 var energy: int = 0
 var party_block: int = 0
 var thorns: int = 0
+## Status bag for the hero. Enemies carry their own under e["status"].
+var party_status: Dictionary = {}
 var bones: int = 0  ## §7.3 — spent by Echo
 var turn: int = 0
 var phase: int = Phase.PLAYER
@@ -34,6 +37,7 @@ var log_lines: Array = []
 ## What just happened, for the UI to animate. Rules stay node-free; the overlay
 ## reads this instead of guessing from log text.
 ## kind: "enemy_hit" | "enemy_died" | "enemy_attack" | "enemy_block"
+##     | "status_applied" | "status_tick"
 var events: Array = []
 
 var _rng := RandomNumberGenerator.new()
@@ -58,6 +62,7 @@ func _init(party_ref: RefCounted, pack: Array, seed_value: int) -> void:
 			"max_hp": int(def["hp"]),
 			"block": 0,
 			"intent": {},
+			"status": {},
 		})
 	begin_player_turn()
 
@@ -105,6 +110,13 @@ func end_turn() -> Array:
 	phase = Phase.ENEMY
 	events.clear()
 	var before := log_lines.size()
+	# Hero's statuses wear off at the end of the HERO's turn, before the enemies
+	# swing — so Отрава cannot kill you after you already survived their round.
+	_tick_party_status()
+	if _party_alive_hp() <= 0:
+		phase = Phase.LOST
+		_log("дружина пала")
+		return log_lines.slice(before)
 	for e in enemies:
 		if int(e["hp"]) <= 0:
 			continue
@@ -115,14 +127,65 @@ func end_turn() -> Array:
 				_event("enemy_block", enemies.find(e))
 				_log("%s закрывается (+%d брони)" % [e["name"], intent["value"]])
 			_:
-				_event("enemy_attack", enemies.find(e), int(intent["value"]))
-				_hit_party(int(intent["value"]), e)
+				var swing := Statuses.outgoing(e["status"], int(intent["value"]))
+				_event("enemy_attack", enemies.find(e), swing)
+				_hit_party(swing, e)
+	_tick_enemy_status()
+	_check_victory()
+	if phase == Phase.WON:
+		return log_lines.slice(before)
 	if _party_alive_hp() <= 0:
 		phase = Phase.LOST
 		_log("дружина пала")
 		return log_lines.slice(before)
 	begin_player_turn()
 	return log_lines.slice(before)
+
+
+func _tick_party_status() -> void:
+	if party_status.is_empty():
+		return
+	var dot := Statuses.tick(party_status)
+	if dot > 0:
+		_event("status_tick", -1, dot)
+		_log("отрава жжёт: ❤−%d" % dot)
+		# Straight to HP: poison is the thing armour does not stop
+		_damage_party(dot)
+
+
+func _tick_enemy_status() -> void:
+	for i in range(enemies.size()):
+		var e: Dictionary = enemies[i]
+		if int(e["hp"]) <= 0:
+			continue
+		var bag: Dictionary = e["status"]
+		if bag.is_empty():
+			continue
+		var dot := Statuses.tick(bag)
+		if dot <= 0:
+			continue
+		e["hp"] = maxi(0, int(e["hp"]) - dot)
+		_event("status_tick", i, dot)
+		if int(e["hp"]) <= 0:
+			_event("enemy_died", i)
+			_log("%s не пережил отраву" % e["name"])
+		else:
+			_log("%s травится на %d" % [e["name"], dot])
+
+
+## Hang a status on an enemy (or the hero when index < 0).
+func apply_status(index: int, id: String, amount: int) -> void:
+	if not Statuses.exists(id) or amount == 0:
+		return
+	if index < 0:
+		Statuses.apply(party_status, id, amount)
+		_event("status_applied", -1, amount, false, id)
+		return
+	var e := _enemy_at(index)
+	if e.is_empty() or int(e["hp"]) <= 0:
+		return
+	Statuses.apply(e["status"], id, amount)
+	_event("status_applied", index, amount, false, id)
 
 
 func _roll_intent(e: Dictionary) -> Dictionary:
@@ -197,6 +260,13 @@ func play_card(hand_index: int, target: int) -> bool:
 			_log("эхо (−1 кость)")
 			_resolve_damage(card, target)
 
+	if sigils.has(CardDB.Sigil.RAGE):
+		apply_status(-1, "rage", 1)
+		_log("+1 ярость")
+	# SANGUINE: paying in blood feeds the swing that follows
+	if sigils.has(CardDB.Sigil.SANGUINE) and blood_cost > 0:
+		apply_status(-1, "rage", 1)
+
 	# Match by id — display name is localised (Треба), not "Offering"
 	var card_id: String = str(deck.hand[hand_index]["card"])
 	if card_id == "offering":
@@ -231,6 +301,8 @@ func _resolve_damage(card: Dictionary, target: int) -> void:
 
 	if sigils.has(CardDB.Sigil.SHARP) and int(e["block"]) > 0:
 		amount += 2
+	# Ярость / Немощь on the hero shape everything they throw
+	amount = Statuses.outgoing(party_status, amount)
 	# Rolled once per card: a Cleave should land clean on both halves or not at
 	# all, rather than critting one target and fizzling on its neighbour.
 	var crit := _rng.randf() < crit_chance()
@@ -244,8 +316,23 @@ func _resolve_damage(card: Dictionary, target: int) -> void:
 		if neighbour >= 0 and neighbour != target:
 			_hit_enemy(neighbour, int(amount * 0.5), ignore_block, crit)
 
+	# SWEEP hits the WHOLE row for half — Cleave's big brother, and the reason a
+	# pack of three grubs is a different problem from one brute.
+	if sigils.has(CardDB.Sigil.SWEEP):
+		for i in range(enemies.size()):
+			if i != target:
+				_hit_enemy(i, int(amount * 0.5), ignore_block, crit)
+
 	if sigils.has(CardDB.Sigil.DRAIN) and dealt > 0:
 		_heal_party(int(dealt * 0.5))
+	# Statuses ride on the hit, so they only land if the card connected
+	if dealt > 0 or int(e["hp"]) <= 0:
+		if sigils.has(CardDB.Sigil.FRAIL_HIT):
+			apply_status(target, "frail", 2)
+		if sigils.has(CardDB.Sigil.POISON_HIT):
+			apply_status(target, "poison", 3)
+		if sigils.has(CardDB.Sigil.WEAKEN):
+			apply_status(target, "weak", 2)
 	if sigils.has(CardDB.Sigil.BONE) and int(e["hp"]) <= 0:
 		bones += 1
 		_log("+1 кость")
@@ -264,7 +351,9 @@ func _hit_enemy(index: int, amount: int, ignore_block: bool, crit: bool = false)
 	var e := _enemy_at(index)
 	if e.is_empty() or int(e["hp"]) <= 0:
 		return 0
-	var left := amount
+	# Порча multiplies BEFORE armour soaks: the blow lands harder, then the
+	# shield takes what it can. The other order lets armour eat the debuff.
+	var left := Statuses.incoming(e["status"], amount)
 	if not ignore_block:
 		var absorbed: int = mini(int(e["block"]), left)
 		e["block"] = int(e["block"]) - absorbed
@@ -291,7 +380,7 @@ func _hit_enemy(index: int, amount: int, ignore_block: bool, crit: bool = false)
 # --------------------------------------------------------------------- party
 
 func _hit_party(amount: int, source: Dictionary) -> void:
-	var left := amount
+	var left := Statuses.incoming(party_status, amount)
 	var absorbed: int = mini(party_block, left)
 	party_block -= absorbed
 	left -= absorbed
@@ -369,8 +458,13 @@ func _enemy_at(index: int) -> Dictionary:
 	return enemies[index]
 
 
-func _event(kind: String, index: int, amount: int = 0, crit: bool = false) -> void:
-	events.append({"kind": kind, "index": index, "amount": amount, "crit": crit})
+## `index` < 0 means the hero rather than an enemy slot.
+func _event(kind: String, index: int, amount: int = 0, crit: bool = false,
+		status: String = "") -> void:
+	events.append({
+		"kind": kind, "index": index, "amount": amount, "crit": crit,
+		"status": status,
+	})
 
 
 func _log(line: String) -> void:

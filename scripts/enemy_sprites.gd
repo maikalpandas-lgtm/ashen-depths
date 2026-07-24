@@ -59,6 +59,13 @@ static func form_scale(pack: Array) -> float:
 ## Floor at which the Root Labyrinth breaks through into Навь
 const NAV_FROM_FLOOR := 3
 
+## Targeting rim (see shaders/sprite_outline.gdshader). Thickness is in SOURCE
+## PIXELS and converted to UV per texture, so every monster gets the same rim
+## however big its PNG happens to be.
+const OUTLINE_SHADER := "res://shaders/sprite_outline.gdshader"
+const RIM_COLOUR := Color(1.0, 0.66, 0.2, 1.0)
+const RIM_PIXELS := 9.0
+
 ## Height in metres, so a rodent and a stone brute are not the same size on
 ## screen just because their PNGs happen to be similar.
 ## Two roster halves. The upper floors keep the cave bestiary; the deeper ones
@@ -198,6 +205,34 @@ static func make_enemy(parent: Node3D, pos: Vector3, enemy_id: String, ground_y:
 	spr.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
 	spr.render_priority = 3
 	holder.add_child(spr)
+
+	# Target rim, hidden until the player drags a card onto this monster. It is
+	# a SIBLING quad running the outline shader, not a material on the sprite
+	# above: material_override would take the sprite's modulate with it, and
+	# modulate is how the hit flash works (see combat_overlay).
+	var rim := Sprite3D.new()
+	rim.name = "Outline"
+	rim.texture = tex
+	rim.pixel_size = spr.pixel_size
+	rim.centered = true
+	rim.position = spr.position
+	rim.transparent = true
+	rim.shaded = false
+	rim.double_sided = true
+	rim.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	rim.render_priority = 4
+	rim.visible = false
+	var rim_mat := ShaderMaterial.new()
+	rim_mat.shader = load(OUTLINE_SHADER)
+	rim_mat.set_shader_parameter("albedo_tex", tex)
+	rim_mat.set_shader_parameter("rim_color", RIM_COLOUR)
+	rim_mat.set_shader_parameter("alpha_cut", 0.2)
+	# Constant thickness ON SCREEN: the rim is measured in UV, so a 1024px
+	# monster and a 300px one need different numbers to look the same.
+	rim_mat.set_shader_parameter("thickness", RIM_PIXELS / float(tex.get_width()))
+	rim_mat.set_shader_parameter("billboard_y", 1.0)
+	rim.material_override = rim_mat
+	holder.add_child(rim)
 
 	return holder
 

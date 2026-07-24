@@ -533,9 +533,19 @@ func _update_enemy_visuals(delta: float) -> void:
 
 		var tint := Color.WHITE
 		var scale_f := base_scale
+		# Hover reads as a RIM, not as a brighter monster: blowing the sprite
+		# out to 2x white washed the art away and the pulse leaked onto the HP
+		# bar underneath, which is what looked like the bar shining through.
+		var rim := node.get_node_or_null("Outline") as Sprite3D
+		if rim:
+			rim.visible = i == hovered
+			if rim.visible:
+				var rim_mat := rim.material_override as ShaderMaterial
+				if rim_mat:
+					rim_mat.set_shader_parameter("pulse", pulse)
 		if i == hovered:
-			tint = Color(1.5, 1.4, 1.05).lerp(Color(2.1, 1.85, 1.25), pulse)
-			scale_f *= 1.05 + 0.02 * pulse
+			tint = Color(1.12, 1.10, 1.03)
+			scale_f *= 1.03
 		if flash > 0.0:
 			# Blow past the hover tint — being hit must always be the loud thing
 			var t: float = flash / FLASH_TIME
@@ -702,7 +712,15 @@ func _draw_world_overlay() -> void:
 			_pill(Rect2(bar.position, Vector2(maxf(bar.size.y, bar.size.x * frac), bar.size.y)),
 				Color(0.88, 0.30, 0.31))
 		if i == hovered:
-			_pill(bar.grow(5.0), Color(1.0, 0.88, 0.35, 0.35))
+			# A solid rim on the OUTSIDE of the bar. The old version painted a
+			# translucent wash ON TOP of the bar, so the red HP fill showed
+			# through the highlight and the whole thing looked see-through.
+			_pill(bar.grow(3.0), Color(1.0, 0.72, 0.24, 1.0))
+			_pill(bar.grow(1.0), Color(0.06, 0.04, 0.05, 1.0))
+			_pill(bar, Color(0.30, 0.10, 0.12, 1.0))
+			if frac > 0.001:
+				_pill(Rect2(bar.position, Vector2(maxf(bar.size.y, bar.size.x * frac), bar.size.y)),
+					Color(0.88, 0.30, 0.31))
 
 		if font == null:
 			continue

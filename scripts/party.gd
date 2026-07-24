@@ -47,47 +47,68 @@ const HEROES := {
 	# --- славянский набор (добавлен, не замена) ---
 	"vityaz": {
 		"name": "Витязь", "archetype": "Богатырь", "role": "Танк / броня",
-		"hp": 36, "portrait": "hero_vityaz", "colour": Color(0.86, 0.3, 0.26),
+		"hp": 82, "portrait": "face_vityaz", "colour": Color(0.86, 0.3, 0.26),
+		"blurb": "Держит удар. Много брони, мало урона.",
 		"deck": [
-			"slice", "slice", "slice",
-			"block", "block", "block",
+			"slice", "slice", "slice", "slice",
+			"block", "block", "block", "block",
 			"ward", "ward",
 			"hack",
 		],
 	},
 	"polyanitsa": {
 		"name": "Поляница", "archetype": "Поляница", "role": "Урон / ловушки",
-		"hp": 28, "portrait": "hero_polyanitsa", "colour": Color(0.55, 0.72, 0.35),
+		"hp": 68, "portrait": "face_polyanitsa", "colour": Color(0.55, 0.72, 0.35),
+		"blurb": "Бьёт по нескольким. Средняя во всём.",
 		"deck": [
-			"slice", "slice", "slice",
+			"slice", "slice", "slice", "slice",
 			"cleave_cut", "cleave_cut",
-			"block", "block",
+			"block", "block", "block",
 			"echo_strike",
 			"offering",
 		],
 	},
 	"volhv": {
 		"name": "Волхв", "archetype": "Ведун", "role": "Чары",
-		"hp": 24, "portrait": "hero_volhv", "colour": Color(0.45, 0.6, 0.95),
+		"hp": 56, "portrait": "face_volhv", "colour": Color(0.45, 0.6, 0.95),
+		"blurb": "Хрупкий, но пробивает броню и лечится кровью.",
 		"deck": [
-			"firebolt", "firebolt", "firebolt",
+			"firebolt", "firebolt", "firebolt", "firebolt",
 			"slice", "slice",
-			"block", "block",
+			"block", "block", "block",
 			"blood_lash",
 			"bone_rattle",
 		],
 	},
 }
 
-## Славянская тройка — основная. Старая (kael/lyra/sera) осталась в пуле:
-## драфт 3 из пула появится позже, DESIGN §5.
-const MVP_PARTY := ["vityaz", "polyanitsa", "volhv"]
-const OLD_PARTY := ["kael", "lyra", "sera"]
+## ONE hero per run, chosen at the start (decided 22.07.2026, overriding the
+## party-of-three in DESIGN §5 / §7.5). The container is still called Party and
+## still holds a `members` array, because a dozen call sites iterate it — it
+## simply holds exactly one hero now.
+##
+## HP is per-hero and no longer sums to 88: a solo run needs the whole pool in
+## one body, and the spread IS the choice. Vityaz 82 / Polyanitsa 68 / Volhv 56.
+const PLAYABLE := ["vityaz", "polyanitsa", "volhv"]
+const DEFAULT_HERO := "vityaz"
+## Old western cast, kept as data for the upper floors and a possible English
+## build. Not offered at hero select.
+const LEGACY := ["kael", "lyra", "sera"]
 
 var members: Array = []  ## [{id, name, hp, max_hp, deck:[{card,plus}], ...}]
 
 
-func _init(hero_ids: Array = MVP_PARTY) -> void:
+## Build a party for one hero. No class_name in this project (AGENTS.md), so
+## the return stays untyped.
+static func of(hero_id: String) -> RefCounted:
+	return (load("res://scripts/party.gd") as GDScript).new([hero_id])
+
+
+func hero() -> Dictionary:
+	return members[0] if not members.is_empty() else {}
+
+
+func _init(hero_ids: Array = [DEFAULT_HERO]) -> void:
 	for id in hero_ids:
 		if not HEROES.has(id):
 			push_error("[Party] unknown hero id: %s" % id)

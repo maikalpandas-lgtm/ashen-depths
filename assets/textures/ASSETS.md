@@ -226,3 +226,18 @@ python3 tools/sprite_cutter.py assets/textures/masters/prop_wall_torch_source.jp
 | **prop_brazier** | `prop_brazier.png` | `masters/prop_brazier.png` | `masters/prop_brazier_source.jpg` | Настенная жаровня + cyan light |
 
 Код: `scripts/prop_sprites.gd` · спавн: `dungeon_generator.gd` `_spawn_chest` / `_spawn_brazier`.
+
+---
+
+## Faces / avatars (батч 6) — только голова
+
+Крупный план для круглой рамки HUD. Старые `hero_*` (бюст) остаются для справок.
+
+| ID | Файл в игре | Master PNG | Source | Кто |
+|----|-------------|------------|--------|-----|
+| **face_vityaz** | `face_vityaz.png` | `masters/face_vityaz.png` | `masters/face_vityaz_source.jpg` | Витязь |
+| **face_polyanitsa** | `face_polyanitsa.png` | `masters/face_polyanitsa.png` | `masters/face_polyanitsa_source.jpg` | Поляница |
+| **face_volhv** | `face_volhv.png` | `masters/face_volhv.png` | `masters/face_volhv_source.jpg` | Волхв |
+
+Код: `portrait` в `scripts/party.gd` → `left_panel.gd` / `card_test_overlay.gd`.
+Промпты: `docs/ART_PROMPTS.md` §3.8.

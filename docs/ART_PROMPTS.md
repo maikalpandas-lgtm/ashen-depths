@@ -357,49 +357,89 @@ harsh midday light on her despite the dark
 
 ## 3.8. Батч 6 — аватары героев (только лицо)
 
-Текущие портреты — поясные, в круглой рамке половина кадра уходит на плечи и
-доспех, лицо мелкое. У конкурента в рамке **одна голова крупным планом**, она
-читается мгновенно. Перерисовываем под это.
+Текущие портреты — поясные: в круглой рамке HUD полкадра — плечи и доспех,
+лицо мелкое. Нужен **крупный план лица** (как у конкурента): одна голова
+во весь кадр, читается в круге ~100–120 px.
 
-Общий хвост ко всем промптам батча (в дополнение к §0 и славянскому хвосту §3.7):
+### Правила кадра (обязательно)
+
+- **Только голова:** подбородок → макушка. **Без плеч, без торса, без доспеха
+  на корпусе**, без рук.
+- Лицо **во весь кадр** (extreme close-up / headshot fill).
+- Глаза ≈ **45%** высоты кадра; макушка почти у верхнего края.
+- Центр для **круглой обрезки** HUD.
+- Фон: чистая **#FF00FF** (§0).
+- Если модель вернула бюст — **перегенерить**, не «подрезать в Photoshop».
+
+### Общий хвост (после §0; для славян ещё + хвост §3.7)
 
 ```
-character face portrait, HEAD ONLY filling the frame edge to edge, chin to
-crown, no shoulders and no armour visible, facing the viewer straight on,
-big expressive eyes, bold thick outline, flat cel shading, strong silhouette
-readable at 120px, centred for a circular crop
+character FACE ONLY portrait, extreme close-up headshot, HEAD fills the entire
+frame from chin to crown edge-to-edge, ZERO shoulders zero chest zero torso,
+no armour plates no clothing collar no neck-guard, facing the viewer straight on,
+big expressive eyes, bold thick black outline, flat cel shading two-three tones,
+strong silhouette readable at 120px circular crop, nothing below the chin line
 ```
 
-⚠️ **Голова должна занимать почти весь кадр.** Если модель отдаёт бюст с
-плечами — перегенерить, иначе после круглой обрезки снова получится мелкое
-лицо. Проверка: глаза примерно на 45% высоты кадра, макушка почти касается
-верхнего края.
+### Славянская тройка (основная партия)
 
-| Файл | Кто |
-|---|---|
-| `face_vityaz` | Витязь — богатырь |
-| `face_polyanitsa` | Поляница — воительница |
-| `face_volhv` | Волхв — ведун |
+| Файл | Кто | В коде `portrait` |
+|---|---|---|
+| `face_vityaz` | Витязь | → `party.gd` vityaz |
+| `face_polyanitsa` | Поляница | → polyanitsa |
+| `face_volhv` | Волхв | → volhv |
 
 **`face_vityaz`**
 ```
-a broad-faced Slavic bogatyr, thick dark beard covering the jaw, heavy brows,
-a small nasal helm rim just visible at the top of the frame, calm stubborn
-stare, weathered skin, a red embroidered band across the forehead
+a broad-faced Slavic bogatyr man, thick full dark brown beard filling the lower
+third of the frame, heavy straight brows, calm stubborn dark eyes, weathered
+skin, a thin red embroidered rushnik band across the forehead under a hint of
+conical nasal-helm rim only at the very top edge of the frame, no shoulders
 ```
 
 **`face_polyanitsa`**
 ```
-a young Slavic warrior woman, one dark braid crossing her cheek, sharp green
-eyes, a thin scar over one eyebrow, red embroidered ribbon in her hair,
-confident half-smile
+a young Slavic warrior woman face filling the frame, one dark braid curved across
+her cheek, sharp green-hazel eyes, a thin pale scar over one eyebrow, small red
+embroidered ribbon in her hair near the temple, confident half-smile, freckles,
+no shoulders no armor
 ```
 
 **`face_volhv`**
 ```
-an old Slavic pagan sorcerer, long grey beard filling the lower frame, unbound
-grey hair, deep wrinkles, ONE milky blind eye and one pale blue eye, faint cold
-blue light on his face from below
+an old Slavic pagan sorcerer face filling the frame, long grey beard filling the
+lower frame, unbound grey hair, deep wrinkles, ONE milky white blind eye and one
+clear pale blue eye, faint cold cyan light from below on the cheekbones, no
+shoulders no staff
+```
+
+### Старая тройка (копи, опционально)
+
+| Файл | Кто |
+|---|---|
+| `face_kael` | Каэль |
+| `face_lyra` | Лира |
+| `face_sera` | Сера |
+
+**`face_kael`**
+```
+a stoic human paladin man in his forties, face only, short greying dark hair,
+square jaw, a pale scar across the left eyebrow, calm tired brown eyes, warm
+torch light from below on the face, no shoulders no pauldrons
+```
+
+**`face_lyra`**
+```
+a sharp-eyed young huntress face only, dark braided hair with a green cloth band
+on the forehead, freckles, alert half-smile, cool green-teal eye accents, no
+shoulders no cloak
+```
+
+**`face_sera`**
+```
+a fire mage woman face only, cropped copper-red hair, soot smudge on one cheek,
+intense focused eyes lit warm orange from below by her own magic, no shoulders
+no robe
 ```
 
 ---

@@ -4,6 +4,13 @@ extends PanelContainer
 
 const UiTheme = preload("res://scripts/ui/ui_theme.gd")
 const EnemySprites = preload("res://scripts/enemy_sprites.gd")
+
+const REACT_TIME := 0.42
+const REACT_COLOURS := {
+	"hit": Color(1.0, 0.32, 0.28),
+	"heal": Color(0.42, 0.92, 0.5),
+	"buff": Color(1.0, 0.78, 0.3),
+}
 const ART_DIR := "res://assets/textures/"
 
 signal inventory_pressed
@@ -17,6 +24,12 @@ const CIRCLE_MASK = preload("res://shaders/circle_mask.gdshader")
 var _title: Label = null
 var _floor: Label = null
 var _portrait: TextureRect = null
+## Seconds of "just got hit" left on the portrait. The reference's goblin reacts
+## to events, not only to a health threshold — that is what sells it as a face
+## rather than a stat readout.
+var _react := 0.0
+var _react_kind := ""
+var _react_ring: Panel = null
 var _hero_name: Label = null
 var _hp_bar: ProgressBar = null
 var _hp_label: Label = null
@@ -98,6 +111,36 @@ func refresh() -> void:
 ## ship BEFORE the art does — see docs/ART_PROMPTS.md §3.11. The reference
 ## leans on this hard: its goblin visibly reacts, and it costs nothing at
 ## runtime.
+## Flash the portrait on a combat event. `kind`: "hit" | "heal" | "buff".
+##
+## Deliberately a RING and a shake rather than a swapped image: this fires
+## several times a fight, and swapping the texture that often would fight the
+## HP-threshold portrait for control of the same node.
+func react(kind: String) -> void:
+	_react_kind = kind
+	_react = REACT_TIME
+	set_process(true)
+
+
+func _process(delta: float) -> void:
+	if _react <= 0.0:
+		set_process(false)
+		if _react_ring:
+			_react_ring.modulate = Color(1, 1, 1, 0)
+		if _portrait:
+			_portrait.position = Vector2.ZERO
+		return
+	_react = maxf(0.0, _react - delta)
+	var t: float = _react / REACT_TIME
+	if _react_ring:
+		_react_ring.modulate = Color(REACT_COLOURS.get(_react_kind,
+			REACT_COLOURS["hit"]), t)
+	if _portrait and _react_kind == "hit":
+		# Small horizontal shake — a vertical one reads as the whole panel
+		# jumping, which is far more distracting than the hit deserves.
+		_portrait.position = Vector2(sin(t * 46.0) * 4.0 * t, 0.0)
+
+
 func _portrait_for(base_id: String, hp: int, max_hp: int) -> String:
 	if max_hp <= 0:
 		return base_id
@@ -217,6 +260,20 @@ func _build() -> void:
 	mask.shader = CIRCLE_MASK
 	_portrait.material = mask
 	port_ring.add_child(_portrait)
+
+	# Reaction ring, transparent until react() fires. Sits OVER the portrait and
+	# ignores the mouse so it can never eat a click on the panel.
+	_react_ring = Panel.new()
+	var react_style := StyleBoxFlat.new()
+	react_style.bg_color = Color(0, 0, 0, 0)
+	react_style.border_color = Color(1, 1, 1, 1)
+	react_style.set_border_width_all(4)
+	react_style.set_corner_radius_all(int(portrait_size))
+	_react_ring.add_theme_stylebox_override("panel", react_style)
+	_react_ring.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_react_ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_react_ring.modulate = Color(1, 1, 1, 0)
+	port_ring.add_child(_react_ring)
 
 	_hero_name = Label.new()
 	_hero_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

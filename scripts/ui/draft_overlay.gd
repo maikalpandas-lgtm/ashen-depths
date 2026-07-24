@@ -117,7 +117,19 @@ func _pick(index: int) -> void:
 		print("[Draft] +%s → %s" % [offer["card"], offer["owner"]])
 	if Sfx:
 		Sfx.play("draft_pick")
+	_flourish(str(offer["card"]), "КАРТА ВЗЯТА")
 	_close("Карта взята: %s" % CardDB.get_card(offer["card"]).get("name", offer["card"]))
+
+
+## Big centre-screen beat, so the new card is actually LOOKED at instead of
+## vanishing into a 27-card pile the moment the overlay closes.
+func _flourish(card_id: String, caption: String) -> void:
+	var fl := get_tree().current_scene.get_node_or_null("CardFlourish")
+	if fl and fl.has_method("show_card"):
+		var colour := Color(0.9, 0.85, 0.7)
+		if GameState and GameState.party and GameState.party.has_method("hero"):
+			colour = GameState.party.hero().get("colour", colour)
+		fl.call("show_card", card_id, caption, colour)
 
 
 func _skip() -> void:

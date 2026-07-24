@@ -11,6 +11,7 @@ const CardDB = preload("res://scripts/cards/card_db.gd")
 const Deck = preload("res://scripts/cards/deck.gd")
 const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 const Statuses = preload("res://scripts/combat/statuses.gd")
+const FloorScale = preload("res://scripts/combat/floor_scale.gd")
 
 const START_ENERGY := 3  ## §7.4 — ⚡3 at the start of the player's turn
 const DRAW_PER_TURN := 5  ## §7.5
@@ -47,6 +48,9 @@ var mods: Dictionary = {}
 var _first_strike_used: bool = false
 ## Damage the last _hit_enemy spent past the target's final hit point.
 var last_overkill: int = 0
+## Depth this fight happens at, snapshotted at the start (GameState may change
+## under a long fight, and a monster must not grow mid-combat).
+var floor_index: int = 1
 var _bones_from_items: int = 0  ## bone_charm cap 3/fight
 
 
@@ -55,18 +59,31 @@ func _init(party_ref: RefCounted, pack: Array, seed_value: int) -> void:
 	_rng.seed = seed_value
 	deck = party.build_combat_deck(seed_value)
 	mods = _read_backpack_mods()
+	floor_index = _read_floor_index()
 	for enemy_id in pack:
 		var def: Dictionary = EnemySprites.ENEMIES.get(enemy_id, EnemySprites.ENEMIES["grub"])
+		# Scaled by depth. Without this the run got EASIER the deeper it went:
+		# stats were flat while the hero levelled, drafted and geared up.
+		var hp := FloorScale.scale_hp(int(def["hp"]), floor_index)
 		enemies.append({
 			"id": enemy_id,
 			"name": def["name"],
-			"hp": int(def["hp"]),
-			"max_hp": int(def["hp"]),
+			"hp": hp,
+			"max_hp": hp,
 			"block": 0,
 			"intent": {},
 			"status": {},
 		})
 	begin_player_turn()
+
+
+func _read_floor_index() -> int:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree and tree.root:
+		var gs = tree.root.get_node_or_null("GameState")
+		if gs != null and gs.get("floor_index") != null:
+			return maxi(1, int(gs.floor_index))
+	return 1
 
 
 func _read_backpack_mods() -> Dictionary:
@@ -204,7 +221,9 @@ func apply_status(index: int, id: String, amount: int) -> void:
 func _roll_intent(e: Dictionary) -> Dictionary:
 	# Brutes hit hard and rarely guard; grubs chip; shades are in between
 	# Floor: ~max_hp/3 so a pack of 3 grubs can actually chip through block
-	var base: int = maxi(3, int(e["max_hp"]) / 3)
+	# max_hp is already scaled, so the intent inherits depth through it; the
+	# extra damage multiplier is applied on top and kept gentler than HP.
+	var base: int = FloorScale.scale_damage(maxi(3, int(e["max_hp"]) / 3), floor_index)
 	if _rng.randf() < 0.15:
 		return {"type": "block", "value": base, "hits": 1}
 	# Small, fast things flurry; heavy things land one big blow. Tied to size so

@@ -145,6 +145,10 @@ func _pick_upgrade(index: int) -> void:
 	var offer: Dictionary = _upgrade_offers[index]
 	if GameState and GameState.party:
 		GameState.party.upgrade_card(str(offer["owner"]), int(offer["deck_index"]))
+		# Show it AFTER the upgrade so the card on screen is the improved one —
+		# the whole point is seeing what the +2 did.
+		_flourish({"card": str(offer.get("card", "")),
+			"plus": int(offer.get("plus", 0)) + 1}, "УЛУЧШЕНО")
 	if Sfx:
 		Sfx.play("draft_pick")
 	var name_s := str(CardDB.get_card(str(offer["card"])).get("name", offer["card"]))
@@ -157,6 +161,7 @@ func _pick_rare(index: int) -> void:
 	var offer: Dictionary = _rare_offers[index]
 	if GameState and GameState.party:
 		GameState.party.add_card(str(offer["owner"]), str(offer["card"]))
+		_flourish(str(offer["card"]), "РЕДКАЯ КАРТА")
 	if Sfx:
 		Sfx.play("draft_pick")
 	var name_s := str(CardDB.get_card(str(offer["card"])).get("name", offer["card"]))
@@ -254,3 +259,13 @@ func _build_ui() -> void:
 	_rare_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	_rare_row.add_theme_constant_override("separation", 16)
 	col.add_child(_rare_row)
+
+
+## Shared with draft_overlay — see its _flourish for why this exists.
+func _flourish(entry, caption: String) -> void:
+	var fl := get_tree().current_scene.get_node_or_null("CardFlourish")
+	if fl and fl.has_method("show_card"):
+		var colour := Color(0.9, 0.85, 0.7)
+		if GameState and GameState.party and GameState.party.has_method("hero"):
+			colour = GameState.party.hero().get("colour", colour)
+		fl.call("show_card", entry, caption, colour)

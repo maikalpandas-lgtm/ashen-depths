@@ -1177,6 +1177,7 @@ func _play_events() -> void:
 					Sfx.play("enemy_die", -1.0)
 			"enemy_attack":
 				_lunge_enemy(i)
+				_react_portrait("hit")
 				_spawn_slash(int(ev["amount"]))
 				_shake = maxf(_shake, 0.06 + float(ev["amount"]) * 0.004)
 				if Sfx:
@@ -1185,6 +1186,8 @@ func _play_events() -> void:
 				if Sfx:
 					Sfx.play("block", -4.0)
 			"status_tick":
+				if i < 0:
+					_react_portrait("hit")
 				# Poison has no attacker and no impact burst, so without a
 				# number the HP just silently drops and reads as a bug.
 				if i >= 0:
@@ -1795,6 +1798,17 @@ func _party_max_hp() -> int:
 	for m in _combat.party.members:
 		sum += maxi(0, int(m["max_hp"]))
 	return sum
+
+
+## Poke the portrait so the hero visibly reacts (фаза F). Silent if the panel
+## is an older build without react() — this is decoration, not a dependency.
+func _react_portrait(kind: String) -> void:
+	var main := get_tree().current_scene
+	if main == null:
+		return
+	var panel = main.get_node_or_null("UI/LeftPanel")
+	if panel and panel.has_method("react"):
+		panel.call("react", kind)
 
 
 func _sync_left_hud() -> void:

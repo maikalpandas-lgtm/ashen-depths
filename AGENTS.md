@@ -55,6 +55,8 @@ godot --headless --script tests/hero_card_layout_test.gd # карточка ге
 godot --headless --script tests/art_import_test.gd     # все спрайты на месте И импортированы
 godot --headless --script tests/status_test.gd         # статусы: тик, стаки, множители
 godot --headless --script tests/deck_layout_test.gd    # книга колоды: группировка и индексы
+godot --headless --script tests/flourish_test.gd       # показ карты держится и не лезет на руку
+godot --headless --script tests/floor_scale_test.gd    # глубже = труднее, и никогда наоборот
 ```
 
 ⚠️ **Не импортировать `combat_overlay.gd` в headless-тест** — прогон зависает.

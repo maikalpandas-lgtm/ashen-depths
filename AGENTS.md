@@ -54,6 +54,10 @@ godot --headless --script tests/view_cone_test.gd     # конус обзора 
 ⚠️ **Не импортировать `combat_overlay.gd` в headless-тест** — прогон зависает.
 Чистую логику выносить в отдельный модуль без узлов (см. `scripts/ui/label_layout.gd`).
 
+⚠️ **`clip_contents` режет по ПРЯМОУГОЛЬНИКУ**, а не по скруглению стиля.
+Круглый портрет = маска-шейдер `shaders/circle_mask.gdshader`, иначе арт вылезает
+за рамку.
+
 ⚠️ **`Panel` по умолчанию `MOUSE_FILTER_STOP`**, `TextureRect` — `PASS`, `Label` — `IGNORE`.
 Любой `Panel` поверх интерактивного элемента съедает клик молча. Карта целиком
 помечена `IGNORE` (`CardView._ignore_mouse`) — не снимать.

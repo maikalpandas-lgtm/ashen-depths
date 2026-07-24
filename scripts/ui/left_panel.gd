@@ -11,6 +11,8 @@ signal settings_pressed
 @export var minimap_path: NodePath
 @export var portrait_size: float = 100.0
 
+const CIRCLE_MASK = preload("res://shaders/circle_mask.gdshader")
+
 var _title: Label = null
 var _floor: Label = null
 var _portrait: TextureRect = null
@@ -161,6 +163,8 @@ func _build() -> void:
 	ring_style.border_color = Color(0.65, 0.48, 0.28, 1)
 	ring_style.set_border_width_all(4)
 	ring_style.set_corner_radius_all(int(portrait_size))
+	# Keep the portrait inside the ring rather than under it
+	ring_style.set_content_margin_all(5.0)
 	port_ring.add_theme_stylebox_override("panel", ring_style)
 	port_wrap.add_child(port_ring)
 
@@ -168,7 +172,11 @@ func _build() -> void:
 	_portrait.custom_minimum_size = Vector2(portrait_size, portrait_size)
 	_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	_portrait.clip_contents = true
+	# clip_contents would only clip to the RECTANGLE; the round ring behind it is
+	# just paint, so the art spilled past it. A real circular mask instead.
+	var mask := ShaderMaterial.new()
+	mask.shader = CIRCLE_MASK
+	_portrait.material = mask
 	port_ring.add_child(_portrait)
 
 	_hero_name = Label.new()

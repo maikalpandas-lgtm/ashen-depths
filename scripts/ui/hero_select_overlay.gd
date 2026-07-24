@@ -12,6 +12,7 @@ const CardView = preload("res://scripts/ui/card_view.gd")
 const UiTheme = preload("res://scripts/ui/ui_theme.gd")
 
 const PORTRAIT := 190
+const CIRCLE_MASK = preload("res://shaders/circle_mask.gdshader")
 const MINI_CARD := Vector2(74, 104)
 
 signal hero_chosen(hero_id: String)
@@ -122,14 +123,30 @@ func _make_card(hero_id: String) -> Control:
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	btn.add_child(box)
 
+	# Ring + circular crop, matching the in-game panel
+	var ring := PanelContainer.new()
+	ring.custom_minimum_size = Vector2(PORTRAIT + 14, PORTRAIT + 14)
+	ring.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ring_style := StyleBoxFlat.new()
+	ring_style.bg_color = Color(0.10, 0.08, 0.07)
+	ring_style.border_color = Color(colour, 0.9)
+	ring_style.set_border_width_all(4)
+	ring_style.set_corner_radius_all(PORTRAIT)
+	ring_style.set_content_margin_all(5.0)
+	ring.add_theme_stylebox_override("panel", ring_style)
+	box.add_child(ring)
+
 	var portrait := TextureRect.new()
 	portrait.texture = CardView.load_art(str(def["portrait"]))
 	portrait.custom_minimum_size = Vector2(PORTRAIT, PORTRAIT)
 	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	portrait.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(portrait)
+	var mask := ShaderMaterial.new()
+	mask.shader = CIRCLE_MASK
+	portrait.material = mask
+	ring.add_child(portrait)
 
 	var name_label := Label.new()
 	name_label.text = str(def["name"]).to_upper()

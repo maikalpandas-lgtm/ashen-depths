@@ -10,10 +10,9 @@ const Party = preload("res://scripts/party.gd")
 const CardDB = preload("res://scripts/cards/card_db.gd")
 const CardView = preload("res://scripts/ui/card_view.gd")
 const UiTheme = preload("res://scripts/ui/ui_theme.gd")
+const HeroCardLayout = preload("res://scripts/ui/hero_card_layout.gd")
 
-const PORTRAIT := 190
 const CIRCLE_MASK = preload("res://shaders/circle_mask.gdshader")
-const MINI_CARD := Vector2(74, 104)
 
 signal hero_chosen(hero_id: String)
 
@@ -27,6 +26,7 @@ const BIOMES := [
 var _root: Control = null
 var _row: HBoxContainer = null
 var _biome_row: HBoxContainer = null
+var _biome_buttons: Array = []
 var _biome_note: Label = null
 var _biome := "mine"
 var _picked := false
@@ -104,6 +104,7 @@ func _build() -> void:
 	UiTheme.as_title(_biome_note, 14, Color(0.66, 0.64, 0.6))
 	_biome_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(_biome_note)
+	_build_biomes()
 
 	_row = HBoxContainer.new()
 	_row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -118,44 +119,77 @@ func _choose_biome(id: String) -> void:
 	_biome = id
 	if Sfx:
 		Sfx.play("ui_click")
-	_render_biomes()
+	_paint_biomes()
 
 
-func _render_biomes() -> void:
-	for c in _biome_row.get_children():
-		_biome_row.remove_child(c)
-		c.queue_free()
+## Buttons are built ONCE. Selecting a biome only restyles them.
+##
+## The first version rebuilt the row inside the button's own `pressed` handler,
+## which frees the node that is mid-signal — the exact bug that made the combat
+## hand vanish when a card was played. Never free a control from its own signal.
+func _build_biomes() -> void:
+	_biome_buttons.clear()
 	for entry in BIOMES:
 		var id := str(entry["id"])
 		var btn := Button.new()
 		btn.text = str(entry["name"])
 		btn.focus_mode = Control.FOCUS_NONE
-		var on := id == _biome
-		UiTheme.cartoon_button(btn, 16,
-			Color(0.30, 0.52, 0.40) if on else Color(0.17, 0.15, 0.19))
 		btn.pressed.connect(func(): _choose_biome(id))
+		btn.set_meta("biome", id)
 		_biome_row.add_child(btn)
-		if on and _biome_note:
+		_biome_buttons.append(btn)
+	_paint_biomes()
+
+
+func _paint_biomes() -> void:
+	for btn in _biome_buttons:
+		if not is_instance_valid(btn):
+			continue
+		var on: bool = str(btn.get_meta("biome", "")) == _biome
+		UiTheme.cartoon_button(btn as Button, 16,
+			Color(0.30, 0.52, 0.40) if on else Color(0.17, 0.15, 0.19))
+	for entry in BIOMES:
+		if str(entry["id"]) == _biome and _biome_note:
 			_biome_note.text = str(entry["blurb"])
 
 
 func _render() -> void:
-	_render_biomes()
+	_paint_biomes()
 	for c in _row.get_children():
 		_row.remove_child(c)
 		c.queue_free()
+	# Size every card for the HEAVIEST deck, so the three stay identical — a row
+	# of cards that each shrank to their own content looks broken.
+	var worst := 0
 	for hero_id in Party.PLAYABLE:
-		_row.add_child(_make_card(str(hero_id)))
+		worst = maxi(worst, _distinct_cards(str(hero_id)))
+	var vp := get_viewport().get_visible_rect().size.y
+	var m: Dictionary = HeroCardLayout.metrics(vp, worst)
+	if bool(m.get("overflow", false)):
+		push_warning("[HeroSelect] card content %.0fpx > budget %.0fpx at %dpx tall"
+			% [m["content"], m["budget"], int(vp)])
+	for hero_id in Party.PLAYABLE:
+		_row.add_child(_make_card(str(hero_id), m))
 
 
-func _make_card(hero_id: String) -> Control:
+func _distinct_cards(hero_id: String) -> int:
+	var def: Dictionary = Party.HEROES.get(hero_id, {})
+	var seen := {}
+	for card_id in def.get("deck", []):
+		seen[str(card_id)] = true
+	return seen.size()
+
+
+func _make_card(hero_id: String, m: Dictionary) -> Control:
 	var def: Dictionary = Party.HEROES.get(hero_id, {})
 	if def.is_empty():
 		return Control.new()
 	var colour: Color = def["colour"]
 
 	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(330, 470)
+	var portrait_px: float = float(m["portrait"])
+	var mini: Vector2 = m["mini"]
+	btn.custom_minimum_size = m["card"]
 	btn.focus_mode = Control.FOCUS_NONE
 	UiTheme.cartoon_button(btn, 1, Color(0.13, 0.11, 0.15))
 	btn.pressed.connect(func(): _choose(hero_id))
@@ -173,21 +207,21 @@ func _make_card(hero_id: String) -> Control:
 
 	# Ring + circular crop, matching the in-game panel
 	var ring := PanelContainer.new()
-	ring.custom_minimum_size = Vector2(PORTRAIT + 14, PORTRAIT + 14)
+	ring.custom_minimum_size = Vector2(portrait_px + HeroCardLayout.RING, portrait_px + HeroCardLayout.RING)
 	ring.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var ring_style := StyleBoxFlat.new()
 	ring_style.bg_color = Color(0.10, 0.08, 0.07)
 	ring_style.border_color = Color(colour, 0.9)
 	ring_style.set_border_width_all(4)
-	ring_style.set_corner_radius_all(PORTRAIT)
+	ring_style.set_corner_radius_all(int(portrait_px))
 	ring_style.set_content_margin_all(5.0)
 	ring.add_theme_stylebox_override("panel", ring_style)
 	box.add_child(ring)
 
 	var portrait := TextureRect.new()
 	portrait.texture = CardView.load_art(str(def["portrait"]))
-	portrait.custom_minimum_size = Vector2(PORTRAIT, PORTRAIT)
+	portrait.custom_minimum_size = Vector2(portrait_px, portrait_px)
 	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -213,14 +247,14 @@ func _make_card(hero_id: String) -> Control:
 	UiTheme.as_title(blurb, 13, Color(0.68, 0.66, 0.63))
 	blurb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	blurb.custom_minimum_size = Vector2(0, 36)
+	blurb.custom_minimum_size = Vector2(0, HeroCardLayout.BLURB_H)
 	box.add_child(blurb)
 
 	# Starting deck, stacked by count — the choice is mostly WHAT YOU DRAW
 	var deck_row := HFlowContainer.new()
 	deck_row.alignment = FlowContainer.ALIGNMENT_CENTER
-	deck_row.add_theme_constant_override("h_separation", 4)
-	deck_row.add_theme_constant_override("v_separation", 4)
+	deck_row.add_theme_constant_override("h_separation", int(HeroCardLayout.DECK_SEP))
+	deck_row.add_theme_constant_override("v_separation", int(HeroCardLayout.DECK_SEP))
 	deck_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(deck_row)
 
@@ -233,19 +267,19 @@ func _make_card(hero_id: String) -> Control:
 			order.append(key)
 		counts[key] += 1
 	for key in order:
-		deck_row.add_child(_mini_card(str(key), int(counts[key]), colour))
+		deck_row.add_child(_mini_card(str(key), int(counts[key]), colour, mini))
 
 	return btn
 
 
-func _mini_card(card_id: String, count: int, colour: Color) -> Control:
+func _mini_card(card_id: String, count: int, colour: Color, mini: Vector2) -> Control:
 	var holder := Control.new()
-	holder.custom_minimum_size = MINI_CARD
+	holder.custom_minimum_size = mini
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var card := CardDB.get_card(card_id)
 	if card.is_empty():
 		return holder
-	holder.add_child(CardView.build(card, colour, MINI_CARD))
+	holder.add_child(CardView.build(card, colour, mini))
 	if count > 1:
 		var badge := Label.new()
 		badge.text = "×%d" % count

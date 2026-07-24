@@ -6,6 +6,7 @@ const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 const PropSprites = preload("res://scripts/prop_sprites.gd")
 const ForestProps = preload("res://scripts/forest_props.gd")
 const ROCK_SHADER = preload("res://shaders/cave_rock.gdshader")
+const FOREST_GROUND_SHADER = preload("res://shaders/forest_ground.gdshader")
 
 ## How far rock may bulge into the corridor. Keeps the walking line clear —
 ## see wall_push().
@@ -161,18 +162,22 @@ func _build_materials() -> void:
 		"angular": 0.5,
 		"rough": 0.84,
 	})
-	# Floor: flatter, wider slabs, less rim (light rakes across it, not down it)
-	_floor_mat = _make_rock_mat(jitter + 11.0, {
-		"deep_col": Color(0.05, 0.11, 0.16),
-		"mid_col": Color(0.08, 0.18, 0.24),
-		"lite_col": Color(0.13, 0.27, 0.32),
-		"hi_col": Color(0.2, 0.4, 0.44),
-		"big_scale": 1.5,
-		"small_scale": 4.4,
-		"angular": 0.62,
-		"rim_strength": 0.22,
-		"rough": 0.9,
-	})
+	# Floor: cave rock OR forest soil (same mesh, different look).
+	if _biome == "forest":
+		_floor_mat = _make_forest_ground_mat(jitter + 11.0)
+	else:
+		# Floor: flatter, wider slabs, less rim (light rakes across it, not down it)
+		_floor_mat = _make_rock_mat(jitter + 11.0, {
+			"deep_col": Color(0.05, 0.11, 0.16),
+			"mid_col": Color(0.08, 0.18, 0.24),
+			"lite_col": Color(0.13, 0.27, 0.32),
+			"hi_col": Color(0.2, 0.4, 0.44),
+			"big_scale": 1.5,
+			"small_scale": 4.4,
+			"angular": 0.62,
+			"rim_strength": 0.22,
+			"rough": 0.9,
+		})
 	# Ceiling: darkest, finest — it is mostly silhouette
 	_ceiling_mat = _make_rock_mat(jitter + 23.0, {
 		"deep_col": Color(0.04, 0.1, 0.12),
@@ -195,6 +200,29 @@ func _make_rock_mat(seed_offset: float, params: Dictionary) -> ShaderMaterial:
 	m.set_shader_parameter("seed_offset", seed_offset)
 	for key in params:
 		m.set_shader_parameter(key, params[key])
+	return m
+
+
+## Dirt / moss / litter — forest floor only. Tuned cooler so night ambient
+## still reads; warm leaf flecks keep it from looking like wet mud.
+func _make_forest_ground_mat(seed_offset: float) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = FOREST_GROUND_SHADER
+	m.set_shader_parameter("seed_offset", seed_offset)
+	m.set_shader_parameter("deep_col", Color(0.07, 0.09, 0.04))
+	m.set_shader_parameter("mid_col", Color(0.13, 0.15, 0.06))
+	m.set_shader_parameter("lite_col", Color(0.20, 0.22, 0.09))
+	m.set_shader_parameter("hi_col", Color(0.16, 0.26, 0.11))
+	m.set_shader_parameter("moss_col", Color(0.09, 0.20, 0.08))
+	m.set_shader_parameter("litter_col", Color(0.26, 0.16, 0.06))
+	m.set_shader_parameter("ink_col", Color(0.03, 0.05, 0.02))
+	m.set_shader_parameter("big_scale", 1.25)
+	m.set_shader_parameter("small_scale", 4.6)
+	m.set_shader_parameter("angular", 0.16)
+	m.set_shader_parameter("rim_strength", 0.16)
+	m.set_shader_parameter("moss_amount", 0.45)
+	m.set_shader_parameter("litter_amount", 0.30)
+	m.set_shader_parameter("rough", 0.96)
 	return m
 
 

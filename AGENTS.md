@@ -51,6 +51,7 @@ godot --headless --script tests/fan_layout_test.gd    # веер карт вле
 godot --headless --script tests/view_cone_test.gd     # конус обзора смотрит куда надо
 godot --headless --script tests/camera_framing_test.gd # монстры не мелкие и не в пол-экрана
 godot --headless --script tests/sfx_biome_test.gd      # биомный звук не проваливается в тишину
+godot --headless --script tests/hero_card_layout_test.gd # карточка героя влезает в экран
 ```
 
 ⚠️ **Не импортировать `combat_overlay.gd` в headless-тест** — прогон зависает.
@@ -65,6 +66,11 @@ godot --headless --script tests/sfx_biome_test.gd      # биомный звук
 ⚠️ **`clip_contents` режет по ПРЯМОУГОЛЬНИКУ**, а не по скруглению стиля.
 Круглый портрет = маска-шейдер `shaders/circle_mask.gdshader`, иначе арт вылезает
 за рамку.
+
+⚠️ **Не освобождать контрол из его же сигнала.** `pressed` → пересобрать ряд
+кнопок = убить узел, который прямо сейчас обрабатывает нажатие. Ловили дважды:
+рука карт в бою и выбор биома в стартовом меню (кнопка просто не срабатывала).
+Строить один раз, на выбор — перекрашивать.
 
 ⚠️ **`Panel` по умолчанию `MOUSE_FILTER_STOP`**, `TextureRect` — `PASS`, `Label` — `IGNORE`.
 Любой `Panel` поверх интерактивного элемента съедает клик молча. Карта целиком

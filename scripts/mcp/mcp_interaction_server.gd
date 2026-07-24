@@ -18,6 +18,11 @@ var _held_keys: Dictionary = {}
 func _ready() -> void:
 	# Ensure MCP server keeps processing even when game is paused
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# Headless = a test run. It has no frames to screenshot, and binding the
+	# port there steals it from the real game the agent is watching (tests are
+	# run WHILE the game stays open).
+	if DisplayServer.get_name() == "headless":
+		return
 	_init_key_map()
 	_server = TCPServer.new()
 	var err: int = _server.listen(PORT, "127.0.0.1")

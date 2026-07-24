@@ -41,4 +41,29 @@ func _init() -> void:
 			failed += 1
 	if failed == 0:
 		print("  ok   HP labels never overlap (%d layouts)" % cases.size())
+	failed += _rows_are_shared()
 	quit(1 if failed > 0 else 0)
+
+
+## Two identical monsters on uneven floor must still get ONE row of labels.
+func _rows_are_shared() -> int:
+	var bad := 0
+	# feet at different heights (undulating floor), heads likewise
+	var r: Dictionary = LabelLayout.rows([490.0, 507.0], [305.0, 322.0])
+	if not is_equal_approx(float(r["feet"]), 507.0):
+		printerr("  FAIL feet row %s, want the LOWEST feet (507)" % r["feet"])
+		bad += 1
+	if not is_equal_approx(float(r["head"]), 305.0):
+		printerr("  FAIL head row %s, want the HIGHEST head (305)" % r["head"])
+		bad += 1
+	# a mixed pack: the row must clear the tall one, not the average
+	var r2: Dictionary = LabelLayout.rows([500.0, 480.0, 512.0], [400.0, 210.0, 395.0])
+	if not is_equal_approx(float(r2["feet"]), 512.0) or not is_equal_approx(float(r2["head"]), 210.0):
+		printerr("  FAIL mixed pack rows %s" % r2)
+		bad += 1
+	if LabelLayout.rows([], []).is_empty():
+		printerr("  FAIL empty pack should still return a dictionary")
+		bad += 1
+	if bad == 0:
+		print("  ok   name / HP / intent share one row per pack")
+	return bad

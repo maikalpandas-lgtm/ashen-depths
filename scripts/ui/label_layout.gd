@@ -4,6 +4,31 @@ extends RefCounted
 ## the run, and this is the part actually worth testing anyway.
 
 
+## One shared baseline for the whole pack: a feet row for name + HP bar, and a
+## head row for the intent.
+##
+## Labels used to be projected per monster, which looked wrong the moment two
+## IDENTICAL enemies stood side by side: each stands on its own patch of an
+## undulating cave floor, so their feet — and therefore their bars and intents —
+## landed at different screen heights. A shipped frame had two identical shades
+## with their intents 17px apart. The reference lines the whole row up.
+##
+## The feet row takes the LOWEST feet and the head row the HIGHEST head, so no
+## label is ever drawn on top of the sprite it belongs to.
+static func rows(feet_ys: Array, head_ys: Array) -> Dictionary:
+	var feet := 0.0
+	var head := 0.0
+	var have := false
+	for y in feet_ys:
+		feet = float(y) if not have else maxf(feet, float(y))
+		have = true
+	have = false
+	for y in head_ys:
+		head = float(y) if not have else minf(head, float(y))
+		have = true
+	return {"feet": feet, "head": head}
+
+
 ## Push a row of label positions apart so none overlap, keeping each as close to
 ## its own anchor as the spacing allows, and pull the row inside [left, right].
 ##

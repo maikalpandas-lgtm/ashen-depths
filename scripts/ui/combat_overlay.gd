@@ -623,11 +623,22 @@ func _draw_world_overlay() -> void:
 			var t: float = 0.5 if n == 1 else float(k) / float(n - 1)
 			p = Vector2(left_m + usable * t, 150.0)
 			head_y = p.y - 90.0
-		# Only a floor clamp: dragging the feet UP puts the labels on the sprite
-		# Only a floor clamp, and it must clear the hand strip below
-		p.y = minf(p.y, vp.y - 300.0)
 		spots.append(p)
 		head_ys.append(head_y)
+
+	# ONE row for the whole pack. Per-monster heights meant two identical
+	# enemies got their bars and intents at different screen heights, because
+	# each stands on its own bump of cave floor (see LabelLayout.rows).
+	var feet_ys: Array = []
+	for v in spots:
+		feet_ys.append(v.y)
+	var rows: Dictionary = LabelLayout.rows(feet_ys, head_ys)
+	# Only a floor clamp, and it must clear the hand strip below: dragging the
+	# row UP would put the labels back on the sprites.
+	var feet_row: float = minf(float(rows["feet"]), vp.y - 300.0)
+	var intent_row: float = maxf(72.0, float(rows["head"]) - 8.0)
+	for k in range(n):
+		spots[k] = Vector2(spots[k].x, feet_row)
 
 	LabelLayout.separate(spots, min_gap, 230.0, vp.x - 50.0)
 
@@ -663,8 +674,7 @@ func _draw_world_overlay() -> void:
 		# Intent just over the real head, not a guessed offset
 		var it: Dictionary = e["intent"]
 		var is_block: bool = it.get("type", "attack") == "block"
-		var intent_y: float = maxf(72.0, float(head_ys[k]) - 8.0)
-		_outlined(font, Vector2(bar.position.x, intent_y),
+		_outlined(font, Vector2(bar.position.x, intent_row),
 			("🛡 %d" if is_block else "🗡 %d") % it.get("value", 0),
 			bar_w, 21, Color(0.65, 0.88, 1.0) if is_block else Color(1.0, 0.66, 0.45))
 		if int(e["block"]) > 0:

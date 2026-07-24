@@ -507,16 +507,25 @@ warm amber glow accents, birch and fir, folklore mood
 не держит. Поэтому земля пока **процедурная**, как скала в копях
 (`cave_rock.gdshader` → лесной вариант). Отдельного ассета не просить.
 
-### 3.9.5 Обитатели леса (опционально, решает юзер)
+### 3.9.5 Обитатели леса — НУЖНЫ (решено 24.07.2026)
 
-Если лес получает свой бестиарий, а не мобов копей — фронтально, в полный рост,
-по правилам §3 (`realm: "forest"` в `scripts/enemy_sprites.gd`):
+Свой бестиарий, не мобы копей. Уже прописаны в `scripts/enemy_sprites.gd`
+(`realm: "forest"`), игра ждёт ровно эти три файла. Фронтально, в полный рост,
+по правилам §3.
 
-| Файл | Кто | Хвост промпта |
-|---|---|---|
-| `enemy_leshy` | Леший | `a forest spirit made of bark and moss, long beard of hanging lichen, glowing green eyes, tall and stooped` |
-| `enemy_kikimora` | Кикимора | `a small hunched swamp crone in ragged wet cloth, tangled hair with twigs, spindly limbs` |
-| `enemy_wolf` | Волк | `a large shaggy grey wolf, bared fangs, hackles raised, standing on all fours` |
+| Файл | Кто | Рост | Хвост промпта |
+|---|---|---|---|
+| `enemy_wolf` | Волк | 1.3 м | `a large shaggy grey wolf, bared fangs, hackles raised, standing on all fours, seen from the front` |
+| `enemy_kikimora` | Кикимора | 1.5 м | `a small hunched swamp crone in ragged wet cloth, tangled hair with twigs, spindly limbs, standing` |
+| `enemy_leshy` | Леший | 2.3 м | `a forest spirit made of bark and moss, long beard of hanging lichen, glowing green eyes, tall and stooped` |
+
+**Босса рисовать не надо.** «Лесной хозяин» переиспользует `enemy_leshy` в
+большем масштабе — ровно как «Хранитель копи» переиспользует `enemy_brute`.
+
+⚠️ **Волк на четырёх лапах = широкий спрайт.** Строй считается по реальной
+ширине PNG (`pack_widest`), и пока файла нет, движок ПОДСТАВЛЯЕТ 1.3 м. Когда
+арт приедет — прогнать `tests/formation_test.gd`: строй из трёх может перестать
+влезать в 3.5 м прохода, и тогда правится состав стаи, а не арт.
 
 ---
 

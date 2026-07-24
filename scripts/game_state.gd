@@ -10,6 +10,10 @@ var current_seed: int = 0
 ## Fixed for the whole run — floor layouts derive from this + floor_index.
 var run_seed: int = 0
 var floor_index: int = 1
+## Which map type the run is on: "mine" (the labyrinth) or "forest" (open
+## ground). NOT derived from floor_index — the forest is a different kind of
+## map, not a deeper one, and the bestiary keys off this (EnemySprites.realm_for).
+var biome: String = "mine"
 var gold: int = 0
 ## ONE hero per run, chosen at the title screen (DESIGN §5, revised 22.07.2026).
 ## Party still holds a `members` array so the dozen call sites that iterate it
@@ -51,12 +55,13 @@ func _ready() -> void:
 		backpack = Backpack.new()
 
 
-func new_run(seed_value: int = 0, chosen_hero: String = "") -> void:
+func new_run(seed_value: int = 0, chosen_hero: String = "", chosen_biome: String = "mine") -> void:
 	if seed_value == 0:
 		seed_value = randi()
 	run_seed = seed_value
 	current_seed = seed_value
 	floor_index = 1
+	biome = chosen_biome
 	gold = 0
 	xp = 0
 	level = 1

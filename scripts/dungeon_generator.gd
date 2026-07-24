@@ -1262,17 +1262,18 @@ func _spawn_encounter(world: Vector3, pack_name: String) -> void:
 	var spawned: Array[Node3D] = []
 	var cell := world_to_cell(world)
 	var floor_i: int = GameState.floor_index if GameState else 1
+	var biome: String = GameState.biome if GameState else "mine"
 	var kind: String = str(encounter_kinds.get(cell, "normal"))
 	var pack: Array
 	match kind:
 		"mini_boss":
-			pack = EnemySprites.mini_boss_pack(floor_i)
+			pack = EnemySprites.mini_boss_pack(floor_i, biome)
 			pack_name = "Элита"
 		"floor_boss":
-			pack = EnemySprites.floor_boss_pack(floor_i)
+			pack = EnemySprites.floor_boss_pack(floor_i, biome)
 			pack_name = "Страж этажа"
 		_:
-			pack = EnemySprites.pack_for(absi(cell.x * 31 + cell.y * 17), floor_i)
+			pack = EnemySprites.pack_for(absi(cell.x * 31 + cell.y * 17), floor_i, biome)
 	# A row ACROSS the corridor, with the same spacing and scale combat uses, so
 	# the pack does not visibly rearrange itself the moment the fight opens.
 	# Corridors are 4.5m wide now, which is what makes a row fit at all.

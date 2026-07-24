@@ -82,6 +82,10 @@ const ENEMIES := {
 	"likho": {"art": "enemy_likho", "height": 2.1, "hp": 28, "name": "Лихо Одноглазое", "realm": "nav"},
 	"mavka": {"art": "enemy_mavka", "height": 1.75, "hp": 14, "name": "Мавка", "realm": "nav"},
 	"poludnitsa": {"art": "enemy_poludnitsa", "height": 1.75, "hp": 18, "name": "Полудница", "realm": "nav"},
+	# --- сказочный лес (второй тип карты, не этаж) ---
+	"wolf": {"art": "enemy_wolf", "height": 1.3, "hp": 9, "name": "Волк", "realm": "forest"},
+	"kikimora": {"art": "enemy_kikimora", "height": 1.5, "hp": 13, "name": "Кикимора", "realm": "forest"},
+	"leshy": {"art": "enemy_leshy", "height": 2.3, "hp": 26, "name": "Леший", "realm": "forest"},
 	# --- боссы (те же спрайты, жирнее статы) ---
 	"cave_warden": {
 		"art": "enemy_brute", "height": 2.45, "hp": 42, "name": "Хранитель копи",
@@ -90,6 +94,12 @@ const ENEMIES := {
 	"nav_host": {
 		"art": "enemy_likho", "height": 2.35, "hp": 52, "name": "Воевода Нави",
 		"realm": "nav", "boss": true,
+	},
+	# Reuses the Леший art at a bigger scale, exactly like cave_warden reuses
+	# the brute — a boss costs stats and a name, not another Grok batch.
+	"forest_lord": {
+		"art": "enemy_leshy", "height": 2.6, "hp": 48, "name": "Лесной хозяин",
+		"realm": "forest", "boss": true,
 	},
 }
 
@@ -112,12 +122,32 @@ static func ids() -> Array:
 	return ENEMIES.keys()
 
 
+## Which realm a pack is drawn from. The forest is a MAP TYPE, not a depth, so
+## it cannot be derived from floor_index the way Навь is — that is exactly the
+## assumption that had to be broken to add it.
+static func realm_for(floor_index: int, biome: String = "mine") -> String:
+	if biome == "forest":
+		return "forest"
+	return "nav" if floor_index >= NAV_FROM_FLOOR else "mine"
+
+
 ## Which enemies stand in a pack. Kept deterministic per cell so a dungeon
 ## looks the same when regenerated from its seed.
-## `floor_index` decides the realm: the mines on top, Навь below. Packs never
-## mix realms, so a paladin-era grub does not stand beside a mavka by accident.
-static func pack_for(cell_hash: int, floor_index: int = 1) -> Array:
-	if floor_index >= NAV_FROM_FLOOR:
+## Packs never mix realms, so a paladin-era grub does not stand beside a mavka
+## by accident.
+static func pack_for(cell_hash: int, floor_index: int = 1, biome: String = "mine") -> Array:
+	var realm := realm_for(floor_index, biome)
+	if realm == "forest":
+		match cell_hash % 4:
+			0:
+				return ["wolf", "wolf"]
+			1:
+				return ["leshy"]
+			2:
+				return ["kikimora", "wolf"]
+			_:
+				return ["kikimora", "kikimora", "wolf"]
+	if realm == "nav":
 		match cell_hash % 4:
 			0:
 				return ["anchutka", "anchutka", "anchutka"]
@@ -139,15 +169,21 @@ static func pack_for(cell_hash: int, floor_index: int = 1) -> Array:
 
 
 ## Elite mid-floor pack — one fat body, more XP/gold than a normal pack.
-static func mini_boss_pack(floor_index: int = 1) -> Array:
-	if floor_index >= NAV_FROM_FLOOR:
+static func mini_boss_pack(floor_index: int = 1, biome: String = "mine") -> Array:
+	var realm := realm_for(floor_index, biome)
+	if realm == "forest":
+		return ["leshy", "wolf"]
+	if realm == "nav":
 		return ["likho", "anchutka"]
 	return ["brute", "grub"]
 
 
 ## Floor boss near the EXIT campfire — DESIGN Phase 3 mini/floor boss.
-static func floor_boss_pack(floor_index: int = 1) -> Array:
-	if floor_index >= NAV_FROM_FLOOR:
+static func floor_boss_pack(floor_index: int = 1, biome: String = "mine") -> Array:
+	var realm := realm_for(floor_index, biome)
+	if realm == "forest":
+		return ["forest_lord", "kikimora"]
+	if realm == "nav":
 		return ["nav_host", "mavka"]
 	return ["cave_warden", "shade"]
 

@@ -164,8 +164,13 @@ python3 tools/sprite_cutter.py path/to/raw.jpg assets/textures/out.png \
 | **enemy_likho** | `enemy_likho.png` | `masters/enemy_likho.png` | `masters/enemy_likho_source.jpg` | Лихо Одноглазое (танк) |
 | **enemy_mavka** | `enemy_mavka.png` | `masters/enemy_mavka.png` | `masters/enemy_mavka_source.jpg` | Мавка (быстрая) |
 | **enemy_poludnitsa** | `enemy_poludnitsa.png` | `masters/enemy_poludnitsa.png` | `masters/enemy_poludnitsa_source.jpg` | Полудница (AoE) |
+| **enemy_wolf** | `enemy_wolf.png` | `masters/enemy_wolf.png` | `masters/enemy_wolf_source.jpg` | Волк (лес, pack, 1.3 м, wide) |
+| **enemy_kikimora** | `enemy_kikimora.png` | `masters/enemy_kikimora.png` | `masters/enemy_kikimora_source.jpg` | Кикимора (лес, 1.5 м) |
+| **enemy_leshy** | `enemy_leshy.png` | `masters/enemy_leshy.png` | `masters/enemy_leshy_source.jpg` | Леший (лес, 2.3 м; босс = scale) |
 
-Промпты: `docs/ART_PROMPTS.md` §3 + §3.7 (батч 5 Навь).
+Промпты: `docs/ART_PROMPTS.md` §3 + §3.7 (батч 5 Навь) + §3.9.5 (батч 7 лес).  
+Cut quality (bright edge): wolf / kikimora / leshy = **0.0%**.  
+`realm: "forest"` в `scripts/enemy_sprites.gd`. После арта волка — `tests/formation_test.gd`.
 
 ---
 
@@ -241,3 +246,31 @@ python3 tools/sprite_cutter.py assets/textures/masters/prop_wall_torch_source.jp
 
 Код: `portrait` в `scripts/party.gd` → `left_panel.gd` / `card_test_overlay.gd`.
 Промпты: `docs/ART_PROMPTS.md` §3.8.
+
+---
+
+## Forest biome (батч 7 — сказочный лес)
+
+Открытая местность: 3D только земля, всё остальное 2D-спрайты.  
+Опора по нижнему краю (кроме `forest_treeline`). Без baked ground shadow.  
+Промпты: `docs/ART_PROMPTS.md` §3.9.
+
+### Vegetation / props
+
+| ID | Файл в игре | Master PNG | Source | Назначение |
+|----|-------------|------------|--------|------------|
+| **forest_pine** | `forest_pine.png` | `masters/forest_pine.png` | `masters/forest_pine_source.jpg` | Высокая ель |
+| **forest_birch** | `forest_birch.png` | `masters/forest_birch.png` | `masters/forest_birch_source.jpg` | Берёза |
+| **forest_oak_old** | `forest_oak_old.png` | `masters/forest_oak_old.png` | `masters/forest_oak_old_source.jpg` | Старый дуб-великан |
+| **forest_bush** | `forest_bush.png` | `masters/forest_bush.png` | `masters/forest_bush_source.jpg` | Куст с ягодами |
+| **forest_fern** | `forest_fern.png` | `masters/forest_fern.png` | `masters/forest_fern_source.jpg` | Папоротник |
+| **forest_stump** | `forest_stump.png` | `masters/forest_stump.png` | `masters/forest_stump_source.jpg` | Пень + мухомор |
+| **forest_log** | `forest_log.png` | `masters/forest_log.png` | `masters/forest_log_source.jpg` | Лежащее бревно |
+| **forest_lantern** | `forest_lantern.png` | `masters/forest_lantern.png` | `masters/forest_lantern_source.jpg` | Фонарь на шесте |
+| **forest_glowshroom** | `forest_glowshroom.png` | `masters/forest_glowshroom.png` | `masters/forest_glowshroom_source.jpg` | Светящиеся грибы |
+| **forest_campfire** | `forest_campfire.png` | `masters/forest_campfire.png` | `masters/forest_campfire_source.jpg` | Костёр |
+| **forest_treeline** | `forest_treeline.png` | `masters/forest_treeline.png` | `masters/forest_treeline_source.jpg` | Полоса леса на горизонте |
+
+### Enemies (forest realm)
+
+См. таблицу Enemies выше: `enemy_wolf`, `enemy_kikimora`, `enemy_leshy`.

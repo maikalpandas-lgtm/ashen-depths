@@ -593,6 +593,31 @@ slavic folklore motifs, carved wood and hammered iron, embroidered red ornament
 
 ---
 
+## 3.11. Батч 9 — портреты по состоянию (фаза C)
+
+Конкурент сильно выигрывает на том, что его гоблин **реагирует**: ест,
+морщится, доволен. Приём дешёвый, эффект большой.
+
+Код это уже поддерживает и **работает без арта**: `left_panel._portrait_for`
+ищет `<id>_hurt` ниже половины HP и `<id>_low` ниже четверти, а если файла нет —
+берёт обычный портрет и просто подкрашивает его красным. То есть картинки можно
+доносить по одной.
+
+Правила кадра — те же, что в §3.8 (только лицо, в круг, фон `#FF00FF`).
+Ракурс и стрижка **обязаны совпадать** с базовым портретом: это одно лицо в
+разном состоянии, а не три разных персонажа.
+
+| Файл | Состояние | Хвост промпта |
+|---|---|---|
+| `face_vityaz_hurt` | Витязь, ранен | `same face, teeth gritted in pain, one eye squeezed shut, a fresh cut across the cheekbone, blood at the temple` |
+| `face_vityaz_low` | Витязь, при смерти | `same face, pale and haggard, eyes half closed, heavy bleeding down one side, jaw slack with exhaustion` |
+| `face_polyanitsa_hurt` | Поляница, ранена | `same face, snarling through the pain, brow furrowed hard, a split lip and a scraped cheek` |
+| `face_polyanitsa_low` | Поляница, при смерти | `same face, drained and grey, unfocused stare, blood matting the hair at the temple` |
+| `face_volhv_hurt` | Волхв, ранен | `same face, grimacing, deep lines around the eyes, blood in the white beard` |
+| `face_volhv_low` | Волхв, при смерти | `same face, ashen and hollow-cheeked, eyes clouded over, head tilting` |
+
+---
+
 ## 4. Куда класть готовое
 
 1. Исходник (что отдал Grok) → `assets/textures/masters/<id>_source.jpg`

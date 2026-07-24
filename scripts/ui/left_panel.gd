@@ -86,7 +86,41 @@ func refresh() -> void:
 	if _hero_name:
 		_hero_name.text = name_s
 	if _portrait:
-		_portrait.texture = _load_tex(portrait_id)
+		_portrait.texture = _load_tex(_portrait_for(portrait_id, party_hp, party_max))
+		# Tint is the fallback when a mood portrait has not been drawn yet: a
+		# hurt hero still reads as hurt, just less expressively.
+		_portrait.modulate = _portrait_tint(party_hp, party_max)
+
+
+## Mood portraits: `<id>_hurt` under half HP, `<id>_low` under a quarter.
+##
+## Falls back to the plain portrait when the variant is missing, so this can
+## ship BEFORE the art does — see docs/ART_PROMPTS.md §3.11. The reference
+## leans on this hard: its goblin visibly reacts, and it costs nothing at
+## runtime.
+func _portrait_for(base_id: String, hp: int, max_hp: int) -> String:
+	if max_hp <= 0:
+		return base_id
+	var frac := float(hp) / float(max_hp)
+	var want := base_id
+	if frac <= 0.25:
+		want = base_id + "_low"
+	elif frac <= 0.5:
+		want = base_id + "_hurt"
+	if want != base_id and _load_tex(want) != null:
+		return want
+	return base_id
+
+
+func _portrait_tint(hp: int, max_hp: int) -> Color:
+	if max_hp <= 0:
+		return Color.WHITE
+	var frac := float(hp) / float(max_hp)
+	if frac <= 0.25:
+		return Color(1.0, 0.72, 0.68)
+	if frac <= 0.5:
+		return Color(1.0, 0.88, 0.84)
+	return Color.WHITE
 
 
 func _build() -> void:

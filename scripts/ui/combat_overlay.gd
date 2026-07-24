@@ -19,6 +19,7 @@ const UiTheme = preload("res://scripts/ui/ui_theme.gd")
 const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 const LabelLayout = preload("res://scripts/ui/label_layout.gd")
 const Statuses = preload("res://scripts/combat/statuses.gd")
+const ItemDB = preload("res://scripts/items/item_db.gd")
 const FanLayout = preload("res://scripts/ui/fan_layout.gd")
 const CameraFraming = preload("res://scripts/ui/camera_framing.gd")
 
@@ -804,8 +805,17 @@ func _draw_world_overlay() -> void:
 		# Intent just over the real head, not a guessed offset
 		var it: Dictionary = e["intent"]
 		var is_block: bool = it.get("type", "attack") == "block"
-		_outlined(font, Vector2(bar.position.x, intent_row),
-			("🛡 %d" if is_block else "🗡 %d") % it.get("value", 0),
+		var hits: int = maxi(1, int(it.get("hits", 1)))
+		# `3×2` rather than a summed `6`: armour soaks each blow separately, so
+		# a flurry and one big hit are different problems and must look it.
+		var txt: String
+		if is_block:
+			txt = "🛡 %d" % it.get("value", 0)
+		elif hits > 1:
+			txt = "🗡 %d×%d" % [it.get("value", 0), hits]
+		else:
+			txt = "🗡 %d" % it.get("value", 0)
+		_outlined(font, Vector2(bar.position.x, intent_row), txt,
 			bar_w, 21, Color(0.65, 0.88, 1.0) if is_block else Color(1.0, 0.66, 0.45))
 		if int(e["block"]) > 0:
 			# Shield pill sitting ON the left end of the bar, like the reference
@@ -909,6 +919,76 @@ func _update_motes(delta: float) -> void:
 			pos = Vector2(randf() * area.x, area.y * 0.78)
 		m["pos"] = pos
 	_fx_layer.queue_redraw()
+
+
+## Backpack items along the top, like the reference's relic row.
+##
+## They already modify every fight (Backpack.compute_mods, frozen into
+## combat.mods at the start), but lived behind the B key — so the player got a
+## permanent buff they could not see while using it.
+##
+## Coloured plates with an initial rather than icons: item art does not exist
+## yet, and inventing placeholder PNGs would have to be redone when it lands.
+func _draw_relics() -> void:
+	if _combat == null:
+		return
+	var items := _relic_list()
+	if items.is_empty():
+		return
+	var font := UiTheme.title_font()
+	if font == null:
+		return
+	var area := _fx_layer.size
+	if area.x < 10.0:
+		area = get_viewport().get_visible_rect().size
+	var w := 30.0
+	var gap := 6.0
+	var total: float = float(items.size()) * w + float(items.size() - 1) * gap
+	# Centred on the 3D view, not the window: the left HUD is ~212px wide and
+	# centring on the whole screen tucks the row under it.
+	var centre: float = 212.0 + (area.x - 212.0) * 0.5
+	var x := centre - total * 0.5
+	for it in items:
+		var r := Rect2(x, 8.0, w, 30.0)
+		_fx_layer.draw_rect(r.grow(2.0), Color(0.06, 0.04, 0.05, 0.92), true)
+		_fx_layer.draw_rect(r, it["colour"], true)
+		_fx_layer.draw_string(font, Vector2(r.position.x, r.position.y + 21.0),
+			str(it["initial"]), HORIZONTAL_ALIGNMENT_CENTER, w, 16,
+			Color(0.06, 0.05, 0.05))
+		x += w + gap
+
+
+const RELIC_COLOURS := {
+	"common": Color(0.72, 0.70, 0.66),
+	"uncommon": Color(0.55, 0.78, 0.60),
+	"rare": Color(0.85, 0.68, 0.35),
+}
+
+
+func _relic_list() -> Array:
+	var out: Array = []
+	if GameState == null or GameState.backpack == null:
+		return out
+	var bp = GameState.backpack
+	if bp.get("placed") == null:
+		return out
+	var seen := {}
+	for uid in (bp.placed as Dictionary).keys():
+		var entry: Dictionary = bp.placed[uid]
+		var id := str(entry.get("id", ""))
+		if id == "" or seen.has(id):
+			continue
+		seen[id] = true
+		var def: Dictionary = ItemDB.get_item(id)
+		if def.is_empty():
+			continue
+		var nm := str(def.get("name", "?"))
+		out.append({
+			"initial": nm.substr(0, 1).to_upper(),
+			"colour": RELIC_COLOURS.get(str(def.get("rarity", "common")),
+				RELIC_COLOURS["common"]),
+		})
+	return out
 
 
 ## Draw pile / discard counters in the bottom corners, like the reference.
@@ -1046,6 +1126,7 @@ func _draw_popups() -> void:
 func _draw_fx() -> void:
 	_draw_motes()
 	_draw_piles()
+	_draw_relics()
 	_draw_impacts()
 	_draw_popups()
 	for f in _slashes:

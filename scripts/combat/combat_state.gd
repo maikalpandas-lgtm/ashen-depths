@@ -130,8 +130,13 @@ func end_turn() -> Array:
 				_log("%s закрывается (+%d брони)" % [e["name"], intent["value"]])
 			_:
 				var swing := Statuses.outgoing(e["status"], int(intent["value"]))
-				_event("enemy_attack", enemies.find(e), swing)
-				_hit_party(swing, e)
+				# Each hit lands separately, so armour is chewed through one
+				# blow at a time — that is the whole point of a flurry.
+				for _h in range(maxi(1, int(intent.get("hits", 1)))):
+					if _party_alive_hp() <= 0:
+						break
+					_event("enemy_attack", enemies.find(e), swing)
+					_hit_party(swing, e)
 	_tick_enemy_status()
 	_check_victory()
 	if phase == Phase.WON:
@@ -190,13 +195,25 @@ func apply_status(index: int, id: String, amount: int) -> void:
 	_event("status_applied", index, amount, false, id)
 
 
+## Intents carry a HIT COUNT, not just a number.
+##
+## `3x2` is a different problem from `6x1`: each hit is soaked by armour
+## separately, so block is worth far less against a flurry. Showing one summed
+## number hid that entirely — the player could not tell why their 6 armour
+## evaporated against a "6" attack.
 func _roll_intent(e: Dictionary) -> Dictionary:
 	# Brutes hit hard and rarely guard; grubs chip; shades are in between
 	# Floor: ~max_hp/3 so a pack of 3 grubs can actually chip through block
 	var base: int = maxi(3, int(e["max_hp"]) / 3)
 	if _rng.randf() < 0.15:
-		return {"type": "block", "value": base}
-	return {"type": "attack", "value": base + _rng.randi_range(0, 3)}
+		return {"type": "block", "value": base, "hits": 1}
+	# Small, fast things flurry; heavy things land one big blow. Tied to size so
+	# it reads off the sprite rather than being a surprise.
+	var big: bool = int(e["max_hp"]) >= 20
+	if not big and _rng.randf() < 0.35:
+		var per: int = maxi(2, base / 2)
+		return {"type": "attack", "value": per, "hits": 2}
+	return {"type": "attack", "value": base + _rng.randi_range(0, 3), "hits": 1}
 
 
 # --------------------------------------------------------------------- cards

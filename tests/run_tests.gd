@@ -31,6 +31,7 @@ func _init() -> void:
 	_test_floor_seed()
 	_test_biome_realms()
 	_test_phase_b_sigils()
+	_test_multi_hit_intent()
 	_test_card_upgrades()
 	_test_xp_level()
 	_test_backpack()
@@ -164,6 +165,11 @@ func _test_combat_damage() -> void:
 	var c := _combat(["shade"])
 	# Force a known hand so the test does not depend on the shuffle
 	c.deck.hand = [{"card": "slice", "owner": Party.DEFAULT_HERO}, {"card": "block", "owner": Party.DEFAULT_HERO}]
+	# ...and no crits, so it does not depend on LUCK either. This test asserted
+	# an exact 7 and passed only because that seed happened not to crit: adding
+	# one RNG call anywhere else in combat rolled a crit, killed the shade
+	# outright and took two later asserts down with it.
+	c.mods["crit_chance"] = -1.0
 	var hp_before: int = c.enemies[0]["hp"]
 	check(c.play_card(0, 0), "slice resolves")
 	check(c.enemies[0]["hp"] == hp_before - 7, "slice deals its 7")
@@ -273,6 +279,50 @@ func _test_floor_seed() -> void:
 ## The forest is a MAP TYPE, not a depth. Nav is picked by floor, the forest is
 ## picked by the player, and mixing the two is how "I chose the forest and woke
 ## up in a cave" happens.
+## Фаза C — multi-hit intents. `3x2` is not `6x1`: armour soaks each blow
+## separately, so a flurry cuts through block a single big hit would bounce off.
+## Summing them for display hid that, and the player could not tell why 6 armour
+## vanished against a "6" attack.
+func _test_multi_hit_intent() -> void:
+	print("multi-hit intents")
+	var c := Combat.new(Party.of("vityaz"), ["grub"], 5)
+	for i in range(40):
+		var it: Dictionary = c._roll_intent(c.enemies[0])
+		if not it.has("hits"):
+			check(false, "every intent carries a hit count")
+			return
+		if int(it["hits"]) < 1:
+			check(false, "an intent never claims zero hits")
+			return
+	check(true, "every rolled intent carries a sane hit count")
+
+	# 3x2 against 6 armour must get through; 6x1 must not.
+	var c2 := Combat.new(Party.of("vityaz"), ["grub"], 5)
+	c2.party_block = 6
+	var hp_before: int = c2._party_alive_hp()
+	c2.enemies[0]["intent"] = {"type": "attack", "value": 3, "hits": 2}
+	c2.end_turn()
+	check(c2._party_alive_hp() == hp_before,
+		"3x2 into 6 armour is fully soaked, but in two bites")
+
+	var c3 := Combat.new(Party.of("vityaz"), ["grub"], 5)
+	c3.party_block = 4
+	var hp3: int = c3._party_alive_hp()
+	c3.enemies[0]["intent"] = {"type": "attack", "value": 3, "hits": 2}
+	c3.end_turn()
+	# First blow eats 3 of 4 armour, second meets 1 and 2 reaches the hero
+	check(c3._party_alive_hp() == hp3 - 2,
+		"a flurry chews through partial armour instead of bouncing")
+
+	# A pack that kills the hero mid-flurry must stop, not keep swinging
+	var c4 := Combat.new(Party.of("volhv"), ["brute"], 5)
+	c4.party.members[0]["hp"] = 2
+	c4.party_block = 0
+	c4.enemies[0]["intent"] = {"type": "attack", "value": 5, "hits": 3}
+	c4.end_turn()
+	check(c4.phase == Combat.Phase.LOST, "the fight ends the moment the hero drops")
+
+
 ## Фаза B — «карта делает две вещи». These four riders all change how damage is
 ## spent, and every one of them can fail SILENTLY: leftover that vanishes,
 ## overkill that double-counts, exhaust that burns the wrong card.

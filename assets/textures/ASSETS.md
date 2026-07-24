@@ -332,3 +332,18 @@ Id = `status_poison` / `status_frail` / `status_weak` / `status_rage`
 | **status_rage** | `status_rage.png` | `masters/status_rage.png` | `masters/status_rage_source.jpg` | Ярость — огненная стрела вверх |
 
 Промпты: `docs/ART_PROMPTS.md` §3.13.
+
+## Портреты по состоянию (батч 9, §3.11)
+
+Подхватываются автоматически: `left_panel._portrait_for` ищет `<id>_hurt` ниже
+половины HP и `<id>_low` ниже четверти. Файла нет → берётся базовый портрет с
+красным подкрасом, так что набор можно доносить по одному.
+
+| Файл | Кто | Состояние |
+|---|---|---|
+| `face_vityaz_hurt` | Витязь | ранен |
+| `face_vityaz_low` | Витязь | **НЕТ** — лимиты Grok, 24.07 |
+| `face_polyanitsa_hurt` | Поляница | ранена |
+| `face_polyanitsa_low` | Поляница | при смерти |
+| `face_volhv_hurt` | Волхв | ранен |
+| `face_volhv_low` | Волхв | при смерти |

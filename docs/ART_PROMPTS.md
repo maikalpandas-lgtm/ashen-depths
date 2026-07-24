@@ -610,7 +610,7 @@ slavic folklore motifs, carved wood and hammered iron, embroidered red ornament
 | Файл | Состояние | Хвост промпта |
 |---|---|---|
 | `face_vityaz_hurt` | Витязь, ранен | `same face, teeth gritted in pain, one eye squeezed shut, a fresh cut across the cheekbone, blood at the temple` |
-| `face_vityaz_low` | Витязь, при смерти | `same face, pale and haggard, eyes half closed, heavy bleeding down one side, jaw slack with exhaustion` |
+| `face_vityaz_low` | Витязь, при смерти | ⏳ **ЕДИНСТВЕННЫЙ НЕСДЕЛАННЫЙ** (лимит Grok 24.07). `same face, pale and haggard, eyes half closed, heavy bleeding down one side, jaw slack with exhaustion` |
 | `face_polyanitsa_hurt` | Поляница, ранена | `same face, snarling through the pain, brow furrowed hard, a split lip and a scraped cheek` |
 | `face_polyanitsa_low` | Поляница, при смерти | `same face, drained and grey, unfocused stare, blood matting the hair at the temple` |
 | `face_volhv_hurt` | Волхв, ранен | `same face, grimacing, deep lines around the eyes, blood in the white beard` |

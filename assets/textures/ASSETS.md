@@ -290,3 +290,28 @@ python3 tools/sprite_cutter.py assets/textures/masters/prop_wall_torch_source.jp
 ### Enemies (forest realm)
 
 См. таблицу Enemies выше: `enemy_wolf`, `enemy_kikimora`, `enemy_leshy`.
+
+---
+
+## Backpack items (батч 10 — §3.12)
+
+Иконки реликвий. В бою ~**30 px** — силуэт + 2–3 цвета, без мелочи.  
+Id = `art` / filename stem в `scripts/items/item_db.gd`.
+
+| ID | Файл в игре | Master PNG | Source | Предмет |
+|----|-------------|------------|--------|---------|
+| **item_rusty_blade** | `item_rusty_blade.png` | `masters/item_rusty_blade.png` | `masters/item_rusty_blade_source.jpg` | Ржавый клинок |
+| **item_whetstone** | `item_whetstone.png` | `masters/item_whetstone.png` | `masters/item_whetstone_source.jpg` | Точило |
+| **item_shield_shard** | `item_shield_shard.png` | `masters/item_shield_shard.png` | `masters/item_shield_shard_source.jpg` | Осколок щита |
+| **item_poison_vial** | `item_poison_vial.png` | `masters/item_poison_vial.png` | `masters/item_poison_vial_source.jpg` | Фиал яда |
+| **item_mana_rune** | `item_mana_rune.png` | `masters/item_mana_rune.png` | `masters/item_mana_rune_source.jpg` | Руна ⚡ |
+| **item_coin_pouch** | `item_coin_pouch.png` | `masters/item_coin_pouch.png` | `masters/item_coin_pouch_source.jpg` | Мешок монет |
+| **item_bone_charm** | `item_bone_charm.png` | `masters/item_bone_charm.png` | `masters/item_bone_charm_source.jpg` | Костяной оберег |
+| **item_blood_charm** | `item_blood_charm.png` | `masters/item_blood_charm.png` | `masters/item_blood_charm_source.jpg` | Кровавый оберег |
+| **item_iron_plating** | `item_iron_plating.png` | `masters/item_iron_plating.png` | `masters/item_iron_plating_source.jpg` | Железная обшивка |
+| **item_hunter_fang** | `item_hunter_fang.png` | `masters/item_hunter_fang.png` | `masters/item_hunter_fang_source.jpg` | Клык охотника |
+| **item_ember_core** | `item_ember_core.png` | `masters/item_ember_core.png` | `masters/item_ember_core_source.jpg` | Уголёк |
+| **item_seal_shard** | `item_seal_shard.png` | `masters/item_seal_shard.png` | `masters/item_seal_shard_source.jpg` | Осколок Зарока |
+
+Промпты: `docs/ART_PROMPTS.md` §3.12. Cut: `--ffmpeg --erode-light 2`.  
+После drop: `godot --headless --import` + `tests/art_import_test.gd`.

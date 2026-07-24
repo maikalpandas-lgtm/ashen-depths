@@ -56,8 +56,28 @@ static func form_scale(pack: Array) -> float:
 	return float(form_layout(pack)["scale"])
 
 
-## Floor at which the Root Labyrinth breaks through into Навь
-const NAV_FROM_FLOOR := 3
+## Floor at which the Root Labyrinth breaks through into Навь.
+##
+## Was 3, moved to 2 on 24.07.2026: the whole Slavic roster (анчутка, лихо,
+## мавка, полудница) sat behind two floor clears, so a normal session never saw
+## any of it — the mines were the entire game.
+##
+## THE one source of this number. The HUD used to hard-code `floor < 3` in two
+## more places, which meant a change here would have left the panel saying
+## "Рудники" while Навь mobs walked around in it.
+const NAV_FROM_FLOOR := 2
+
+
+## Human-readable realm for the HUD, so labels can never drift from the
+## bestiary they describe.
+static func realm_name(floor_index: int, biome: String = "mine") -> String:
+	match realm_for(floor_index, biome):
+		"forest":
+			return "Лес"
+		"nav":
+			return "Навь"
+		_:
+			return "Рудники"
 
 ## Targeting rim (see shaders/sprite_outline.gdshader). Thickness is in SOURCE
 ## PIXELS and converted to UV per texture, so every monster gets the same rim

@@ -29,10 +29,16 @@ enum Cell {
 
 signal generation_finished(start_world: Vector3)
 
-@export var grid_width: int = 41
-@export var grid_height: int = 41
+## 25, not 41: at 4.5m a cell that was a 184x184m floor — ~400 walkable cells,
+## which is twenty minutes of corridor before the exit. 25 gives ~112x112m,
+## still a maze but a floor you finish in one sitting.
+##
+## Odd numbers only. The carver works on odd coordinates, so an even grid loses
+## its last row and column to solid rock.
+@export var grid_width: int = 25
+@export var grid_height: int = 25
 ## Maze corridors only (width 1) + few small chambers — competitor "corridor map" feel.
-@export var room_count: int = 4
+@export var room_count: int = 3
 @export var room_min_size: int = 2
 @export var room_max_size: int = 3
 ## 4.5, not 3.0: a 3m cell left only 2m of clear floor once the rock bulge is
@@ -43,11 +49,13 @@ signal generation_finished(start_world: Vector3)
 @export var cell_size: float = 4.5
 ## Raised with the width: 3.2m walls around a 4.5m corridor read squat.
 @export var wall_height: float = 3.9
-## Packs per floor. Doubled for denser runs (~44 on a full maze).
-@export var encounter_rooms: int = 44
+## Packs per floor. Scaled with the grid: 44 on the old 41x41 was ~1 pack per
+## 9 walkable cells, and keeping 44 on a 25x25 would have put a fight in every
+## third cell.
+@export var encounter_rooms: int = 16
 ## Lower = denser wall torches (1 = every walkable cell with a wall).
 @export var torch_spacing: int = 2
-@export var extra_loops: int = 10
+@export var extra_loops: int = 6
 
 var grid: Array = []
 var rooms: Array[Rect2i] = []

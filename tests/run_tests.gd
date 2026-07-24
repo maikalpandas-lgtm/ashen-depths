@@ -273,7 +273,15 @@ func _test_floor_seed() -> void:
 func _test_biome_realms() -> void:
 	print("biomes")
 	check(EnemySprites.realm_for(1, "mine") == "mine", "floor 1 of the mines is the mines")
+	check(EnemySprites.realm_for(2, "mine") == "nav", "Nav starts on floor 2")
 	check(EnemySprites.realm_for(5, "mine") == "nav", "deep mine floors are Nav")
+	# The HUD label must come from the SAME call the bestiary uses. It used to
+	# hard-code `floor < 3` in two other files, so moving this boundary would
+	# have left the panel saying "Рудники" while Навь mobs walked around in it.
+	check(EnemySprites.realm_name(1, "mine") == "Рудники", "floor 1 reads as the mines")
+	check(EnemySprites.realm_name(EnemySprites.NAV_FROM_FLOOR, "mine") == "Навь",
+		"the label flips on the same floor the mobs do")
+	check(EnemySprites.realm_name(1, "forest") == "Лес", "forest reads as forest")
 	check(EnemySprites.realm_for(1, "forest") == "forest", "forest floor 1 is forest")
 	check(EnemySprites.realm_for(9, "forest") == "forest",
 		"depth never turns the forest into Nav")

@@ -529,6 +529,70 @@ warm amber glow accents, birch and fir, folklore mood
 
 ---
 
+## 3.10. Батч 8 — новые карты (24.07.2026)
+
+**Только иллюстрация.** Ни рамки, ни названия, ни цифр, ни текста — их рисует
+движок из `card_db.gd`. Цифра, впечатанная в арт, разойдётся с реальной при
+первой же правке баланса.
+
+Общий хвост для всех карт этого батча (после §0):
+
+```
+square composition, single iconic object or effect centred in frame,
+dynamic but readable at 140px tall, no character faces, no text, no card frame
+```
+
+Славянским картам добавлять к §0 вместо «dark teal-and-ember dungeon world»:
+
+```
+slavic folklore motifs, carved wood and hammered iron, embroidered red ornament
+```
+
+### 3.10.1 Удары (движок это уже умеет)
+
+| Файл | Карта | Хвост промпта |
+|---|---|---|
+| `card_axe_swing` | Секира — тяжёлый удар | `a heavy two-handed war axe caught at the top of its swing, notched iron head, a wide arc of motion blur behind it` |
+| `card_spear_thrust` | Копьё — пробой брони | `a long spear thrusting straight at the viewer in sharp foreshortening, iron tip splitting a cracked shield plate` |
+| `card_flail` | Кистень — по всем | `a spiked iron flail whirling in a full circle, the chain a blurred ring, sparks where the spikes pass` |
+| `card_dagger_pair` | Двойной нож — два удара | `two identical narrow throwing knives crossed in mid-air, cold steel, thin trailing streaks` |
+| `card_bear_claw` | Медвежья лапа — рвущий | `a huge shaggy bear paw with splayed claws mid-slash, three ragged parallel gashes torn through the air` |
+
+### 3.10.2 Защита и поддержка
+
+| Файл | Карта | Хвост промпта |
+|---|---|---|
+| `card_tower_shield` | Червлёный щит — много брони | `a tall kite shield planted in the ground facing the viewer, deep red field with gold slavic ornament, iron rim` |
+| `card_chainmail` | Кольчуга — броня держится | `a folded coil of riveted iron chainmail lying in a heap, one edge catching cold light` |
+| `card_herbs` | Травы — лечение | `a bound bundle of dried herbs and flowers tied with red thread, a few loose leaves falling, faint green glow` |
+| `card_kvass` | Ковш — восполнить силы | `a carved wooden dipper ladle brimming with dark drink, droplets flying off the rim, warm amber highlight` |
+
+### 3.10.3 Чары (Навь)
+
+| Файл | Карта | Хвост промпта |
+|---|---|---|
+| `card_frost` | Стужа — заморозить | `a jagged burst of pale blue ice crystals exploding outward, frost spikes and cold vapour` |
+| `card_lightning` | Перун — молния | `a single forked white-blue lightning bolt striking downward, scorched air, small arcs branching off` |
+| `card_curse_doll` | Куколка — порча | `a crude straw and cloth poppet doll with a rusted iron nail driven through its chest, dark threads unravelling` |
+| `card_raven` | Ворон — вестник | `a black raven in flight seen head-on, wings spread wide, one eye glowing dull red, loose feathers` |
+| `card_wolf_howl` | Волчий вой — призыв | `a stylised wolf head thrown back mid-howl in silhouette against a pale moon, sound rings rippling outward` |
+
+### 3.10.4 Кровь (платятся HP)
+
+| Файл | Карта | Хвост промпта |
+|---|---|---|
+| `card_blood_pact` | Уговор — сила за кровь | `an open palm cut across, dark red blood running down the wrist and gathering into a floating sphere` |
+| `card_bone_crown` | Костяной венец | `a circlet of small animal bones and teeth bound with sinew, dull grey-green glow in the joints` |
+
+⚠️ **Кости** (`card_bone_crown`) — механика уже в движке (`Sigil.BONE`, `ECHO`),
+так что арт не заблокирован кодом.
+
+⚠️ Три карты выше требуют механик, которых в бою **пока нет** (заморозка,
+лечение, восполнение энергии) — арт можно рисовать, но в игре они появятся
+только после правок в `combat_state.gd`.
+
+---
+
 ## 4. Куда класть готовое
 
 1. Исходник (что отдал Grok) → `assets/textures/masters/<id>_source.jpg`

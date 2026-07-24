@@ -3,6 +3,7 @@ extends PanelContainer
 ## title + gear · big zoomed minimap · large cartoon portrait · HP · gold · inventory.
 
 const UiTheme = preload("res://scripts/ui/ui_theme.gd")
+const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 const ART_DIR := "res://assets/textures/"
 
 signal inventory_pressed
@@ -65,7 +66,8 @@ func refresh() -> void:
 	if _title:
 		_title.text = "Заповедный Лес" if forest else "Навьи Копи"
 	if _floor:
-		var realm := "Лес" if forest else ("Рудники" if floor_i < 3 else "Навь")
+		var realm := EnemySprites.realm_name(floor_i,
+			str(GameState.biome) if GameState else "mine")
 		var lvl := 1
 		var xp_s := ""
 		if GameState:

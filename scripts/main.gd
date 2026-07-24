@@ -30,13 +30,13 @@ func _ready() -> void:
 		GameState.dungeon_ready.connect(_on_dungeon_ready)
 		if GameState.has_signal("floor_changed"):
 			GameState.floor_changed.connect(_on_floor_changed)
-	var picker := get_node_or_null("HeroSelectOverlay")
-	if picker and picker.has_signal("hero_chosen"):
-		picker.hero_chosen.connect(_on_hero_chosen)
 		if GameState.has_signal("draft_finished"):
 			GameState.draft_finished.connect(_on_draft_finished)
 		if GameState.has_signal("defeat_finished"):
 			GameState.defeat_finished.connect(_on_defeat_finished)
+	var picker := get_node_or_null("HeroSelectOverlay")
+	if picker and picker.has_signal("hero_chosen"):
+		picker.hero_chosen.connect(_on_hero_chosen)
 
 	if minimap and minimap.has_method("setup"):
 		minimap.setup(dungeon, player)
@@ -243,11 +243,9 @@ func _on_floor_changed(new_floor: int) -> void:
 	_apply_biome_sound()
 
 
-## Realm label. The forest is a map type, so it wins over the depth rule.
+## Realm label — delegated, so the words always match the mobs that spawn.
 func _realm_name(floor_i: int) -> String:
-	if GameState and str(GameState.biome) == "forest":
-		return "Лес"
-	return "Рудники" if floor_i < 3 else "Навь"
+	return EnemySprites.realm_name(floor_i, str(GameState.biome) if GameState else "mine")
 
 
 ## Soundscape follows the same realm split as the bestiary, so the wood and the

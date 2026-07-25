@@ -29,9 +29,13 @@ const SIDE_PAD := 28.0  ## box offset_left + offset_right
 ## the card 24px over budget — i.e. still clipped, just less obviously.
 const CHROME_H := 240.0
 
-const MIN_PORTRAIT := 108.0
+## Floors lowered on 25.07.2026: giving each hero their own cards took Витязь
+## from 5 distinct entries to 7, which is a third grid row, and at the old floors
+## the card no longer fitted a 600px window. The test caught it, which is what it
+## is for.
+const MIN_PORTRAIT := 86.0
 const MAX_PORTRAIT := 190.0
-const MIN_MINI := Vector2(52.0, 73.0)
+const MIN_MINI := Vector2(46.0, 64.0)
 const MAX_MINI := Vector2(74.0, 104.0)
 const BLURB_H := 34.0
 

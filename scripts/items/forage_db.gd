@@ -12,36 +12,39 @@ extends RefCounted
 ## without it — sprites fall back to a coloured billboard — because the economy
 ## is worth playtesting before the pictures exist.
 
+## Heights raised with the corridor props: a 0.35m clump in a 4.5m corridor is
+## something you walk over without seeing, and an unnoticed pickup is no pickup.
+##
 ## Where a forageable can grow. "any" appears in both biomes.
 const FORAGE := {
 	"glow_moss": {
 		"name": "Светящийся мох", "art": "forage_glow_moss", "biome": "mine",
-		"height": 0.35, "colour": Color(0.45, 0.85, 0.75),
+		"height": 0.5, "colour": Color(0.45, 0.85, 0.75),
 		"gives": "broth",
 	},
 	"cave_mushroom": {
 		"name": "Пещерный гриб", "art": "forage_cave_mushroom", "biome": "mine",
-		"height": 0.4, "colour": Color(0.82, 0.78, 0.62),
+		"height": 0.55, "colour": Color(0.82, 0.78, 0.62),
 		"gives": "antidote",
 	},
 	"bone_pile": {
 		"name": "Костяные обломки", "art": "forage_bone_pile", "biome": "mine",
-		"height": 0.3, "colour": Color(0.86, 0.84, 0.72),
+		"height": 0.6, "colour": Color(0.86, 0.84, 0.72),
 		"gives": "bones",
 	},
 	"herbs": {
 		"name": "Травы", "art": "forage_herbs", "biome": "forest",
-		"height": 0.45, "colour": Color(0.4, 0.75, 0.35),
+		"height": 0.6, "colour": Color(0.4, 0.75, 0.35),
 		"gives": "broth",
 	},
 	"berries": {
 		"name": "Ягоды", "art": "forage_berries", "biome": "forest",
-		"height": 0.4, "colour": Color(0.78, 0.22, 0.3),
+		"height": 0.55, "colour": Color(0.78, 0.22, 0.3),
 		"gives": "rage_draught",
 	},
 	"amanita": {
 		"name": "Мухомор", "art": "forage_amanita", "biome": "forest",
-		"height": 0.4, "colour": Color(0.88, 0.28, 0.24),
+		"height": 0.55, "colour": Color(0.88, 0.28, 0.24),
 		"gives": "antidote",
 	},
 }

@@ -10,17 +10,21 @@ extends RefCounted
 
 const ART_DIR := "res://assets/textures/"
 
+## Heights raised across the board on 25.07.2026 — at the old sizes rubble and
+## mushrooms were specks a player walked past without registering. A corridor is
+## 4.5m wide and 3.9m tall, so a 0.55m pile is nothing in it.
+##
 ## `wall` props hang on a wall face like a torch; the rest stand on the floor.
 ## `weight` biases how often each appears — rubble is filler, a grave is an event.
 const PROPS := {
-	"prop_banner": {"height": 2.1, "wall": true, "weight": 3, "light": false},
-	"prop_column": {"height": 2.9, "wall": false, "weight": 2, "light": false},
-	"prop_barrel": {"height": 1.0, "wall": false, "weight": 3, "light": false},
-	"prop_rubble": {"height": 0.55, "wall": false, "weight": 5, "light": false},
-	"prop_wall_shrooms": {"height": 0.7, "wall": false, "weight": 4, "light": true},
-	"prop_crystals": {"height": 1.0, "wall": false, "weight": 3, "light": true},
-	"prop_bones_big": {"height": 0.8, "wall": false, "weight": 2, "light": false},
-	"prop_grave": {"height": 1.6, "wall": false, "weight": 1, "light": false},
+	"prop_banner": {"height": 2.5, "wall": true, "weight": 3, "light": false},
+	"prop_column": {"height": 3.4, "wall": false, "weight": 2, "light": false},
+	"prop_barrel": {"height": 1.35, "wall": false, "weight": 3, "light": false},
+	"prop_rubble": {"height": 0.95, "wall": false, "weight": 5, "light": false},
+	"prop_wall_shrooms": {"height": 1.15, "wall": false, "weight": 4, "light": true},
+	"prop_crystals": {"height": 1.55, "wall": false, "weight": 3, "light": true},
+	"prop_bones_big": {"height": 1.25, "wall": false, "weight": 2, "light": false},
+	"prop_grave": {"height": 2.0, "wall": false, "weight": 1, "light": false},
 }
 
 ## Cold glow for the two that emit — crystals and mushrooms are the only reason
@@ -63,6 +67,12 @@ static func pick(hash_value: int, wall_available: bool) -> String:
 			continue
 		return id
 	return ""
+
+
+## Height in metres, so the generator can work out where a hanging prop's middle
+## sits before it decides how far off the rock to mount it.
+static func height_of(id: String) -> float:
+	return float(PROPS.get(id, {}).get("height", 1.0))
 
 
 static func is_wall_prop(id: String) -> bool:

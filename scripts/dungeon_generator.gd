@@ -1415,9 +1415,15 @@ func _spawn_cave_props() -> void:
 		var pos: Vector3
 		var face := Vector2i.ZERO
 		if CaveProps.is_wall_prop(id) and wd != Vector2i.ZERO:
-			# Hard against the rock, at the height a banner hangs
-			var push := _mount_push(world, wd, 1.6)
-			var dist: float = clampf(cell_size * 0.5 - push - 0.05, 0.3, cell_size * 0.5)
+			# Sample the rock bulge at the banner's OWN centre height, not at a
+			# torch's. The cloth hangs with its base 1.05m up and is 2.5m tall, so
+			# its middle is at ~2.3m — sampling at 1.6m let the rock swell past it
+			# higher up and the banner's edge vanished into the wall.
+			var mid_h: float = 1.05 + CaveProps.height_of(id) * 0.5
+			var push := _mount_push(world, wd, mid_h)
+			# 0.14 of daylight rather than 0.05: the panel is displaced per pixel
+			# in the shader too, and that extra relief is not in wall_push.
+			var dist: float = clampf(cell_size * 0.5 - push - 0.14, 0.3, cell_size * 0.5)
 			pos = world + Vector3(float(wd.x) * dist, 0.0, float(wd.y) * dist)
 			face = wd
 		else:

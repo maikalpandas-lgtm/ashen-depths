@@ -19,6 +19,7 @@ const Party = preload("res://scripts/party.gd")
 const CardView = preload("res://scripts/ui/card_view.gd")
 const UiTheme = preload("res://scripts/ui/ui_theme.gd")
 const DeckLayout = preload("res://scripts/ui/deck_layout.gd")
+const Glossary = preload("res://scripts/cards/glossary.gd")
 
 ## Same price as the shop, so the choice between them is convenience versus
 ## having to walk to a camp, not cost.
@@ -249,6 +250,16 @@ func _make_entry(group: Dictionary, owner_id: String, gold: int) -> Control:
 
 
 func _tooltip(def: Dictionary, can_upgrade: bool, gold: int) -> String:
+	# Keyword meanings first — the deck book is where a player reads a card
+	# properly, so it is the natural place to learn what its words do.
+	var lines: Array = []
+	for word in Glossary.for_text(str(def.get("text", ""))):
+		lines.append("%s — %s" % [word, Glossary.text(str(word))])
+	var head := ("\n".join(lines) + "\n\n") if not lines.is_empty() else ""
+	return head + _upgrade_hint(def, can_upgrade, gold)
+
+
+func _upgrade_hint(def: Dictionary, can_upgrade: bool, gold: int) -> String:
 	if DeckLayout.upgradeable(def):
 		if gold < UPGRADE_COST:
 			return "Нужно %d🪙 (есть %d)" % [UPGRADE_COST, gold]

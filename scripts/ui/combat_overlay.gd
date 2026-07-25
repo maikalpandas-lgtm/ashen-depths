@@ -21,6 +21,7 @@ const LabelLayout = preload("res://scripts/ui/label_layout.gd")
 const Statuses = preload("res://scripts/combat/statuses.gd")
 const ItemDB = preload("res://scripts/items/item_db.gd")
 const ForageDB = preload("res://scripts/items/forage_db.gd")
+const Glossary = preload("res://scripts/cards/glossary.gd")
 const FanLayout = preload("res://scripts/ui/fan_layout.gd")
 const CameraFraming = preload("res://scripts/ui/camera_framing.gd")
 
@@ -805,7 +806,10 @@ func _draw_world_overlay() -> void:
 		# drawn above the bar at bar.y - 8, and since draw_string places a
 		# BASELINE the glyphs climbed up onto the monster's paws. Now nothing in
 		# this block reaches above the feet line.
-		var bar := Rect2(p.x - bar_w * 0.5, p.y + 34.0, bar_w, 15.0)
+		# +48, not +34: at 34 the name's glyphs started only 14px below the feet
+		# line and still brushed a splayed stone foot or a slug's belly. Cheap
+		# clearance beats arguing about which sprite hangs lowest.
+		var bar := Rect2(p.x - bar_w * 0.5, p.y + 48.0, bar_w, 15.0)
 		var frac: float = clampf(float(e["hp"]) / maxf(1.0, float(e["max_hp"])), 0.0, 1.0)
 		var back_tex := _ui(BAR_BACK_TEX)
 		var fill_tex := _ui(BAR_FILL_TEX)
@@ -856,7 +860,7 @@ func _draw_world_overlay() -> void:
 			nm_size -= 1
 		# Baseline placed so the glyphs sit BETWEEN the feet and the bar
 		_outlined(font, Vector2(bar.position.x + bar_w * 0.5 - nm_w * 0.5,
-			p.y + 26.0), nm, nm_w, nm_size, Color(0.97, 0.94, 0.88))
+			p.y + 40.0), nm, nm_w, nm_size, Color(0.97, 0.94, 0.88))
 		# Intent just over the real head, not a guessed offset
 		var it: Dictionary = e["intent"]
 		var is_block: bool = it.get("type", "attack") == "block"
@@ -1044,6 +1048,93 @@ func _update_motes(delta: float) -> void:
 			pos = Vector2(randf() * area.x, area.y * 0.78)
 		m["pos"] = pos
 	_fx_layer.queue_redraw()
+
+
+## Explain the coloured words on the hovered card.
+##
+## A card said "Перенос" in a colour and nothing anywhere said what that was —
+## the colour announced that it mattered without saying what it did. Shown on
+## hover so it costs the player nothing to ignore.
+func _draw_keyword_tip() -> void:
+	if _combat == null or _hover_card < 0 or _dragging >= 0:
+		return
+	if _hover_card >= _combat.deck.hand.size():
+		return
+	var card: Dictionary = CardDB.resolve_entry(_combat.deck.hand[_hover_card])
+	if card.is_empty():
+		return
+	var words: Array = Glossary.for_text(str(card.get("text", "")))
+	if words.is_empty():
+		return
+	var font := UiTheme.title_font()
+	var num := UiTheme.number_font()
+	if font == null:
+		return
+
+	# Measure first, then place: a tip that overflows the screen is worse than
+	# no tip, and the hand sits at the bottom so this has to go above it.
+	var pad := 12.0
+	var line_h := 19.0
+	var head_h := 26.0
+	var w := 360.0
+	var rows: Array = []
+	for word in words:
+		var body := Glossary.text(str(word))
+		# Wrap by hand: draw_multiline_string cannot colour the keyword apart
+		# from its explanation.
+		var line := ""
+		var out_lines: Array = []
+		for chunk in body.split(" "):
+			var probe := line + (" " if line != "" else "") + str(chunk)
+			if font.get_string_size(probe, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x > w - pad * 2.0:
+				out_lines.append(line)
+				line = str(chunk)
+			else:
+				line = probe
+		if line != "":
+			out_lines.append(line)
+		rows.append({"word": str(word), "lines": out_lines})
+
+	var h := pad * 2.0
+	for r in rows:
+		h += head_h + line_h * float((r["lines"] as Array).size())
+
+	var area := _fx_layer.size
+	if area.x < 10.0:
+		area = get_viewport().get_visible_rect().size
+	var x: float = clampf(_hand_centre_x() - w * 0.5, 220.0, area.x - w - 16.0)
+	var y: float = maxf(12.0, area.y - 210.0 - h)
+
+	var r := Rect2(x, y, w, h)
+	_fx_layer.draw_rect(r.grow(3.0), Color(0.03, 0.02, 0.03, 0.92), true)
+	_fx_layer.draw_rect(r, Color(0.13, 0.11, 0.14, 0.97), true)
+	_fx_layer.draw_rect(r, Color(0.55, 0.45, 0.28, 0.9), false, 2.0)
+
+	var ty := y + pad + 16.0
+	for row in rows:
+		var word := str(row["word"])
+		_fx_layer.draw_string(num, Vector2(x + pad, ty), word,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 15, _keyword_colour(word))
+		ty += head_h - 6.0
+		for line in row["lines"]:
+			_fx_layer.draw_string(font, Vector2(x + pad + 6.0, ty), str(line),
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.86, 0.83, 0.78))
+			ty += line_h
+		ty += 6.0
+
+
+## The colour CardView paints this keyword, so the tip and the card agree.
+func _keyword_colour(word: String) -> Color:
+	for pair in CardView.KEYWORDS:
+		if str(pair[0]) == word:
+			return Color(str(pair[1]))
+	return Color(1.0, 0.9, 0.6)
+
+
+func _hand_centre_x() -> float:
+	if _hand_row == null:
+		return 640.0
+	return _hand_row.global_position.x + _hand_row.size.x * 0.5
 
 
 ## Energy as a designed element, not a line of text.
@@ -1477,6 +1568,7 @@ func _draw_fx() -> void:
 	_draw_consumables()
 	_draw_energy()
 	_draw_trigger_banner()
+	_draw_keyword_tip()
 	_draw_impacts()
 	_draw_popups()
 	for f in _slashes:
@@ -1916,6 +2008,9 @@ func _set_hover_card(index: int) -> void:
 		return
 	_hover_card = index
 	_hand_dirty = true
+	# The tip lives on the fx layer, which only repaints when asked
+	if _fx_layer:
+		_fx_layer.queue_redraw()
 
 
 func _start_drag(index: int, holder: Control) -> void:

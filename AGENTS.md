@@ -60,6 +60,7 @@ godot --headless --script tests/floor_scale_test.gd    # глубже = труд
 godot --headless --script tests/forage_test.gd         # сбор/расходники/трофеи не пропадают
 godot --headless --script tests/enemy_trait_test.gd    # повадки врагов реально различаются
 godot --headless --script tests/font_test.gd           # у всех шрифтов есть кириллица и цифры
+godot --headless --script tests/glossary_test.gd       # каждое подсвеченное слово объяснено
 ```
 
 ⚠️ **Не импортировать `combat_overlay.gd` в headless-тест** — прогон зависает.

@@ -89,6 +89,10 @@ const FLASH_SHADER := "res://shaders/sprite_flash.gdshader"
 const RIM_COLOUR := Color(1.0, 0.66, 0.2, 1.0)
 const RIM_PIXELS := 9.0
 
+## Four-legged and flying packs were raised on 25.07.2026: a 1.3m wolf is
+## honest next to a man but reads as a puppy beside a 2.3m Леший in the same row,
+## and the row is the only place a player ever compares them.
+##
 ## Height in metres, so a rodent and a stone brute are not the same size on
 ## screen just because their PNGs happen to be similar.
 ## Two roster halves. The upper floors keep the cave bestiary; the deeper ones
@@ -108,7 +112,7 @@ const ENEMIES := {
 		"realm": "mine", "trait": "hexer"},
 	"slug": {"art": "enemy_slug", "height": 1.15, "hp": 26, "name": "Рудный слизень",
 		"realm": "mine", "trait": "poisoner"},
-	"bat_swarm": {"art": "enemy_bat_swarm", "height": 1.5, "hp": 18, "name": "Нетопыри",
+	"bat_swarm": {"art": "enemy_bat_swarm", "height": 1.7, "hp": 18, "name": "Нетопыри",
 		"realm": "mine", "trait": "swarm"},
 	# --- навь (нижние этажи) ---
 	"anchutka": {"art": "enemy_anchutka", "height": 1.1, "hp": 13, "name": "Анчутка",
@@ -124,15 +128,15 @@ const ENEMIES := {
 	"koldun": {"art": "enemy_koldun", "height": 1.8, "hp": 26, "name": "Мёртвый колдун",
 		"realm": "nav", "trait": "howler"},
 	# --- сказочный лес (второй тип карты, не этаж) ---
-	"wolf": {"art": "enemy_wolf", "height": 1.3, "hp": 17, "name": "Волк",
+	"wolf": {"art": "enemy_wolf", "height": 1.65, "hp": 17, "name": "Волк",
 		"realm": "forest", "trait": "swarm"},
-	"kikimora": {"art": "enemy_kikimora", "height": 1.5, "hp": 23, "name": "Кикимора",
+	"kikimora": {"art": "enemy_kikimora", "height": 1.8, "hp": 23, "name": "Кикимора",
 		"realm": "forest", "trait": "hexer"},
 	"leshy": {"art": "enemy_leshy", "height": 2.3, "hp": 42, "name": "Леший",
 		"realm": "forest", "trait": "howler"},
-	"boar": {"art": "enemy_boar", "height": 1.5, "hp": 33, "name": "Вепрь",
+	"boar": {"art": "enemy_boar", "height": 1.8, "hp": 33, "name": "Вепрь",
 		"realm": "forest", "trait": "brute"},
-	"raven_flock": {"art": "enemy_raven_flock", "height": 1.4, "hp": 20, "name": "Вороньё",
+	"raven_flock": {"art": "enemy_raven_flock", "height": 1.6, "hp": 20, "name": "Вороньё",
 		"realm": "forest", "trait": "weaver"},
 	"bereginya": {"art": "enemy_bereginya", "height": 1.8, "hp": 38, "name": "Берегиня",
 		"realm": "forest", "trait": "guard"},

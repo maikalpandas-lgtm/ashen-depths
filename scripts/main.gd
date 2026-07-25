@@ -12,6 +12,7 @@ const SHOT_DIR := "res://shots"
 const LeftPanelScript = preload("res://scripts/ui/left_panel.gd")
 const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 const Party = preload("res://scripts/party.gd")
+const KeyHints = preload("res://scripts/ui/key_hints.gd")
 
 var minimap: Control = null
 
@@ -43,7 +44,9 @@ func _ready() -> void:
 		minimap.setup(dungeon, player)
 
 	_update_hud()
-	hud_hint.text = "W/S · A/D · B рюкзак · C колода · костёр → лавка → этаж"
+	_build_key_hints()
+	# Short and situational now; the permanent controls live in the key caps.
+	hud_hint.text = ""
 
 	# Debug entry points, so a visual check does not have to walk the menus:
 	#   godot --path . -- --fight          straight into a normal fight
@@ -329,3 +332,37 @@ func _debug_start_fight() -> void:
 		return
 	_place_player(dungeon.cell_to_world(target))
 	print("[Debug] fight: hero=%s biome=%s floor=%d cell=%s" % [hero, biome, floor_i, target])
+
+
+## Key caps along the bottom bar. The old single string listed every control as
+## prose and got skipped; a cap is a shape and the eye finds shapes.
+func _build_key_hints() -> void:
+	var existing := get_node_or_null("UI/KeyHints")
+	if existing:
+		existing.queue_free()
+	var hints := KeyHints.new()
+	hints.name = "KeyHints"
+	get_node("UI").add_child(hints)
+	hints.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	# Clear of the left panel (212px) and sitting on the bottom bar
+	# Derived from the panel, like the combat HUD does (see _hud_left there)
+	hints.position = Vector2(left_panel.position.x + left_panel.size.x + 16.0, -34.0)
+	# Explicit size and a raised z: the bottom bar Panel is a sibling drawn after
+	# it, so at zero size behind that panel the caps were invisible.
+	hints.size = Vector2(760.0, 26.0)
+	hints.z_index = 10
+	hints.set_hints([
+		{"key": "W/S", "label": "шаг"},
+		{"key": "A/D", "label": "поворот"},
+		{"key": "B", "label": "рюкзак"},
+		{"key": "C", "label": "колода"},
+		{"key": "Esc", "label": "пауза"},
+	])
+
+
+## Hidden during a fight: the crawler keys do nothing there, and the fight has
+## its own caps on the potion slots.
+func set_key_hints_visible(on: bool) -> void:
+	var hints := get_node_or_null("UI/KeyHints")
+	if hints:
+		(hints as Control).visible = on

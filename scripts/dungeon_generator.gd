@@ -791,11 +791,19 @@ func _build_merged_floor(fill_all: bool = false) -> void:
 				# Wall-proximity AO bottoms out at 0.16, which is right beside
 				# rock but pitch black for a whole cell of forest floor. Under
 				# the trees it is only shade, so give it a floor.
+				#
+				# And a CEILING on scenery ground, which is what makes the path
+				# readable: the forest had no walls to frame the route, so the
+				# walkable strip and the ground under the trees looked identical
+				# and there was nothing to walk along. Capping the shade off the
+				# path at 0.62 leaves the route the brightest thing on the floor
+				# — a trodden trail rather than a painted line.
 				var ao_min: float = 0.0 if walk else 0.45
-				var a00: float = maxf(_floor_ao(world, u0, v0, half), ao_min)
-				var a10: float = maxf(_floor_ao(world, u1, v0, half), ao_min)
-				var a11: float = maxf(_floor_ao(world, u1, v1, half), ao_min)
-				var a01: float = maxf(_floor_ao(world, u0, v1, half), ao_min)
+				var ao_max: float = 1.0 if walk else 0.62
+				var a00: float = clampf(_floor_ao(world, u0, v0, half), ao_min, ao_max)
+				var a10: float = clampf(_floor_ao(world, u1, v0, half), ao_min, ao_max)
+				var a11: float = clampf(_floor_ao(world, u1, v1, half), ao_min, ao_max)
+				var a01: float = clampf(_floor_ao(world, u0, v1, half), ao_min, ao_max)
 				_tri_ao(st, p00, p10, p11, Vector3.UP,
 					p00.x * uv_s, p00.z * uv_s, p10.x * uv_s, p10.z * uv_s, p11.x * uv_s, p11.z * uv_s,
 					a00, a10, a11)

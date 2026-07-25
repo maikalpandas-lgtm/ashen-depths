@@ -290,6 +290,7 @@ func _enter_combat_view() -> void:
 
 	_clear_torches_off_the_lens()
 	_clear_occluders_off_the_lens()
+	_toggle_crawler_hints(false)
 
 	if _stage_light and is_instance_valid(_stage_light):
 		_stage_light.queue_free()
@@ -385,6 +386,7 @@ func _restore_torches() -> void:
 
 
 func _exit_combat_view() -> void:
+	_toggle_crawler_hints(true)
 	_restore_torches()
 	if _viewmodel and is_instance_valid(_viewmodel):
 		_viewmodel.visible = true
@@ -1102,7 +1104,7 @@ func _draw_keyword_tip() -> void:
 	var area := _fx_layer.size
 	if area.x < 10.0:
 		area = get_viewport().get_visible_rect().size
-	var x: float = clampf(_hand_centre_x() - w * 0.5, 220.0, area.x - w - 16.0)
+	var x: float = clampf(_hand_centre_x() - w * 0.5, _hud_left(), area.x - w - 16.0)
 	var y: float = maxf(12.0, area.y - 210.0 - h)
 
 	var r := Rect2(x, y, w, h)
@@ -1137,6 +1139,21 @@ func _hand_centre_x() -> float:
 	return _hand_row.global_position.x + _hand_row.size.x * 0.5
 
 
+## Left edge for everything the fight draws on the HUD, taken from the PANEL's
+## real right edge instead of a constant.
+##
+## The panel is 222px wide plus a 10px margin — 232 — and the constant 232 was
+## being used as the START x, so the energy pill, potion slots and deck fans all
+## began exactly ON the panel border and read as overlapping it.
+func _hud_left() -> float:
+	var main := get_tree().current_scene
+	if main:
+		var panel := main.get_node_or_null("UI/LeftPanel") as Control
+		if panel:
+			return panel.global_position.x + panel.size.x + 16.0
+	return 248.0
+
+
 ## Energy as a designed element, not a line of text.
 ##
 ## The hero strip was literally one string — "⚡ 3/3   🛡 0   🦴 0   ❤ 56/56" —
@@ -1151,12 +1168,15 @@ func _draw_energy() -> void:
 	var area := _fx_layer.size
 	if area.x < 10.0:
 		area = get_viewport().get_visible_rect().size
-	var x := 232.0
-	var y := area.y - 152.0
+	var x := _hud_left()
+	# The hand fan starts around y = area.y - 210 and runs to the bottom, so the
+	# whole left column has to live ABOVE it — at -152 the first card covered the
+	# energy pill.
+	var y := area.y - 305.0
 
 	# Hero status chips stack ABOVE the pill, like the reference's buff column
 	var row: Array = Statuses.to_row(_combat.party_status)
-	var chip_y := y - 6.0
+	var chip_y := y - 8.0
 	for item in row:
 		chip_y -= 30.0
 		var cr := Rect2(x, chip_y, 26.0, 26.0)
@@ -1185,13 +1205,17 @@ func _draw_energy() -> void:
 		ex_x += 58.0
 
 	# The pill itself, with the bolt breaking out of its left edge
-	var pill := Rect2(x + 14.0, y, 96.0, 38.0)
+	# Wider and with the bolt hanging further out, so the glyphs get the whole
+	# pill instead of sharing it with the bolt.
+	var pill := Rect2(x + 18.0, y, 104.0, 38.0)
 	_pill_on(_fx_layer, pill.grow(3.0), Color(0.10, 0.16, 0.09, 0.9))
 	var full: bool = _combat.energy >= Combat.START_ENERGY
 	_pill_on(_fx_layer, pill,
 		Color(0.42, 0.66, 0.28) if full else Color(0.30, 0.48, 0.22))
-	_bolt(Vector2(x + 6.0, y + 19.0), 15.0)
-	_outlined_fx(UiTheme.number_font(), Vector2(pill.position.x + 10.0, y + 27.0),
+	_bolt(Vector2(x + 8.0, y + 19.0), 16.0)
+	# Centred on the PILL, no extra offset: the old +10 pushed the number off
+	# centre and the whole thing read as a lopsided bar.
+	_outlined_fx(UiTheme.number_font(), Vector2(pill.position.x, y + 27.0),
 		"%d/%d" % [_combat.energy, Combat.START_ENERGY], pill.size.x, 21,
 		Color(0.99, 0.99, 0.94))
 
@@ -1244,7 +1268,7 @@ func _draw_trigger_banner() -> void:
 	var alpha: float = 1.0 if t < 0.7 else (1.0 - (t - 0.7) / 0.3)
 	# Rises slightly as it fades, so two triggers in a row do not overlap
 	var y: float = 92.0 - 14.0 * t
-	var centre: float = 212.0 + (area.x - 212.0) * 0.5
+	var centre: float = _hud_left() + (area.x - _hud_left()) * 0.5
 	_outlined_fx(font, Vector2(centre - 300.0, y), _trigger_text.to_upper(),
 		600.0, 26, Color(1.0, 0.88, 0.35, alpha))
 
@@ -1265,8 +1289,8 @@ func _draw_consumables() -> void:
 		area = get_viewport().get_visible_rect().size
 	var w := 38.0
 	var gap := 6.0
-	var x := 232.0
-	var y := area.y - 96.0
+	var x := _hud_left()
+	var y := area.y - 250.0
 	for i in range(ForageDB.CARRY_SLOTS):
 		var r := Rect2(x, y, w, 38.0)
 		var filled: bool = i < GameState.consumables.size()
@@ -1278,8 +1302,14 @@ func _draw_consumables() -> void:
 				_fx_layer.draw_texture_rect(tex, r, false)
 			else:
 				_fx_layer.draw_rect(r, def.get("colour", Color.GRAY), true)
-			_outlined_fx(font, Vector2(r.position.x, r.position.y + 13.0),
-				str(i + 1), w, 12, Color(1, 1, 1, 0.9))
+			# Key cap on the slot, so "press 1" is visible without a manual
+			var cap := Rect2(r.position.x + w - 15.0, r.end.y - 15.0, 15.0, 15.0)
+			_fx_layer.draw_rect(cap.grow(1.0), Color(0.05, 0.04, 0.05, 0.95), true)
+			_fx_layer.draw_rect(cap, Color(0.26, 0.23, 0.26, 0.98), true)
+			_fx_layer.draw_string(UiTheme.number_font(),
+				Vector2(cap.position.x, cap.position.y + 12.0), str(i + 1),
+				HORIZONTAL_ALIGNMENT_CENTER, cap.size.x, 11,
+				Color(0.96, 0.93, 0.88))
 		else:
 			_fx_layer.draw_rect(r, Color(0.13, 0.12, 0.14, 0.75), true)
 		x += w + gap
@@ -1319,7 +1349,7 @@ func _draw_relics() -> void:
 	var total: float = float(items.size()) * w + float(items.size() - 1) * gap
 	# Centred on the 3D view, not the window: the left HUD is ~212px wide and
 	# centring on the whole screen tucks the row under it.
-	var centre: float = 212.0 + (area.x - 212.0) * 0.5
+	var centre: float = _hud_left() + (area.x - _hud_left()) * 0.5
 	var x := centre - total * 0.5
 	for it in items:
 		var r := Rect2(x, 8.0, w, 30.0)
@@ -1390,15 +1420,15 @@ func _draw_piles() -> void:
 	# Left column, climbing UP from the energy pill. Every other corner is
 	# taken: the bottom bar carries the pack label, the bottom right is END TURN
 	# (which hid the fan entirely), and the top centre is the relic row.
-	var x := 240.0
-	var y := area.y - 250.0
+	var x := _hud_left()
+	var y := area.y - 375.0
 	_pile_badge(font, Vector2(x, y), _combat.deck.draw_pile.size(),
 		"колода", Color(0.30, 0.42, 0.62))
-	_pile_badge(font, Vector2(x, y - 92.0), _combat.deck.discard_pile.size(),
+	_pile_badge(font, Vector2(x, y - 90.0), _combat.deck.discard_pile.size(),
 		"сброс", Color(0.42, 0.34, 0.26))
 	var burned: int = _combat.deck.exhaust_pile.size()
 	if burned > 0:
-		_pile_badge(font, Vector2(x, y - 184.0), burned,
+		_pile_badge(font, Vector2(x, y - 180.0), burned,
 			"сгорело", Color(0.52, 0.20, 0.20))
 
 
@@ -2300,6 +2330,14 @@ func _party_max_hp() -> int:
 func _announce(text: String) -> void:
 	_trigger_text = text
 	_trigger_age = 0.0
+
+
+## The crawler's key caps mean nothing mid-fight, and they sit exactly where the
+## pack label goes.
+func _toggle_crawler_hints(on: bool) -> void:
+	var main := get_tree().current_scene
+	if main and main.has_method("set_key_hints_visible"):
+		main.call("set_key_hints_visible", on)
 
 
 func _react_portrait(kind: String) -> void:

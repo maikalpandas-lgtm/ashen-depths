@@ -179,12 +179,31 @@ func _on_dungeon_ready(start_world: Vector3) -> void:
 ## actually exists, or choosing the forest drops you in a cave with a forest
 ## label on the HUD.
 func _on_hero_chosen(_hero_id: String) -> void:
+	await _generate_with_loading()
+
+
+## Generation is one long BLOCKING frame — maze, meshes, torches, props, forage,
+## packs. Straight after the hero pick that froze the window, which reads as a
+## crash. So: show the overlay, wait for it to actually be DRAWN, then build.
+func _generate_with_loading() -> void:
+	var loading := get_node_or_null("LoadingOverlay")
+	var where := "НАВЬИ КОПИ"
+	if GameState and str(GameState.biome) == "forest":
+		where = "ЗАПОВЕДНЫЙ ЛЕС"
+	if loading and loading.has_method("show_for"):
+		loading.call("show_for", where)
+		# Two frames: one to lay the overlay out, one to put it on screen. With
+		# a single await the generation still lands before anything is drawn.
+		await get_tree().process_frame
+		await RenderingServer.frame_post_draw
 	if minimap and minimap.has_method("clear_fog"):
 		minimap.clear_fog()
 	var seed_val: int = GameState.current_seed if GameState else randi()
 	if dungeon.has_method("generate"):
 		dungeon.generate(seed_val)
 	_update_hud()
+	if loading and loading.has_method("hide_now"):
+		loading.call("hide_now")
 
 
 func _place_player(pos: Vector3) -> void:
@@ -246,13 +265,8 @@ func _apply_biome_environment() -> void:
 
 
 func _on_floor_changed(new_floor: int) -> void:
-	if minimap and minimap.has_method("clear_fog"):
-		minimap.clear_fog()
-	var seed_val: int = GameState.current_seed if GameState else randi()
 	_apply_biome_environment()
-	if dungeon.has_method("generate"):
-		dungeon.generate(seed_val)
-	_update_hud()
+	await _generate_with_loading()
 	hud_hint.text = "↓ Этаж %d · %s" % [new_floor, _realm_name(new_floor)]
 	_apply_biome_sound()
 

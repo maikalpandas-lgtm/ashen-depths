@@ -94,7 +94,11 @@ func _rebuild_rows() -> void:
 			"plus": int(offer.get("plus", 0)) + 1,  # preview next level
 		})
 		var colour: Color = offer.get("colour", Color(0.8, 0.8, 0.8))
-		var caption := "Улучшить  ·  %s" % offer.get("owner_name", offer["owner"])
+		# Show the actual CHANGE, not just the improved card: the preview showed
+		# "7 брони" and the player had no way to know it used to be 5. A "было →
+		# стало" line is the whole reason to pick this over a new card.
+		var caption := "%s  ·  %s" % [_diff_text(offer),
+			offer.get("owner_name", offer["owner"])]
 		var idx := i
 		_upgrade_row.add_child(_make_pick_btn(def, colour, caption, func(): _pick_upgrade(idx)))
 
@@ -113,6 +117,23 @@ func _rebuild_rows() -> void:
 		var caption := "%s  ·  → %s" % [rarity, owner_name]
 		var idx := i
 		_rare_row.add_child(_make_pick_btn(def, colour, caption, func(): _pick_rare(idx)))
+
+
+## "урон 7 → 9" / "броня 5 → 7", built by resolving the card at both levels.
+func _diff_text(offer: Dictionary) -> String:
+	var plus := int(offer.get("plus", 0))
+	var before := CardDB.resolve_entry({"card": offer["card"], "plus": plus})
+	var after := CardDB.resolve_entry({"card": offer["card"], "plus": plus + 1})
+	if before.is_empty() or after.is_empty():
+		return "Улучшить"
+	var parts: Array = []
+	if int(after.get("damage", 0)) > int(before.get("damage", 0)):
+		parts.append("урон %d → %d" % [int(before["damage"]), int(after["damage"])])
+	if int(after.get("block", 0)) > int(before.get("block", 0)):
+		parts.append("броня %d → %d" % [int(before["block"]), int(after["block"])])
+	if parts.is_empty():
+		return "Улучшить"
+	return "  ·  ".join(parts)
 
 
 func _make_pick_btn(def: Dictionary, colour: Color, caption: String, on_press: Callable) -> Control:

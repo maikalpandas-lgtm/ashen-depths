@@ -1387,7 +1387,7 @@ func _spawn_forage() -> void:
 		var world := cell_to_world(cell)
 		# Off the walking line, like the undergrowth — a pickup in the middle of
 		# the corridor ends up inside the camera.
-		var side: float = cell_size * 0.3 * (1.0 if (h % 2) == 0 else -1.0)
+		var side: float = cell_size * 0.4 * (1.0 if (h % 2) == 0 else -1.0)
 		var pos := world + (Vector3(side, 0.0, 0.0) if (h % 4) < 2
 			else Vector3(0.0, 0.0, side))
 		ForageSprites.make(props_root, pos, id, _floor_height(pos.x, pos.z))
@@ -1436,7 +1436,10 @@ func _spawn_cave_props() -> void:
 			face = wd
 		else:
 			var side := wd if wd != Vector2i.ZERO else Vector2i(1, 0)
-			var off: float = cell_size * 0.33
+			# 0.42 of the cell, not 0.33: at a third the prop still stood in the
+			# walking lane and the camera drove through it. This puts it against
+			# the rock, which is also where a barrel or a bone pile belongs.
+			var off: float = cell_size * 0.42
 			pos = world + Vector3(float(side.x) * off, 0.0, float(side.y) * off)
 		var ground := _floor_height(pos.x, pos.z)
 		if CaveProps.is_wall_prop(id):

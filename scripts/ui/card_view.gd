@@ -30,6 +30,10 @@ const COST_RECT := Rect2(0.015, 0.005, 0.235, 0.165)
 const ART_RECT := Rect2(0.045, 0.145, 0.91, 0.44)
 const TYPE_RECT := Rect2(0.31, 0.605, 0.38, 0.062)
 const TEXT_RECT := Rect2(0.055, 0.685, 0.89, 0.29)
+## Narrower than this and the rules text cannot fit even one short line at a
+## legible size, so it is omitted rather than clipped. Measured against the
+## longest card text in the game at the 8px floor fit_font_size allows.
+const MIN_TEXT_WIDTH := 108.0
 
 const PARCHMENT := Color(0.91, 0.86, 0.73)
 const INK := Color(0.16, 0.11, 0.07)
@@ -216,6 +220,13 @@ static func build(card: Dictionary, owner_colour: Color, card_size: Vector2) -> 
 		root.add_child(tab_label)
 
 	# --- rules text -------------------------------------------------------
+	# Below MIN_TEXT_WIDTH the rules are simply left OFF. At 74px across, the
+	# hero-select thumbnails rendered "Остриё: +2 по" and stopped mid-word —
+	# half a sentence is worse than none, because it looks like a bug rather
+	# than a deliberately compact card. Callers that hide the text put the full
+	# rules in a tooltip instead.
+	if card_size.x < MIN_TEXT_WIDTH:
+		return root
 	var raw_text := str(card["text"])
 	var text_box := card_size * TEXT_RECT.size
 	var text_size := fit_font_size(UiTheme.title_font(), raw_text, text_box, 14, 8, true)

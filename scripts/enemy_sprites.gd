@@ -83,6 +83,9 @@ static func realm_name(floor_index: int, biome: String = "mine") -> String:
 ## PIXELS and converted to UV per texture, so every monster gets the same rim
 ## however big its PNG happens to be.
 const OUTLINE_SHADER := "res://shaders/sprite_outline.gdshader"
+## Hit flash lives on the sprite's OWN material (shaders/sprite_flash.gdshader):
+## the reference fills the silhouette white, which modulate cannot do.
+const FLASH_SHADER := "res://shaders/sprite_flash.gdshader"
 const RIM_COLOUR := Color(1.0, 0.66, 0.2, 1.0)
 const RIM_PIXELS := 9.0
 
@@ -305,6 +308,15 @@ static func make_enemy(parent: Node3D, pos: Vector3, enemy_id: String, ground_y:
 	spr.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	spr.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
 	spr.render_priority = 3
+	# White-fill flash needs a shader; Sprite3D.billboard is ignored once a
+	# material_override is set, so the shader does the billboarding too.
+	var flash_mat := ShaderMaterial.new()
+	flash_mat.shader = load(FLASH_SHADER)
+	flash_mat.set_shader_parameter("albedo_tex", tex)
+	flash_mat.set_shader_parameter("flash", 0.0)
+	flash_mat.set_shader_parameter("billboard_y", 1.0)
+	flash_mat.set_shader_parameter("alpha_cut", 0.2)
+	spr.material_override = flash_mat
 	holder.add_child(spr)
 
 	# Target rim, hidden until the player drags a card onto this monster. It is

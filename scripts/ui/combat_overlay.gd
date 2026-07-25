@@ -80,6 +80,10 @@ var _viewmodel: Node3D = null
 const TORCH_CLEAR_RADIUS := 1.8
 var _muted_torches: Array = []
 var _muted_occluders: Array = []
+## Trigger banner (see _draw_trigger_banner).
+const TRIGGER_TIME := 1.25
+var _trigger_text := ""
+var _trigger_age := 0.0
 
 var _root: Control = null
 var _world_layer: Control = null  ## HP bars drawn over the 3D view
@@ -418,6 +422,11 @@ func _process(_delta: float) -> void:
 
 	_update_motes(_delta)
 	_update_enemy_visuals(_delta)
+	if _trigger_text != "":
+		_trigger_age += _delta
+		if _trigger_age >= TRIGGER_TIME:
+			_trigger_text = ""
+		_fx_layer.queue_redraw()
 	if not _impacts.is_empty():
 		for imp in _impacts:
 			imp["age"] += _delta
@@ -544,10 +553,9 @@ func _refresh() -> void:
 
 	var hp_now := _party_hp()
 	var hp_max := _party_max_hp()
-	_status.text = "⚡ %d/%d    🛡 %d    🦴 %d    ❤ %d/%d%s" % [
-		_combat.energy, Combat.START_ENERGY, _combat.party_block,
-		_combat.bones, hp_now, hp_max, _party_status_text(),
-	]
+	# Energy, block, bones and statuses moved to _draw_energy as real elements.
+	# Leaving them here too would print every value twice.
+	_status.text = "❤ %d/%d" % [hp_now, hp_max]
 	_log.text = "   ·   ".join(_combat.log_lines.slice(maxi(0, _combat.log_lines.size() - 2)))
 	# Keep left HUD in sync — party HP lives on GameState.party (same ref)
 	_sync_left_hud()
@@ -614,12 +622,18 @@ func _update_enemy_visuals(delta: float) -> void:
 			tint = Color(1.12, 1.10, 1.03)
 			scale_f *= 1.03
 		if flash > 0.0:
-			# Blow past the hover tint — being hit must always be the loud thing
+			# Only the SWELL stays here; the whitening moved to the shader below.
 			var t: float = flash / FLASH_TIME
-			tint = tint.lerp(Color(3.2, 2.5, 2.3), t)
 			scale_f *= 1.0 + 0.12 * t
 		spr.modulate = tint
 		node.scale = Vector3.ONE * scale_f
+		# White silhouette fill — the reference's hit read (video 15.0s). Kept
+		# separate from modulate: brightening keeps the hue, so a teal ghost just
+		# became a lighter teal ghost and the hit did not register.
+		var fm := spr.material_override as ShaderMaterial
+		if fm:
+			fm.set_shader_parameter("flash",
+				pow(clampf(flash / FLASH_TIME, 0.0, 1.0), 0.65))
 
 
 ## Corpse visibility only — tint and scale belong to _update_enemy_visuals.
@@ -776,23 +790,36 @@ func _draw_world_overlay() -> void:
 		# Clear of the feet, name above the bar (reference order). The gap is
 		# generous because a sprite's paws and tail hang below its node origin.
 		var bar := Rect2(p.x - bar_w * 0.5, p.y + 46.0, bar_w, 15.0)
-		# Rounded pill, like the reference, rather than a flat rectangle
-		_pill(bar.grow(2.5), Color(0.06, 0.04, 0.05, 0.95))
-		_pill(bar, Color(0.30, 0.10, 0.12, 0.98))
 		var frac: float = clampf(float(e["hp"]) / maxf(1.0, float(e["max_hp"])), 0.0, 1.0)
-		if frac > 0.001:
-			_pill(Rect2(bar.position, Vector2(maxf(bar.size.y, bar.size.x * frac), bar.size.y)),
-				Color(0.88, 0.30, 0.31))
-		if i == hovered:
-			# A solid rim on the OUTSIDE of the bar. The old version painted a
-			# translucent wash ON TOP of the bar, so the red HP fill showed
-			# through the highlight and the whole thing looked see-through.
-			_pill(bar.grow(3.0), Color(1.0, 0.72, 0.24, 1.0))
-			_pill(bar.grow(1.0), Color(0.06, 0.04, 0.05, 1.0))
-			_pill(bar, Color(0.30, 0.10, 0.12, 1.0))
+		var back_tex := _ui(BAR_BACK_TEX)
+		var fill_tex := _ui(BAR_FILL_TEX)
+		if back_tex != null and fill_tex != null:
+			# Painted plates. No black outline: the reference bar has none, and
+			# ours read as a debug widget because of it.
+			_bar3(_world_layer, back_tex, bar.grow(2.0), BAR_BACK_CAP)
 			if frac > 0.001:
-				_pill(Rect2(bar.position, Vector2(maxf(bar.size.y, bar.size.x * frac), bar.size.y)),
-					Color(0.88, 0.30, 0.31))
+				_bar3(_world_layer, fill_tex,
+					Rect2(bar.position, Vector2(maxf(bar.size.y, bar.size.x * frac),
+						bar.size.y)), BAR_FILL_CAP)
+		else:
+			_pill(bar.grow(2.5), Color(0.06, 0.04, 0.05, 0.95))
+			_pill(bar, Color(0.30, 0.10, 0.12, 0.98))
+			if frac > 0.001:
+				_pill(Rect2(bar.position, Vector2(maxf(bar.size.y, bar.size.x * frac),
+					bar.size.y)), Color(0.88, 0.30, 0.31))
+		if i == hovered:
+			# Rim OUTSIDE the bar only. Repainting the bar on top of itself is
+			# what made the fill look see-through before, and with painted
+			# plates it would draw the art twice.
+			_pill(bar.grow(4.0), Color(1.0, 0.72, 0.24, 0.9))
+			var back2 := _ui(BAR_BACK_TEX)
+			if back2 != null:
+				_bar3(_world_layer, back2, bar.grow(2.0), BAR_BACK_CAP)
+				var fill2 := _ui(BAR_FILL_TEX)
+				if fill2 != null and frac > 0.001:
+					_bar3(_world_layer, fill2,
+						Rect2(bar.position, Vector2(maxf(bar.size.y, bar.size.x * frac),
+							bar.size.y)), BAR_FILL_CAP)
 
 		if font == null:
 			continue
@@ -816,17 +843,24 @@ func _draw_world_overlay() -> void:
 			txt = "🗡 %d×%d" % [it.get("value", 0), hits]
 		else:
 			txt = "🗡 %d" % it.get("value", 0)
-		_outlined(font, Vector2(bar.position.x, intent_row), txt,
-			bar_w, 21, Color(0.65, 0.88, 1.0) if is_block else Color(1.0, 0.66, 0.45))
+		# Bigger and pushed to the SIDE, as the reference does — centred over the
+		# head at 21px it vanished against the rock.
+		var side: float = -1.0 if (k % 2) == 0 else 1.0
+		_outlined(font, Vector2(bar.position.x + side * bar_w * 0.42, intent_row - 6.0),
+			txt, bar_w, 30,
+			Color(0.65, 0.88, 1.0) if is_block else Color(1.0, 0.55, 0.16))
 		if int(e["block"]) > 0:
 			# Shield pill sitting ON the left end of the bar, like the reference
 			# — the old floating "🛡N" off to the right read as loose debris.
-			var sh := Rect2(bar.position.x - 9.0, bar.position.y - 3.0, 21.0, 21.0)
-			_pill(sh.grow(2.0), Color(0.06, 0.04, 0.05, 0.95))
-			_pill(sh, Color(0.30, 0.52, 0.72))
-			_world_layer.draw_string(font, Vector2(sh.position.x, sh.position.y + 15.0),
-				str(int(e["block"])), HORIZONTAL_ALIGNMENT_CENTER, sh.size.x, 13,
-				Color(0.95, 0.98, 1.0))
+			var sh := Rect2(bar.position.x - 11.0, bar.position.y - 5.0, 23.0, 25.0)
+			var shield := _ui(SHIELD_TEX)
+			if shield != null:
+				_world_layer.draw_texture_rect(shield, sh, false)
+			else:
+				_pill(sh.grow(2.0), Color(0.06, 0.04, 0.05, 0.95))
+				_pill(sh, Color(0.30, 0.52, 0.72))
+			_outlined(font, Vector2(sh.position.x, sh.position.y + 17.0),
+				str(int(e["block"])), sh.size.x, 13, Color(0.98, 0.99, 1.0))
 
 		_draw_status_row(font, Vector2(bar.position.x + bar_w * 0.5, bar.position.y + 26.0),
 			e.get("status", {}))
@@ -868,6 +902,53 @@ func _draw_status_row(font: Font, at: Vector2, bag: Dictionary) -> void:
 					"%s%d" % [item["icon"], int(item["stacks"])],
 					HORIZONTAL_ALIGNMENT_CENTER, w, 11, Color(0.07, 0.05, 0.06))
 		x += w + gap
+
+
+## Painted HP plates (батч 13). Null while the art is missing — callers fall
+## back to _pill, which is what shipped before.
+const BAR_BACK_TEX := "res://assets/textures/ui_hp_back.png"
+const BAR_FILL_TEX := "res://assets/textures/ui_hp_fill.png"
+const SHIELD_TEX := "res://assets/textures/ui_shield_badge.png"
+## Rounded cap widths MEASURED off the art, not guessed: 112px on the plate and
+## 76px on the fill, out of 1024 wide. A three-slice with the wrong cap either
+## squashes the rounding or repeats it in the middle.
+const BAR_BACK_CAP := 112.0
+const BAR_FILL_CAP := 76.0
+
+static var _ui_tex: Dictionary = {}
+
+
+static func _ui(path: String) -> Texture2D:
+	if _ui_tex.has(path):
+		return _ui_tex[path]
+	var tex: Texture2D = null
+	if ResourceLoader.exists(path):
+		tex = ResourceLoader.load(path, "Texture2D") as Texture2D
+	_ui_tex[path] = tex
+	return tex
+
+
+## Three-slice a wide bar: left cap, stretched middle, right cap.
+##
+## Stretching the whole texture would flatten the rounded ends into ellipses,
+## and a bar at 8% health would be one squashed blob rather than a sliver.
+func _bar3(layer: CanvasItem, tex: Texture2D, r: Rect2, cap_px: float,
+		tint: Color = Color.WHITE) -> void:
+	var tw := float(tex.get_width())
+	var th := float(tex.get_height())
+	# Caps scale with the bar's HEIGHT so they keep their shape
+	var cap: float = minf(cap_px * (r.size.y / th), r.size.x * 0.5)
+	layer.draw_texture_rect_region(tex,
+		Rect2(r.position, Vector2(cap, r.size.y)),
+		Rect2(0.0, 0.0, cap_px, th), tint)
+	var mid_w: float = maxf(0.0, r.size.x - cap * 2.0)
+	if mid_w > 0.0:
+		layer.draw_texture_rect_region(tex,
+			Rect2(r.position + Vector2(cap, 0.0), Vector2(mid_w, r.size.y)),
+			Rect2(cap_px, 0.0, tw - cap_px * 2.0, th), tint)
+	layer.draw_texture_rect_region(tex,
+		Rect2(r.position + Vector2(r.size.x - cap, 0.0), Vector2(cap, r.size.y)),
+		Rect2(tw - cap_px, 0.0, cap_px, th), tint)
 
 
 ## Rounded-end bar. draw_rect gives hard corners, which read as a debug widget
@@ -931,6 +1012,118 @@ func _update_motes(delta: float) -> void:
 			pos = Vector2(randf() * area.x, area.y * 0.78)
 		m["pos"] = pos
 	_fx_layer.queue_redraw()
+
+
+## Energy as a designed element, not a line of text.
+##
+## The hero strip was literally one string — "⚡ 3/3   🛡 0   🦴 0   ❤ 56/56" —
+## against a reference that gives every value its own shape. This is the single
+## cheapest readability win in docs/VISUAL_PLAN.md §2.1.
+func _draw_energy() -> void:
+	if _combat == null:
+		return
+	var font := UiTheme.title_font()
+	if font == null:
+		return
+	var area := _fx_layer.size
+	if area.x < 10.0:
+		area = get_viewport().get_visible_rect().size
+	var x := 232.0
+	var y := area.y - 152.0
+
+	# Hero status chips stack ABOVE the pill, like the reference's buff column
+	var row: Array = Statuses.to_row(_combat.party_status)
+	var chip_y := y - 6.0
+	for item in row:
+		chip_y -= 30.0
+		var cr := Rect2(x, chip_y, 26.0, 26.0)
+		_fx_layer.draw_rect(cr.grow(2.0), Color(0.07, 0.05, 0.06, 0.88), true)
+		var tex: Texture2D = item.get("tex", null)
+		if tex != null:
+			_fx_layer.draw_texture_rect(tex, cr, false)
+		else:
+			_fx_layer.draw_rect(cr, item["colour"], true)
+		_outlined_fx(font, Vector2(cr.end.x + 2.0, cr.position.y + 19.0),
+			str(int(item["stacks"])), 26.0, 15, Color(0.98, 0.96, 0.92))
+
+	# Block and bones only appear when they are non-zero — a permanent "🛡 0" is
+	# noise that teaches the eye to skip the whole strip.
+	var extras: Array = []
+	if _combat.party_block > 0:
+		extras.append(["🛡", str(_combat.party_block), Color(0.55, 0.78, 0.95)])
+	if _combat.bones > 0:
+		extras.append(["🦴", str(_combat.bones), Color(0.88, 0.86, 0.74)])
+	var ex_x := x + 118.0
+	for e in extras:
+		_fx_layer.draw_rect(Rect2(ex_x, y + 6.0, 52.0, 26.0),
+			Color(0.07, 0.05, 0.06, 0.85), true)
+		_outlined_fx(font, Vector2(ex_x, y + 26.0), "%s%s" % [e[0], e[1]],
+			52.0, 15, e[2])
+		ex_x += 58.0
+
+	# The pill itself, with the bolt breaking out of its left edge
+	var pill := Rect2(x + 14.0, y, 96.0, 38.0)
+	_pill_on(_fx_layer, pill.grow(3.0), Color(0.10, 0.16, 0.09, 0.9))
+	var full: bool = _combat.energy >= Combat.START_ENERGY
+	_pill_on(_fx_layer, pill,
+		Color(0.42, 0.66, 0.28) if full else Color(0.30, 0.48, 0.22))
+	_bolt(Vector2(x + 6.0, y + 19.0), 15.0)
+	_outlined_fx(UiTheme.display_font(), Vector2(pill.position.x + 12.0, y + 28.0),
+		"%d/%d" % [_combat.energy, Combat.START_ENERGY], pill.size.x, 22,
+		Color(0.99, 0.99, 0.94))
+
+
+## Lightning bolt as a polygon — an emoji renders at the mercy of the font and
+## the reference's bolt deliberately sticks OUT of the pill.
+func _bolt(at: Vector2, r: float) -> void:
+	var p := PackedVector2Array([
+		at + Vector2(0.25, -1.0) * r,
+		at + Vector2(-0.55, 0.06) * r,
+		at + Vector2(-0.02, 0.06) * r,
+		at + Vector2(-0.28, 1.0) * r,
+		at + Vector2(0.6, -0.12) * r,
+		at + Vector2(0.05, -0.12) * r,
+	])
+	_fx_layer.draw_colored_polygon(p, Color(0.06, 0.05, 0.03, 0.85))
+	var inner := PackedVector2Array()
+	for v in p:
+		inner.append(at + (v - at) * 0.84)
+	_fx_layer.draw_colored_polygon(inner, Color(0.98, 0.86, 0.22))
+
+
+## _pill draws on _world_layer; this is the same shape on any canvas item.
+func _pill_on(layer: CanvasItem, r: Rect2, col: Color) -> void:
+	var radius: float = r.size.y * 0.5
+	if r.size.x <= r.size.y:
+		layer.draw_circle(r.position + r.size * 0.5, radius, col)
+		return
+	layer.draw_rect(Rect2(r.position.x + radius, r.position.y,
+		r.size.x - radius * 2.0, r.size.y), col)
+	layer.draw_circle(Vector2(r.position.x + radius, r.position.y + radius), radius, col)
+	layer.draw_circle(Vector2(r.end.x - radius, r.position.y + radius), radius, col)
+
+
+## Yellow caps banner for a trigger that would otherwise scroll past in the log.
+##
+## The reference announces relic and status procs across the top of the screen
+## (video 16.0s: "OVERHEAT +2 STR"). Ours went into a two-line log at the bottom
+## that nobody reads mid-fight.
+func _draw_trigger_banner() -> void:
+	if _trigger_text == "" or _trigger_age >= TRIGGER_TIME:
+		return
+	var font := UiTheme.display_font()
+	if font == null:
+		return
+	var area := _fx_layer.size
+	if area.x < 10.0:
+		area = get_viewport().get_visible_rect().size
+	var t: float = _trigger_age / TRIGGER_TIME
+	var alpha: float = 1.0 if t < 0.7 else (1.0 - (t - 0.7) / 0.3)
+	# Rises slightly as it fades, so two triggers in a row do not overlap
+	var y: float = 92.0 - 14.0 * t
+	var centre: float = 212.0 + (area.x - 212.0) * 0.5
+	_outlined_fx(font, Vector2(centre - 300.0, y), _trigger_text.to_upper(),
+		600.0, 26, Color(1.0, 0.88, 0.35, alpha))
 
 
 ## Three consumable slots (фаза E), left of the hand.
@@ -1194,6 +1387,8 @@ func _draw_fx() -> void:
 	_draw_piles()
 	_draw_relics()
 	_draw_consumables()
+	_draw_energy()
+	_draw_trigger_banner()
 	_draw_impacts()
 	_draw_popups()
 	for f in _slashes:
@@ -1265,6 +1460,10 @@ func _play_events() -> void:
 			"status_applied":
 				if i >= 0:
 					_flinch_enemy(i)
+				var st := str(ev.get("status", ""))
+				if st != "":
+					var nm := str(Statuses.info(st).get("name", st))
+					_announce("%s  +%d" % [nm, int(ev.get("amount", 1))])
 	_combat.events.clear()
 	if any_died:
 		_reform_living()
@@ -1894,6 +2093,13 @@ func _party_max_hp() -> int:
 
 ## Poke the portrait so the hero visibly reacts (фаза F). Silent if the panel
 ## is an older build without react() — this is decoration, not a dependency.
+## Show a one-line trigger banner. Latest wins: two procs in the same frame and
+## the second is the one the player still needs to know about.
+func _announce(text: String) -> void:
+	_trigger_text = text
+	_trigger_age = 0.0
+
+
 func _react_portrait(kind: String) -> void:
 	var main := get_tree().current_scene
 	if main == null:

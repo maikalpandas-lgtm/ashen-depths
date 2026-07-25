@@ -719,6 +719,7 @@ func _draw_world_overlay() -> void:
 	if _combat == null:
 		return
 	var font := UiTheme.title_font()
+	var num := UiTheme.number_font()
 	var hovered := _hover_enemy() if _dragging >= 0 else -1
 	var living := _living_indices()
 	if living.is_empty():
@@ -824,9 +825,9 @@ func _draw_world_overlay() -> void:
 		if font == null:
 			continue
 		# Numbers on the bar
-		_world_layer.draw_string(font, Vector2(bar.position.x, bar.position.y + 12.0),
+		_world_layer.draw_string(num, Vector2(bar.position.x, bar.position.y + 12.5),
 			"%d/%d" % [e["hp"], e["max_hp"]],
-			HORIZONTAL_ALIGNMENT_CENTER, bar_w, 12, Color(1.0, 0.96, 0.93))
+			HORIZONTAL_ALIGNMENT_CENTER, bar_w, 12, Color(1.0, 0.97, 0.94))
 		# Name between the feet and the bar, outlined so it survives dark rock
 		_outlined(font, Vector2(bar.position.x, bar.position.y - 8.0), str(e["name"]),
 			bar_w, 14, Color(0.97, 0.94, 0.88))
@@ -846,7 +847,7 @@ func _draw_world_overlay() -> void:
 		# Bigger and pushed to the SIDE, as the reference does — centred over the
 		# head at 21px it vanished against the rock.
 		var side: float = -1.0 if (k % 2) == 0 else 1.0
-		_outlined(font, Vector2(bar.position.x + side * bar_w * 0.42, intent_row - 6.0),
+		_outlined(num, Vector2(bar.position.x + side * bar_w * 0.42, intent_row - 6.0),
 			txt, bar_w, 30,
 			Color(0.65, 0.88, 1.0) if is_block else Color(1.0, 0.55, 0.16))
 		if int(e["block"]) > 0:
@@ -859,7 +860,7 @@ func _draw_world_overlay() -> void:
 			else:
 				_pill(sh.grow(2.0), Color(0.06, 0.04, 0.05, 0.95))
 				_pill(sh, Color(0.30, 0.52, 0.72))
-			_outlined(font, Vector2(sh.position.x, sh.position.y + 17.0),
+			_outlined(num, Vector2(sh.position.x, sh.position.y + 17.0),
 				str(int(e["block"])), sh.size.x, 13, Color(0.98, 0.99, 1.0))
 
 		_draw_status_row(font, Vector2(bar.position.x + bar_w * 0.5, bar.position.y + 26.0),
@@ -891,7 +892,8 @@ func _draw_status_row(font: Font, at: Vector2, bag: Dictionary) -> void:
 			_world_layer.draw_texture_rect(tex,
 				Rect2(r.position.x, r.position.y, side, side), false)
 			if font:
-				_outlined(font, Vector2(r.position.x + side - 2.0, r.position.y + 14.0),
+				_outlined(UiTheme.number_font(),
+					Vector2(r.position.x + side - 2.0, r.position.y + 14.0),
 					str(int(item["stacks"])), w - side + 4.0, 13, item["colour"])
 		else:
 			_pill(r.grow(1.5), Color(0.06, 0.04, 0.05, 0.95))
@@ -1068,8 +1070,8 @@ func _draw_energy() -> void:
 	_pill_on(_fx_layer, pill,
 		Color(0.42, 0.66, 0.28) if full else Color(0.30, 0.48, 0.22))
 	_bolt(Vector2(x + 6.0, y + 19.0), 15.0)
-	_outlined_fx(UiTheme.display_font(), Vector2(pill.position.x + 12.0, y + 28.0),
-		"%d/%d" % [_combat.energy, Combat.START_ENERGY], pill.size.x, 22,
+	_outlined_fx(UiTheme.number_font(), Vector2(pill.position.x + 10.0, y + 27.0),
+		"%d/%d" % [_combat.energy, Combat.START_ENERGY], pill.size.x, 21,
 		Color(0.99, 0.99, 0.94))
 
 
@@ -1280,7 +1282,8 @@ func _pile_badge(font: Font, at: Vector2, count: int, label: String,
 	var r := Rect2(at.x, at.y, 46.0, 30.0)
 	_fx_layer.draw_rect(r.grow(2.0), Color(0.06, 0.04, 0.05, 0.9), true)
 	_fx_layer.draw_rect(r, col, true)
-	_fx_layer.draw_string(font, Vector2(r.position.x, r.position.y + 21.0),
+	_fx_layer.draw_string(UiTheme.number_font(),
+		Vector2(r.position.x, r.position.y + 21.0),
 		str(count), HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 17,
 		Color(0.98, 0.96, 0.92))
 	_fx_layer.draw_string(font, Vector2(r.position.x - 12.0, r.end.y + 13.0),
@@ -1317,6 +1320,27 @@ func _draw_impacts() -> void:
 		var r: float = lerpf(10.0, 92.0 if crit else 66.0, 1.0 - pow(1.0 - t, 2.2))
 		_fx_layer.draw_arc(p, r, 0.0, TAU, 28,
 			Color(colour, fade * 0.85), lerpf(7.0, 1.5, t), true)
+		# Vertical light shaft, as the reference does at the point of contact
+		# (video 5.5s). Drawn as a tapered polygon rather than a line so it can
+		# be wide at the hit and needle-thin at the top.
+		if t < 0.5:
+			var st: float = t / 0.5
+			var beam_a: float = (1.0 - st) * (0.75 if not crit else 0.95)
+			var half: float = lerpf(16.0, 3.0, st) * (1.4 if crit else 1.0)
+			var up: float = lerpf(120.0, 260.0, st) * (1.3 if crit else 1.0)
+			_fx_layer.draw_colored_polygon(PackedVector2Array([
+				p + Vector2(-half, 34.0),
+				p + Vector2(half, 34.0),
+				p + Vector2(half * 0.22, -up),
+				p + Vector2(-half * 0.22, -up),
+			]), Color(colour, beam_a * 0.5))
+			_fx_layer.draw_colored_polygon(PackedVector2Array([
+				p + Vector2(-half * 0.45, 30.0),
+				p + Vector2(half * 0.45, 30.0),
+				p + Vector2(half * 0.1, -up * 0.85),
+				p + Vector2(-half * 0.1, -up * 0.85),
+			]), Color(1.0, 1.0, 0.97, beam_a))
+
 		# White core, gone almost immediately — the "spark" of contact
 		if t < 0.35:
 			var ct: float = t / 0.35
@@ -1337,7 +1361,10 @@ func _draw_impacts() -> void:
 ## they cost nothing to spawn and cannot disturb the UI layout.
 func _draw_popups() -> void:
 	var cam := get_viewport().get_camera_3d()
-	var font := UiTheme.display_font()
+	# Numbers in the heavy figures face; the small caption above them keeps the
+	# display face, exactly the two-font split the reference uses.
+	var font := UiTheme.number_font()
+	var cap_font := UiTheme.display_font()
 	if cam == null or font == null:
 		return
 	for pop in _popups:
@@ -1371,12 +1398,12 @@ func _draw_popups() -> void:
 		var tag: String = str(pop.get("tag", ""))
 		if tag != "":
 			var tag_size := 24
-			var tw := font.get_string_size(tag, HORIZONTAL_ALIGNMENT_CENTER, -1, tag_size).x
+			var tw := cap_font.get_string_size(tag, HORIZONTAL_ALIGNMENT_CENTER, -1, tag_size).x
 			var tag_at := p - Vector2(tw * 0.5, float(size) * 0.72)
 			for off in [Vector2(-2, 0), Vector2(2, 0), Vector2(0, -2), Vector2(0, 2)]:
-				_fx_layer.draw_string(font, tag_at + off, tag,
+				_fx_layer.draw_string(cap_font, tag_at + off, tag,
 					HORIZONTAL_ALIGNMENT_LEFT, -1, tag_size, Color(0.05, 0.03, 0.04, alpha))
-			_fx_layer.draw_string(font, tag_at, tag,
+			_fx_layer.draw_string(cap_font, tag_at, tag,
 				HORIZONTAL_ALIGNMENT_LEFT, -1, tag_size,
 				Color(1.0, 0.88, 0.4, alpha))
 

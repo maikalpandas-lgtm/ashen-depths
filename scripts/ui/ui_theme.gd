@@ -19,14 +19,55 @@ extends RefCounted
 ## in a commercial build.
 
 const DISPLAY_PATH := "res://assets/fonts/RuslanDisplay.ttf"
-const TITLE_PATH := "res://assets/fonts/Forum.ttf"
-const BODY_PATH := "res://assets/fonts/Forum.ttf"
+## PT Serif replaces Forum for labels: a warm humanist serif that stays legible
+## small, which is what the reference uses for names and card text. Forum is a
+## roman too but thinner, and it was also doing duty for NUMBERS.
+const TITLE_PATH := "res://assets/fonts/PTSerif-Bold.ttf"
+const BODY_PATH := "res://assets/fonts/PTSerif.ttf"
+## Numbers get their OWN face. The reference deliberately sets figures in a
+## heavy rounded sans, much bolder than its text — damage, HP and energy are the
+## things a player reads mid-swing, and Forum at 62px was a thin outline.
+##
+## Variable font, wght axis 300…900 (read from its fvar table); FontVariation
+## pins it to 800 because Google's static ExtraBold file does not exist at the
+## path the repo advertises.
+const NUMBER_PATH := "res://assets/fonts/Rubik.ttf"
+const NUMBER_WEIGHT := 800
+
+## Cyrillic verified by parsing the cmap BEFORE wiring either of them in: 66/66
+## Russian letters and 10/10 digits. Cinzel and MedievalSharp both came back
+## 0/66 by the same check, and nothing but a measurement would have caught it.
 
 static var _title: FontFile = null
 static var _body: FontFile = null
 
 
 static var _display: FontFile = null
+static var _number: Font = null
+
+
+## Heavy face for figures only. Returns a FontVariation so the weight can be
+## pinned on a variable font; callers treat it as a plain Font.
+static func number_font() -> Font:
+	if _number == null:
+		var base := _load(NUMBER_PATH)
+		if base == null:
+			return title_font()
+		var v := FontVariation.new()
+		v.base_font = base
+		v.variation_opentype = {"wght": NUMBER_WEIGHT}
+		_number = v
+	return _number
+
+
+## Label styled for a NUMBER rather than for prose.
+static func as_number(label: Label, size: int, colour: Color = Color.WHITE) -> Label:
+	var f := number_font()
+	if f:
+		label.add_theme_font_override("font", f)
+	label.add_theme_font_size_override("font_size", size)
+	label.add_theme_color_override("font_color", colour)
+	return label
 
 
 static func title_font() -> FontFile:

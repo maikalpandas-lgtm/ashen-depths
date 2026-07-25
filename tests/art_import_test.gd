@@ -18,6 +18,7 @@ const CardDB = preload("res://scripts/cards/card_db.gd")
 const Party = preload("res://scripts/party.gd")
 const ItemDB = preload("res://scripts/items/item_db.gd")
 const Statuses = preload("res://scripts/combat/statuses.gd")
+const ForageDB = preload("res://scripts/items/forage_db.gd")
 
 const DIR := "res://assets/textures/"
 
@@ -48,6 +49,14 @@ func _init() -> void:
 	# Status icons — drawn under every enemy HP bar
 	for st in Statuses.STATUSES.keys():
 		wanted["status_" + str(st)] = "status %s" % st
+
+	# Фаза E — forageables in the world, consumables and trophies in the HUD
+	for id in ForageDB.FORAGE.keys():
+		wanted[str(ForageDB.FORAGE[id]["art"])] = "forage %s" % id
+	for id in ForageDB.CONSUMABLES.keys():
+		wanted[str(ForageDB.CONSUMABLES[id]["art"])] = "consumable %s" % id
+	for id in ForageDB.TROPHIES.keys():
+		wanted[str(ForageDB.TROPHIES[id]["art"])] = "trophy %s" % id
 
 	for hero_id in Party.HEROES.keys():
 		var def: Dictionary = Party.HEROES[hero_id]

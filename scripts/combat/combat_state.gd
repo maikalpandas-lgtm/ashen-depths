@@ -350,6 +350,25 @@ func play_card(hand_index: int, target: int) -> bool:
 			_log("эхо (−1 кость)")
 			_resolve_damage(card, target)
 
+	# Row-wide statuses and the cleanse fire on PLAY, not on a hit — Мор has no
+	# damage at all, so hanging it off _resolve_damage would do nothing.
+	if sigils.has(CardDB.Sigil.POISON_ALL):
+		for i in range(enemies.size()):
+			if int(enemies[i]["hp"]) > 0:
+				apply_status(i, "poison", 4)
+		_log("мор по шеренге")
+	if sigils.has(CardDB.Sigil.WEAK_ALL):
+		for i in range(enemies.size()):
+			if int(enemies[i]["hp"]) > 0:
+				apply_status(i, "weak", 2)
+		_log("окрик: немощь всем")
+	if sigils.has(CardDB.Sigil.CLEANSE):
+		# Only the HARMFUL ones. Stripping Ярость too would make the card a trap
+		# dressed as a cure — same rule the antidote follows.
+		Statuses.apply(party_status, "poison", -99)
+		Statuses.apply(party_status, "frail", -99)
+		_log("хвори сняты")
+
 	if sigils.has(CardDB.Sigil.DRAW):
 		var got := deck.draw(1)
 		if got > 0:

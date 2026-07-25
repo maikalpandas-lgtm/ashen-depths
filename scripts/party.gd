@@ -45,39 +45,48 @@ const HEROES := {
 		],
 	},
 	# --- славянский набор (добавлен, не замена) ---
+	# Each hero keeps a couple of shared basics — a starter deck needs one plain
+	# strike and one plain guard to read the rest against — but the REST is
+	# theirs alone. All three used to share Сеча and Заслон four deep, so the
+	# opening turns played identically whoever you picked.
 	"vityaz": {
 		"name": "Витязь", "archetype": "Богатырь", "role": "Танк / броня",
 		"hp": 82, "portrait": "face_vityaz", "colour": Color(0.86, 0.3, 0.26),
-		"blurb": "Держит удар. Много брони, мало урона.",
+		"blurb": "Держит удар. Броня растёт, а перебор идёт в неё же.",
 		"deck": [
-			"slice", "slice", "slice", "slice",
-			"block", "block", "block", "block",
-			"ward", "ward",
+			"slice", "slice",
+			"block", "block",
+			"wall_of_shields", "wall_of_shields",
+			"war_shout", "war_shout",
+			"ram_strike",
+			"ward",
 			"hack",
 		],
 	},
 	"polyanitsa": {
 		"name": "Поляница", "archetype": "Поляница", "role": "Урон / ловушки",
 		"hp": 68, "portrait": "face_polyanitsa", "colour": Color(0.55, 0.72, 0.35),
-		"blurb": "Бьёт по нескольким. Средняя во всём.",
+		"blurb": "Бьёт по нескольким и пробивает броню насквозь.",
 		"deck": [
-			"slice", "slice", "slice", "slice",
-			"cleave_cut", "cleave_cut",
-			"block", "block", "block",
-			"echo_strike",
-			"offering",
+			"slice", "slice",
+			"block", "block",
+			"arrow_shot", "arrow_shot", "arrow_shot",
+			"wolf_pit", "wolf_pit",
+			"fan_cut",
+			"cleave_cut",
 		],
 	},
 	"volhv": {
 		"name": "Волхв", "archetype": "Ведун", "role": "Чары",
 		"hp": 56, "portrait": "face_volhv", "colour": Color(0.45, 0.6, 0.95),
-		"blurb": "Хрупкий, но пробивает броню и лечится кровью.",
+		"blurb": "Хрупкий. Травит шеренгу и платит кровью за силу.",
 		"deck": [
-			"firebolt", "firebolt", "firebolt", "firebolt",
 			"slice", "slice",
-			"block", "block", "block",
-			"blood_lash",
-			"bone_rattle",
+			"block", "block",
+			"firebolt", "firebolt", "firebolt",
+			"blight",
+			"blood_oath",
+			"vedun_ward", "vedun_ward",
 		],
 	},
 }

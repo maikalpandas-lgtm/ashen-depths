@@ -22,6 +22,10 @@ enum Sigil {
 	OVERKILL,  ## перебитый урон становится бронёй
 	EXHAUST,   ## карта уходит из боя совсем
 	DRAW,      ## добор карты
+	## Именные карты героев (25.07.2026)
+	POISON_ALL,  ## отрава на всю шеренгу
+	WEAK_ALL,    ## немощь на всю шеренгу
+	CLEANSE,     ## снимает с героя Отраву и Порчу
 }
 
 ## energy = ⚡, blood = 🩸 HP paid on play.
@@ -164,6 +168,60 @@ const CARDS := {
 		"damage": 5, "block": 0, "sigils": [Sigil.BONE, Sigil.SANGUINE],
 		"text": "−2 HP → 5 урона. Добил — кость. Ярость 1",
 		"art": "card_bone_crown", "rarity": "uncommon",
+	},
+	# --- именные карты: ВИТЯЗЬ (танк) ---
+	# Each hero now starts with three cards nobody else has. Before this all
+	# three decks shared Сеча and Заслон, so the first few turns played the same
+	# whoever you picked — and the pick is the run's first real decision.
+	"wall_of_shields": {
+		"name": "Стена щитов", "type": Type.GUARD, "energy": 2, "blood": 0,
+		"damage": 0, "block": 12, "sigils": [Sigil.DRAW],
+		"text": "12 брони. Добор", "art": "card_wall_of_shields", "rarity": "uncommon",
+	},
+	"war_shout": {
+		"name": "Окрик", "type": Type.SKILL, "energy": 1, "blood": 0,
+		"damage": 0, "block": 5, "sigils": [Sigil.WEAK_ALL],
+		"text": "5 брони. Немощь 2 ВСЕМ", "art": "card_war_shout", "rarity": "uncommon",
+	},
+	"ram_strike": {
+		"name": "Таранный удар", "type": Type.STRIKE, "energy": 2, "blood": 0,
+		"damage": 9, "block": 0, "sigils": [Sigil.OVERKILL, Sigil.SHARP],
+		"text": "9 урона. Остриё: +2 по щиту. Перебор в броню",
+		"art": "card_ram_strike", "rarity": "rare",
+	},
+	# --- именные карты: ПОЛЯНИЦА (урон по нескольким) ---
+	"arrow_shot": {
+		"name": "Стрела", "type": Type.STRIKE, "energy": 1, "blood": 0,
+		"damage": 6, "block": 0, "sigils": [Sigil.PIERCE],
+		"text": "6 урона. Пробой брони", "art": "card_arrow_shot", "rarity": "common",
+	},
+	"wolf_pit": {
+		"name": "Волчья яма", "type": Type.SKILL, "energy": 1, "blood": 0,
+		"damage": 5, "block": 0, "sigils": [Sigil.FRAIL_HIT],
+		"text": "5 урона. Порча 2", "art": "card_wolf_pit", "rarity": "uncommon",
+	},
+	"fan_cut": {
+		"name": "Веерный удар", "type": Type.STRIKE, "energy": 2, "blood": 0,
+		"damage": 7, "block": 0, "sigils": [Sigil.SWEEP],
+		"text": "7 урона, полстолько ВСЕМ", "art": "card_fan_cut", "rarity": "rare",
+	},
+	# --- именные карты: ВОЛХВ (чары и кровь) ---
+	"blight": {
+		"name": "Мор", "type": Type.SPELL, "energy": 2, "blood": 0,
+		"damage": 0, "block": 0, "sigils": [Sigil.POISON_ALL],
+		"text": "Отрава 4 ВСЕМ", "art": "card_blight", "rarity": "rare",
+	},
+	"blood_oath": {
+		"name": "Кровавый обет", "type": Type.BLOOD, "energy": 0, "blood": 5,
+		"damage": 14, "block": 0, "sigils": [Sigil.SANGUINE, Sigil.DRAIN],
+		"text": "−5 HP → 14 урона, вампиризм. Ярость 1",
+		"art": "card_blood_oath", "rarity": "rare",
+	},
+	"vedun_ward": {
+		"name": "Оберег ведуна", "type": Type.GUARD, "energy": 1, "blood": 0,
+		"damage": 0, "block": 6, "sigils": [Sigil.CLEANSE],
+		"text": "6 брони. Снимает Отраву и Порчу",
+		"art": "card_vedun_ward", "rarity": "uncommon",
 	},
 	"firebolt": {
 		"name": "Огнестрел", "type": Type.SPELL, "energy": 1, "blood": 0,

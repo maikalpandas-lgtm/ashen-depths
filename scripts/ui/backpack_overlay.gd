@@ -94,6 +94,10 @@ func _refresh() -> void:
 					btn.text = str(def.get("name", "?")) if is_origin else "·"
 				btn.disabled = false
 				btn.modulate = Color(1.15, 1.05, 0.75) if uid == _selected_uid else Color(0.85, 0.78, 0.55)
+				# A worn weapon is tinted, so "which one is on me" is answerable
+				# without opening a second panel.
+				if is_origin and uid == bp.equipped_uid:
+					btn.modulate = Color(0.75, 1.25, 0.85)
 			else:
 				btn.text = ""
 				btn.icon = null
@@ -103,8 +107,12 @@ func _refresh() -> void:
 	if _selected_uid != "" and bp.placed.has(_selected_uid):
 		var p2: Dictionary = bp.placed[_selected_uid]
 		var def2: Dictionary = ItemDB.get_item(str(p2["id"]))
-		_info.text = "%s  ·  rot %d  ·  клик: клетка / R поворот / Del продать %d🪙" % [
-			def2.get("name", p2["id"]), int(p2["rot"]), int(def2.get("sell", 0))]
+		var extra := ""
+		if ItemDB.is_weapon(str(p2["id"])):
+			extra = "  ·  E надеть" if bp.equipped_uid != _selected_uid else "  ·  НАДЕТО, E снять"
+		_info.text = "%s  ·  %s%s  ·  R поворот / Del продать %d🪙" % [
+			def2.get("name", p2["id"]), str(def2.get("text", "")), extra,
+			int(def2.get("sell", 0))]
 	else:
 		_info.text = "Клик по предмету → выбрать. Клик по пустой клетке → переставить. R — поворот. Del — продать."
 
@@ -151,6 +159,50 @@ func _on_cell(x: int, y: int) -> void:
 		if Sfx:
 			Sfx.play("miss")
 	_refresh()
+
+
+## Wear the selected weapon, or take off the one already worn.
+##
+## Enter/E rather than a button: the grid is already click-driven for moving and
+## a second click target inside a cell would fight with placement.
+func _equip_selected() -> void:
+	var bp: Backpack = GameState.backpack if GameState else null
+	if bp == null or _selected_uid == "":
+		return
+	if not bp.placed.has(_selected_uid):
+		return
+	var id := str((bp.placed[_selected_uid] as Dictionary)["id"])
+	if not ItemDB.is_weapon(id):
+		_info.text = "%s — не оружие" % ItemDB.get_item(id).get("name", id)
+		return
+	if bp.equipped_uid == _selected_uid:
+		bp.unequip()
+		if Sfx:
+			Sfx.play("ui_click")
+	elif bp.equip(_selected_uid):
+		if Sfx:
+			Sfx.play("block", -4.0)
+	_sync_hand()
+	_refresh()
+
+
+## Push the worn weapon into the player's right hand.
+func _sync_hand() -> void:
+	var main := get_tree().current_scene
+	if main == null:
+		return
+	var players := get_tree().get_nodes_in_group("player")
+	if players.is_empty():
+		return
+	var pl := players[0] as Node3D
+	if pl.has_method("set_weapon_art"):
+		var bp: Backpack = GameState.backpack if GameState else null
+		var art := ""
+		if bp:
+			var worn := bp.equipped_id()
+			if worn != "":
+				art = ItemDB.hand_art(worn)
+		pl.call("set_weapon_art", art)
 
 
 func _rotate_selected() -> void:
@@ -274,6 +326,9 @@ func _input(event: InputEvent) -> void:
 		var k := (event as InputEventKey).keycode
 		if k == KEY_R:
 			_rotate_selected()
+			get_viewport().set_input_as_handled()
+		elif k == KEY_ENTER or k == KEY_KP_ENTER or k == KEY_E:
+			_equip_selected()
 			get_viewport().set_input_as_handled()
 		elif k == KEY_DELETE or k == KEY_BACKSPACE:
 			_sell_selected()

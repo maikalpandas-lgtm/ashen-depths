@@ -12,6 +12,18 @@ static func icon_id(item_id: String) -> String:
 	return "item_" + item_id
 
 
+## Weapons are items you EQUIP rather than merely carry. Their bonus applies only
+## while worn (Backpack.compute_mods checks this), which is what makes the single
+## weapon slot a decision instead of a bag of stacking swords.
+static func is_weapon(item_id: String) -> bool:
+	return bool(get_item(item_id).get("weapon", false))
+
+
+## Sprite shown in the player's right hand while this weapon is equipped.
+static func hand_art(item_id: String) -> String:
+	return str(get_item(item_id).get("hand", ""))
+
+
 const ICON_DIR := "res://assets/textures/"
 static var _icon_cache: Dictionary = {}
 
@@ -117,6 +129,39 @@ const ITEMS := {
 		"text": "Заклинания +2 урона",
 		"base": {"spell_dmg": 2},
 		"adj": {},
+	},
+	# --- оружие (надевается, бонус только пока надето) ---
+	"iron_sword": {
+		"name": "Железный меч", "rarity": "common",
+		"w": 1, "h": 2, "tags": ["blade", "weapon"],
+		"buy": 30, "sell": 12,
+		"text": "Надето: удар +2",
+		"weapon": true, "hand": "hand_iron_sword",
+		"base": {"strike_dmg": 2},
+	},
+	"battle_axe": {
+		"name": "Секира", "rarity": "uncommon",
+		"w": 1, "h": 2, "tags": ["blade", "weapon"],
+		"buy": 52, "sell": 21,
+		"text": "Надето: удар +4, но −1 стартовой брони",
+		"weapon": true, "hand": "hand_battle_axe",
+		"base": {"strike_dmg": 4, "start_block": -1},
+	},
+	"bone_spear": {
+		"name": "Костяное копьё", "rarity": "uncommon",
+		"w": 1, "h": 2, "tags": ["weapon", "bone"],
+		"buy": 48, "sell": 19,
+		"text": "Надето: удар +2, убийство даёт кость",
+		"weapon": true, "hand": "hand_bone_spear",
+		"base": {"strike_dmg": 2, "bone_on_kill": 1},
+	},
+	"witch_stave": {
+		"name": "Ведовской посох", "rarity": "rare",
+		"w": 1, "h": 2, "tags": ["weapon", "rune"],
+		"buy": 70, "sell": 28,
+		"text": "Надето: заклинания +4",
+		"weapon": true, "hand": "hand_witch_stave",
+		"base": {"spell_dmg": 4},
 	},
 	"seal_shard": {
 		"name": "Осколок Зарока", "rarity": "epic",

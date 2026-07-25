@@ -314,3 +314,33 @@ static func _make_glow_quad(size: Vector2) -> MeshInstance3D:
 	mi.material_override = mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return mi
+
+
+## Swap the right-hand sprite for an equipped weapon, or back to the knife.
+##
+## `art_id` is empty for "nothing equipped". Missing art falls back to the knife
+## rather than leaving an empty hand — a weapon whose picture has not been drawn
+## should still be wieldable.
+static func set_view_weapon(viewmodel: Node3D, art_id: String) -> void:
+	if viewmodel == null or not is_instance_valid(viewmodel):
+		return
+	var right := viewmodel.get_node_or_null("HandKnife") as Node3D
+	if right == null:
+		return
+	var spr := right.get_node_or_null("KnifeSprite") as Sprite3D
+	if spr == null:
+		return
+	var tex: Texture2D = null
+	if art_id != "":
+		tex = _load_png(ART_DIR_WEAPON + art_id + ".png")
+	if tex == null:
+		_ensure_textures()
+		tex = _hand_knife_tex
+	if tex == null:
+		return
+	spr.texture = tex
+	# pixel_size is per-texture: a taller weapon PNG must not become a giant.
+	spr.pixel_size = 0.00078 * (937.0 / maxf(1.0, float(tex.get_height())))
+
+
+const ART_DIR_WEAPON := "res://assets/textures/"

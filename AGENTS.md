@@ -62,6 +62,7 @@ godot --headless --script tests/enemy_trait_test.gd    # повадки враг
 godot --headless --script tests/font_test.gd           # у всех шрифтов есть кириллица и цифры
 godot --headless --script tests/glossary_test.gd       # каждое подсвеченное слово объяснено
 godot --headless --script tests/hero_deck_test.gd      # у каждого героя своя колода, не общая
+godot --headless --script tests/weapon_test.gd         # оружие даёт бонус только НАДЕТОЕ
 ```
 
 ⚠️ **Не импортировать `combat_overlay.gd` в headless-тест** — прогон зависает.

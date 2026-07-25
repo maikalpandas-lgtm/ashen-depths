@@ -391,3 +391,10 @@ func _pick_open_facing() -> int:
 
 func get_facing() -> Vector2i:
 	return FACINGS[facing_index]
+
+
+## Called by the backpack when a weapon is equipped or taken off.
+func set_weapon_art(art_id: String) -> void:
+	var vm := get_node_or_null("Head/Camera3D/ViewModel") as Node3D
+	if vm:
+		TorchSprites.set_view_weapon(vm, art_id)

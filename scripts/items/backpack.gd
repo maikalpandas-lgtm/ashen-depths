@@ -9,6 +9,9 @@ const HEIGHT := 4
 
 ## uid → {id, x, y, rot}
 var placed: Dictionary = {}
+## uid of the equipped weapon, or "". A weapon carried but not worn gives nothing
+## — otherwise the grid would just be a rack of stacking swords.
+var equipped_uid: String = ""
 var _next_uid: int = 1
 
 
@@ -174,6 +177,9 @@ func compute_mods() -> Dictionary:
 		var def: Dictionary = ItemDB.get_item(str(p["id"]))
 		if def.is_empty():
 			continue
+		# A weapon only counts while it is the equipped one
+		if bool(def.get("weapon", false)) and str(uid) != equipped_uid:
+			continue
 		_add_mod_dict(mods, def.get("base", {}))
 		var adj: Dictionary = def.get("adj", {})
 		var need: String = str(adj.get("need", ""))
@@ -202,3 +208,27 @@ func sell_value(uid: String) -> int:
 		return 0
 	var def := ItemDB.get_item(str(placed[uid]["id"]))
 	return int(def.get("sell", 5))
+
+
+## Equip the weapon at `uid`. Returns false if it is not a weapon or not here.
+##
+## One slot: equipping replaces whatever was worn. Adjacency bonuses still apply
+## to a worn weapon, so WHERE it sits in the grid keeps mattering.
+func equip(uid: String) -> bool:
+	if not placed.has(uid):
+		return false
+	if not ItemDB.is_weapon(str((placed[uid] as Dictionary)["id"])):
+		return false
+	equipped_uid = uid
+	return true
+
+
+func unequip() -> void:
+	equipped_uid = ""
+
+
+## Item id of the worn weapon, or "".
+func equipped_id() -> String:
+	if equipped_uid == "" or not placed.has(equipped_uid):
+		return ""
+	return str((placed[equipped_uid] as Dictionary)["id"])

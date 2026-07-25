@@ -45,6 +45,9 @@ func _init() -> void:
 	# Backpack item icons — the relic row draws these every fight
 	for item_id in ItemDB.ids():
 		wanted[ItemDB.icon_id(str(item_id))] = "item %s" % item_id
+		# ...and a weapon also needs the sprite it puts in the player's hand
+		if ItemDB.is_weapon(str(item_id)):
+			wanted[ItemDB.hand_art(str(item_id))] = "hand sprite for %s" % item_id
 
 	# Status icons — drawn under every enemy HP bar
 	for st in Statuses.STATUSES.keys():

@@ -763,7 +763,7 @@ func _draw_world_overlay() -> void:
 				# a guessed height — a brute and a grub need very different
 				# offsets, and guessing put the intent up by the ceiling.
 				var feet: Vector3 = node.global_position
-				var head: Vector3 = feet + Vector3.UP * _enemy_top(i)
+				var head: Vector3 = feet + Vector3.UP * _enemy_crown(i)
 				if not cam.is_position_behind(feet):
 					p = cam.unproject_position(feet)
 					have_proj = true
@@ -801,9 +801,11 @@ func _draw_world_overlay() -> void:
 		if int(e.get("hp", 0)) <= 0:
 			continue
 		var p: Vector2 = spots[k]
-		# Clear of the feet, name above the bar (reference order). The gap is
-		# generous because a sprite's paws and tail hang below its node origin.
-		var bar := Rect2(p.x - bar_w * 0.5, p.y + 46.0, bar_w, 15.0)
+		# Order under the feet: NAME first, then the bar. The name used to be
+		# drawn above the bar at bar.y - 8, and since draw_string places a
+		# BASELINE the glyphs climbed up onto the monster's paws. Now nothing in
+		# this block reaches above the feet line.
+		var bar := Rect2(p.x - bar_w * 0.5, p.y + 34.0, bar_w, 15.0)
 		var frac: float = clampf(float(e["hp"]) / maxf(1.0, float(e["max_hp"])), 0.0, 1.0)
 		var back_tex := _ui(BAR_BACK_TEX)
 		var fill_tex := _ui(BAR_FILL_TEX)
@@ -852,8 +854,9 @@ func _draw_world_overlay() -> void:
 		while nm_size > 10 and font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT,
 				-1, nm_size).x > nm_w:
 			nm_size -= 1
+		# Baseline placed so the glyphs sit BETWEEN the feet and the bar
 		_outlined(font, Vector2(bar.position.x + bar_w * 0.5 - nm_w * 0.5,
-			bar.position.y - 8.0), nm, nm_w, nm_size, Color(0.97, 0.94, 0.88))
+			p.y + 26.0), nm, nm_w, nm_size, Color(0.97, 0.94, 0.88))
 		# Intent just over the real head, not a guessed offset
 		var it: Dictionary = e["intent"]
 		var is_block: bool = it.get("type", "attack") == "block"
@@ -871,7 +874,9 @@ func _draw_world_overlay() -> void:
 		# the reference, but over the head is what reads as "this one is about to
 		# do that" — and each enemy gets its own height rather than the shared
 		# row, so a short mob's number does not float somewhere above it.
-		var own_head: float = maxf(64.0, float(head_ys[k]) - 16.0)
+		# draw_string places the BASELINE, so the glyphs rise from here — a small
+		# gap is all that is needed to clear the crown.
+		var own_head: float = maxf(38.0, float(head_ys[k]) - 6.0)
 		var ix: float = float(raw_xs[k])
 		_outlined(num, Vector2(ix - bar_w * 0.5, own_head), txt, bar_w, 30,
 			Color(0.65, 0.88, 1.0) if is_block else Color(1.0, 0.55, 0.16))
@@ -888,7 +893,7 @@ func _draw_world_overlay() -> void:
 			_outlined(num, Vector2(sh.position.x, sh.position.y + 17.0),
 				str(int(e["block"])), sh.size.x, 13, Color(0.98, 0.99, 1.0))
 
-		_draw_status_row(font, Vector2(bar.position.x + bar_w * 0.5, bar.position.y + 26.0),
+		_draw_status_row(font, Vector2(bar.position.x + bar_w * 0.5, bar.end.y + 5.0),
 			e.get("status", {}))
 
 
@@ -2082,10 +2087,29 @@ func _hover_enemy() -> int:
 	return _nearest_living_enemy(420.0)
 
 
+## Height used for the POPUP anchor — deliberately a little above the head so a
+## damage number does not start inside the sprite.
 func _enemy_top(index: int) -> float:
 	var id: String = _combat.enemies[index]["id"]
 	var def: Dictionary = EnemySprites.ENEMIES.get(id, {})
 	return float(def.get("height", 1.6)) + 0.35
+
+
+## The monster's ACTUAL crown, in world units, scaled by the formation.
+##
+## _enemy_top pads by 35cm and ignores node.scale, so using it for the intent put
+## the number a third of a metre above the head — and since draw_string places
+## its baseline, the glyphs then climbed another 30px on top of that. On a 2.45m
+## boss the result floated near the top of the screen.
+func _enemy_crown(index: int) -> float:
+	var id: String = _combat.enemies[index]["id"]
+	var def: Dictionary = EnemySprites.ENEMIES.get(id, {})
+	var h := float(def.get("height", 1.6))
+	if index < _enemy_nodes.size():
+		var node := _enemy_nodes[index] as Node3D
+		if is_instance_valid(node):
+			h *= node.scale.y
+	return h
 
 
 func _on_end_turn() -> void:

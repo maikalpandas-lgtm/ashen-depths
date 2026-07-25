@@ -444,7 +444,29 @@ func _is_corridor_or_dead_end(x: int, y: int) -> bool:
 	# Two exits must be opposite each other, or it is a corner
 	var ew := is_walkable_cell(x - 1, y) and is_walkable_cell(x + 1, y)
 	var ns := is_walkable_cell(x, y - 1) and is_walkable_cell(x, y + 1)
-	return ew or ns
+	if not (ew or ns):
+		return false
+	# ...and the combat camera has to have straight corridor to back into. It
+	# retreats ~5m, i.e. into the NEXT cell, and if that cell turns a corner the
+	# fight is framed against a wall joint — which is exactly where the corner
+	# seam shows.
+	return _straight_run(x, y, Vector2i(1, 0) if ew else Vector2i(0, 1))
+
+
+## Are there at least two straight cells either side along `axis`?
+func _straight_run(x: int, y: int, axis: Vector2i) -> bool:
+	for sign_i in [1, -1]:
+		for k in range(1, 3):
+			var cx: int = x + axis.x * k * int(sign_i)
+			var cy: int = y + axis.y * k * int(sign_i)
+			if not is_walkable_cell(cx, cy):
+				return false
+			# a side opening at that cell means the camera sees a junction
+			var perp := Vector2i(axis.y, axis.x)
+			if is_walkable_cell(cx + perp.x, cy + perp.y) \
+					or is_walkable_cell(cx - perp.x, cy - perp.y):
+				return false
+	return true
 
 
 ## Floor surface height — props and combat formations need it to sit on rock.
@@ -943,6 +965,11 @@ func _maybe_cave_wall(x: int, y: int, dx: int, dy: int, world: Vector3, skirt_ma
 ## alcove is tapered from BOTH sides, so nothing was left displaced.
 func _edge_overshoot(nx: int, ny: int, dx: int, dy: int) -> float:
 	if not _is_walkable(_get_cell(nx, ny)):
+		# 0.55 and NOT more. Raising it to 0.95 to close a corner seam produced a
+		# far worse artefact: the excess does not always land inside rock, so the
+		# panel grew a metre-long stone spike INTO the corridor — it read as the
+		# hero having fallen into a wall. The seam is the lesser evil; the real
+		# cure is keeping packs away from corners (_straight_run).
 		return 0.55  # wall turns — overshoot hides inside the rock
 	if not _is_walkable(_get_cell(nx + dx, ny + dy)):
 		return 0.0  # face continues
@@ -1428,6 +1455,11 @@ func _spawn_decorations() -> void:
 		var y := cell.y
 		if _get_cell(x, y) == Cell.START or _get_cell(x, y) == Cell.EXIT:
 			continue
+		# A brazier standing in a pack cell ends up merged with a monster in the
+		# combat view — seen on a boss frame, its blue flame growing out of the
+		# Хранитель's chest.
+		if encounter_kinds.has(cell):
+			continue
 		if _floor_neighbors(x, y) != 1:
 			continue
 		if (x * 13 + y * 7) % 5 != 0:
@@ -1453,7 +1485,11 @@ func _spawn_brazier(pos: Vector3) -> void:
 	# 2D sprite + light (Phase 5 debt: no more cylinder/sphere placeholders)
 	var cell := world_to_cell(pos)
 	var wd := _first_wall_dir(cell.x, cell.y)
-	PropSprites.make_brazier(props_root, pos, wd)
+	var made = PropSprites.make_brazier(props_root, pos, wd)
+	# Combat backs its camera into these too, so give it the handle it uses to
+	# get them out of the frame.
+	if made is Node3D:
+		(made as Node3D).add_to_group("combat_occluder")
 
 
 func _spawn_props_and_entities() -> void:

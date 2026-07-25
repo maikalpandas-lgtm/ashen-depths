@@ -13,6 +13,7 @@ const EnemySprites = preload("res://scripts/enemy_sprites.gd")
 const Statuses = preload("res://scripts/combat/statuses.gd")
 const FloorScale = preload("res://scripts/combat/floor_scale.gd")
 const ForageDB = preload("res://scripts/items/forage_db.gd")
+const EnemyTraits = preload("res://scripts/combat/enemy_traits.gd")
 
 const START_ENERGY := 3  ## §7.4 — ⚡3 at the start of the player's turn
 const DRAW_PER_TURN := 5  ## §7.5
@@ -77,6 +78,7 @@ func _init(party_ref: RefCounted, pack: Array, seed_value: int) -> void:
 			"block": 0,
 			"intent": {},
 			"status": {},
+			"trait": str(def.get("trait", EnemyTraits.DEFAULT)),
 		})
 	# Bones foraged in the corridor come into the fight (фаза E)
 	var gs = _game_state()
@@ -149,6 +151,7 @@ func end_turn() -> Array:
 	for e in enemies:
 		if int(e["hp"]) <= 0:
 			continue
+		_trait_on_turn(e)
 		var intent: Dictionary = e["intent"]
 		match intent.get("type", "attack"):
 			"block":
@@ -164,6 +167,7 @@ func end_turn() -> Array:
 						break
 					_event("enemy_attack", enemies.find(e), swing)
 					_hit_party(swing, e)
+					_trait_on_hit(e)
 	_tick_enemy_status()
 	_check_victory()
 	if phase == Phase.WON:
@@ -174,6 +178,43 @@ func end_turn() -> Array:
 		return log_lines.slice(before)
 	begin_player_turn()
 	return log_lines.slice(before)
+
+
+## A trait that fires when the enemy acts. The howler is the interesting one:
+## it buffs the WHOLE pack, which makes "kill that one first" a real decision
+## rather than always hitting whoever is weakest.
+func _trait_on_turn(e: Dictionary) -> void:
+	var t: Dictionary = EnemyTraits.of(str(e.get("trait", EnemyTraits.DEFAULT)))
+	var spec = t.get("on_turn", null)
+	if spec == null:
+		return
+	var id := str((spec as Dictionary).get("id", ""))
+	var n := int((spec as Dictionary).get("stacks", 1))
+	if id == "" or n <= 0:
+		return
+	if bool((spec as Dictionary).get("allies", false)):
+		for other in enemies:
+			if int(other["hp"]) > 0:
+				Statuses.apply(other["status"], id, n)
+		_event("status_applied", enemies.find(e), n, false, id)
+		_log("%s распаляет стаю" % e["name"])
+	else:
+		Statuses.apply(e["status"], id, n)
+		_event("status_applied", enemies.find(e), n, false, id)
+
+
+## A trait that rides on a connected hit — poison, weaken, frail.
+func _trait_on_hit(e: Dictionary) -> void:
+	var t: Dictionary = EnemyTraits.of(str(e.get("trait", EnemyTraits.DEFAULT)))
+	var spec = t.get("on_hit", null)
+	if spec == null:
+		return
+	var id := str((spec as Dictionary).get("id", ""))
+	var n := int((spec as Dictionary).get("stacks", 1))
+	if id == "" or n <= 0:
+		return
+	apply_status(-1, id, n)
+	_log("%s: %s" % [e["name"], Statuses.info(id).get("name", id)])
 
 
 func _tick_party_status() -> void:
@@ -234,15 +275,16 @@ func _roll_intent(e: Dictionary) -> Dictionary:
 	# max_hp is already scaled, so the intent inherits depth through it; the
 	# extra damage multiplier is applied on top and kept gentler than HP.
 	var base: int = FloorScale.scale_damage(maxi(3, int(e["max_hp"]) / 3), floor_index)
-	if _rng.randf() < 0.15:
+	# Behaviour comes from the enemy's TRAIT, not from its size. Before this
+	# every monster rolled the same intent off max_hp, so a swarm and a brute
+	# were the same fight with different art.
+	var t: Dictionary = EnemyTraits.of(str(e.get("trait", EnemyTraits.DEFAULT)))
+	if _rng.randf() < float(t.get("block_chance", 0.15)):
 		return {"type": "block", "value": base, "hits": 1}
-	# Small, fast things flurry; heavy things land one big blow. Tied to size so
-	# it reads off the sprite rather than being a surprise.
-	var big: bool = int(e["max_hp"]) >= 20
-	if not big and _rng.randf() < 0.35:
-		var per: int = maxi(2, base / 2)
-		return {"type": "attack", "value": per, "hits": 2}
-	return {"type": "attack", "value": base + _rng.randi_range(0, 3), "hits": 1}
+	var hits: int = maxi(1, int(t.get("hits", 1)))
+	var per: int = maxi(1, int(round(float(base + _rng.randi_range(0, 3))
+		* float(t.get("dmg_mult", 1.0)))))
+	return {"type": "attack", "value": per, "hits": hits}
 
 
 # --------------------------------------------------------------------- cards

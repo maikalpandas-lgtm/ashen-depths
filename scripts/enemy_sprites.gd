@@ -94,18 +94,42 @@ const RIM_PIXELS := 9.0
 const ENEMIES := {
 	# --- копи (верхние этажи) ---
 	# Phase 5 balance: early packs die in ~2–3 strikes; bosses still bite
-	"grub": {"art": "enemy_grub", "height": 1.25, "hp": 7, "name": "Пещерный грызун", "realm": "mine"},
-	"brute": {"art": "enemy_brute", "height": 2.25, "hp": 24, "name": "Каменный дед", "realm": "mine"},
-	"shade": {"art": "enemy_shade", "height": 1.7, "hp": 12, "name": "Тень рудокопа", "realm": "mine"},
+	"grub": {"art": "enemy_grub", "height": 1.25, "hp": 7, "name": "Пещерный грызун",
+		"realm": "mine", "trait": "swarm"},
+	"brute": {"art": "enemy_brute", "height": 2.25, "hp": 24, "name": "Каменный дед",
+		"realm": "mine", "trait": "guard"},
+	"shade": {"art": "enemy_shade", "height": 1.7, "hp": 12, "name": "Тень рудокопа",
+		"realm": "mine", "trait": "hexer"},
+	"slug": {"art": "enemy_slug", "height": 1.15, "hp": 16, "name": "Рудный слизень",
+		"realm": "mine", "trait": "poisoner"},
+	"bat_swarm": {"art": "enemy_bat_swarm", "height": 1.5, "hp": 9, "name": "Нетопыри",
+		"realm": "mine", "trait": "swarm"},
 	# --- навь (нижние этажи) ---
-	"anchutka": {"art": "enemy_anchutka", "height": 1.1, "hp": 6, "name": "Анчутка", "realm": "nav"},
-	"likho": {"art": "enemy_likho", "height": 2.1, "hp": 28, "name": "Лихо Одноглазое", "realm": "nav"},
-	"mavka": {"art": "enemy_mavka", "height": 1.75, "hp": 14, "name": "Мавка", "realm": "nav"},
-	"poludnitsa": {"art": "enemy_poludnitsa", "height": 1.75, "hp": 18, "name": "Полудница", "realm": "nav"},
+	"anchutka": {"art": "enemy_anchutka", "height": 1.1, "hp": 6, "name": "Анчутка",
+		"realm": "nav", "trait": "swarm"},
+	"likho": {"art": "enemy_likho", "height": 2.1, "hp": 28, "name": "Лихо Одноглазое",
+		"realm": "nav", "trait": "brute"},
+	"mavka": {"art": "enemy_mavka", "height": 1.75, "hp": 14, "name": "Мавка",
+		"realm": "nav", "trait": "hexer"},
+	"poludnitsa": {"art": "enemy_poludnitsa", "height": 1.75, "hp": 18, "name": "Полудница",
+		"realm": "nav", "trait": "weaver"},
+	"bolotnik": {"art": "enemy_bolotnik", "height": 1.9, "hp": 22, "name": "Болотник",
+		"realm": "nav", "trait": "poisoner"},
+	"koldun": {"art": "enemy_koldun", "height": 1.8, "hp": 15, "name": "Мёртвый колдун",
+		"realm": "nav", "trait": "howler"},
 	# --- сказочный лес (второй тип карты, не этаж) ---
-	"wolf": {"art": "enemy_wolf", "height": 1.3, "hp": 9, "name": "Волк", "realm": "forest"},
-	"kikimora": {"art": "enemy_kikimora", "height": 1.5, "hp": 13, "name": "Кикимора", "realm": "forest"},
-	"leshy": {"art": "enemy_leshy", "height": 2.3, "hp": 26, "name": "Леший", "realm": "forest"},
+	"wolf": {"art": "enemy_wolf", "height": 1.3, "hp": 9, "name": "Волк",
+		"realm": "forest", "trait": "swarm"},
+	"kikimora": {"art": "enemy_kikimora", "height": 1.5, "hp": 13, "name": "Кикимора",
+		"realm": "forest", "trait": "hexer"},
+	"leshy": {"art": "enemy_leshy", "height": 2.3, "hp": 26, "name": "Леший",
+		"realm": "forest", "trait": "howler"},
+	"boar": {"art": "enemy_boar", "height": 1.5, "hp": 20, "name": "Вепрь",
+		"realm": "forest", "trait": "brute"},
+	"raven_flock": {"art": "enemy_raven_flock", "height": 1.4, "hp": 11, "name": "Вороньё",
+		"realm": "forest", "trait": "weaver"},
+	"bereginya": {"art": "enemy_bereginya", "height": 1.8, "hp": 24, "name": "Берегиня",
+		"realm": "forest", "trait": "guard"},
 	# --- боссы (те же спрайты, жирнее статы) ---
 	"cave_warden": {
 		"art": "enemy_brute", "height": 2.45, "hp": 42, "name": "Хранитель копи",
@@ -157,33 +181,54 @@ static func realm_for(floor_index: int, biome: String = "mine") -> String:
 ## by accident.
 static func pack_for(cell_hash: int, floor_index: int = 1, biome: String = "mine") -> Array:
 	var realm := realm_for(floor_index, biome)
+	# Packs are built as ROLE COMBINATIONS, not random picks: a howler beside a
+	# brute is a different problem from two brutes, and that is the point of
+	# traits existing at all (scripts/combat/enemy_traits.gd).
 	if realm == "forest":
-		match cell_hash % 4:
+		match cell_hash % 7:
 			0:
 				return ["wolf", "wolf"]
 			1:
-				return ["leshy"]
+				return ["leshy"]              # howler alone — easy
 			2:
 				return ["kikimora", "wolf"]
+			3:
+				return ["boar"]               # one heavy hit
+			4:
+				return ["leshy", "wolf", "wolf"]   # howler + swarm: kill it first
+			5:
+				return ["bereginya", "raven_flock"]  # guard + frail weaver
 			_:
 				return ["kikimora", "kikimora", "wolf"]
 	if realm == "nav":
-		match cell_hash % 4:
+		match cell_hash % 7:
 			0:
 				return ["anchutka", "anchutka", "anchutka"]
 			1:
 				return ["likho"]
 			2:
 				return ["mavka", "anchutka"]
+			3:
+				return ["bolotnik"]           # poison, armour does not help
+			4:
+				return ["koldun", "anchutka", "anchutka"]  # howler + swarm
+			5:
+				return ["poludnitsa", "likho"]  # frail + heavy = the nasty one
 			_:
-				return ["poludnitsa", "mavka"]
-	match cell_hash % 4:
+				return ["bolotnik", "mavka"]
+	match cell_hash % 7:
 		0:
 			return ["grub", "grub", "grub"]
 		1:
 			return ["brute"]
 		2:
 			return ["shade", "grub"]
+		3:
+			return ["slug"]                   # poison introduced gently
+		4:
+			return ["bat_swarm", "bat_swarm"]
+		5:
+			return ["brute", "slug"]          # guard + poison
 		_:
 			return ["shade", "shade"]
 
@@ -192,10 +237,10 @@ static func pack_for(cell_hash: int, floor_index: int = 1, biome: String = "mine
 static func mini_boss_pack(floor_index: int = 1, biome: String = "mine") -> Array:
 	var realm := realm_for(floor_index, biome)
 	if realm == "forest":
-		return ["leshy", "wolf"]
+		return ["leshy", "boar"]
 	if realm == "nav":
-		return ["likho", "anchutka"]
-	return ["brute", "grub"]
+		return ["koldun", "likho"]
+	return ["brute", "slug"]
 
 
 ## Floor boss near the EXIT campfire — DESIGN Phase 3 mini/floor boss.

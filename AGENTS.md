@@ -58,6 +58,7 @@ godot --headless --script tests/deck_layout_test.gd    # книга колоды
 godot --headless --script tests/flourish_test.gd       # показ карты держится и не лезет на руку
 godot --headless --script tests/floor_scale_test.gd    # глубже = труднее, и никогда наоборот
 godot --headless --script tests/forage_test.gd         # сбор/расходники/трофеи не пропадают
+godot --headless --script tests/enemy_trait_test.gd    # повадки врагов реально различаются
 ```
 
 ⚠️ **Не импортировать `combat_overlay.gd` в headless-тест** — прогон зависает.

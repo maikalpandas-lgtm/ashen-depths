@@ -227,13 +227,20 @@ func _card_upgrade() -> void:
 	_refresh()
 
 
-func _leave() -> void:
+## Descend, optionally switching biome. `to_biome` empty = keep the current one.
+##
+## This is the ONLY route between the mines and the forest: the biome used to be
+## picked once at hero select and then locked for the whole run, so a player who
+## chose the mines could never see the forest without restarting.
+func _leave(to_biome: String = "") -> void:
 	_root.visible = false
 	if Sfx:
 		Sfx.play("ui_click")
 	get_tree().paused = false
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if _mode == "floor":
+		if GameState and to_biome != "" and to_biome != str(GameState.biome):
+			GameState.biome = to_biome
 		# Descend after camp shop
 		if GameState:
 			GameState.finish_floor_shop()
@@ -334,10 +341,33 @@ func _build() -> void:
 	up.pressed.connect(_card_upgrade)
 	tools.add_child(up)
 
+	# At a camp the player also chooses WHERE the next floor is. Two buttons
+	# rather than a dropdown: the fork is the interesting part and it should be
+	# impossible to miss.
+	if _mode == "floor":
+		var fork := HBoxContainer.new()
+		fork.alignment = BoxContainer.ALIGNMENT_CENTER
+		fork.add_theme_constant_override("separation", 12)
+		col.add_child(fork)
+		var here := str(GameState.biome) if GameState else "mine"
+		for entry in [
+			{"id": "mine", "label": "↓ ГЛУБЖЕ В КОПИ", "hint": "Тесно, темно, ближе к Нави"},
+			{"id": "forest", "label": "→ УЙТИ В ЛЕС", "hint": "Открыто, свои твари"},
+		]:
+			var b := Button.new()
+			var id := str(entry["id"])
+			b.text = str(entry["label"]) + ("  ·  здесь" if id == here else "")
+			b.tooltip_text = str(entry["hint"])
+			b.custom_minimum_size = Vector2(240, 46)
+			UiTheme.cartoon_button(b, 15,
+				Color(0.30, 0.52, 0.40) if id == here else Color(0.34, 0.30, 0.22))
+			b.pressed.connect(func(): _leave(id))
+			fork.add_child(b)
+
 	var leave := Button.new()
-	leave.text = "Уйти"
+	leave.text = "Уйти" if _mode != "floor" else "Уйти (тем же путём)"
 	leave.custom_minimum_size = Vector2(140, 40)
-	leave.pressed.connect(_leave)
+	leave.pressed.connect(func(): _leave(""))
 	var leave_c := CenterContainer.new()
 	leave_c.add_child(leave)
 	col.add_child(leave_c)

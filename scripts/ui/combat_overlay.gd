@@ -78,6 +78,8 @@ var _viewmodel: Node3D = null
 ## Torch flame is ~0.6m tall; at 1.8m it still reads as a torch (~215px), and
 ## anything closer starts eating the frame. See _clear_torches_off_the_lens.
 const TORCH_CLEAR_RADIUS := 1.8
+## A torch this close to the pack centre sits between the monsters on screen.
+const TORCH_PACK_RADIUS := 2.6
 var _muted_torches: Array = []
 var _muted_occluders: Array = []
 ## Trigger banner (see _draw_trigger_banner).
@@ -310,11 +312,16 @@ func _clear_torches_off_the_lens() -> void:
 	_muted_torches.clear()
 	if _cam == null or not is_instance_valid(_cam):
 		return
+	var pack_at := _source.global_position if is_instance_valid(_source) else _cam.global_position
 	for holder in get_tree().get_nodes_in_group("wall_torch"):
 		var node := holder as Node3D
 		if not is_instance_valid(node):
 			continue
-		if node.global_position.distance_to(_cam.global_position) > TORCH_CLEAR_RADIUS:
+		var near_lens: bool = node.global_position.distance_to(_cam.global_position) <= TORCH_CLEAR_RADIUS
+		# ...and one standing IN the pack: a bracket poking out between two
+		# monsters reads as part of one of them.
+		var in_pack: bool = node.global_position.distance_to(pack_at) <= TORCH_PACK_RADIUS
+		if not near_lens and not in_pack:
 			continue
 		for child in node.get_children():
 			# Light3D is a VisualInstance3D too — keep it, drop the rest
@@ -553,9 +560,11 @@ func _refresh() -> void:
 
 	var hp_now := _party_hp()
 	var hp_max := _party_max_hp()
-	# Energy, block, bones and statuses moved to _draw_energy as real elements.
-	# Leaving them here too would print every value twice.
-	_status.text = "❤ %d/%d" % [hp_now, hp_max]
+	# Energy, block, bones and statuses moved to _draw_energy as real elements,
+	# and HP has always been in the left panel. So this label now carries only
+	# transient hints — a permanent "❤ 68/68" floating mid-screen was just a
+	# leftover of the old text strip.
+	_status.text = ""
 	_log.text = "   ·   ".join(_combat.log_lines.slice(maxi(0, _combat.log_lines.size() - 2)))
 	# Keep left HUD in sync — party HP lives on GameState.party (same ref)
 	_sync_left_hud()
@@ -738,6 +747,9 @@ func _draw_world_overlay() -> void:
 	var min_gap := bar_w + 10.0
 	var spots: Array[Vector2] = []
 	var head_ys: Array[float] = []
+	## Projected x BEFORE the bars are pushed apart. The intent belongs over the
+	## monster's own head, so it must not inherit the bar's shifted position.
+	var raw_xs: Array[float] = []
 	for k in range(n):
 		var i: int = int(living[k])
 		var p := Vector2.ZERO
@@ -764,6 +776,7 @@ func _draw_world_overlay() -> void:
 			head_y = p.y - 90.0
 		spots.append(p)
 		head_ys.append(head_y)
+		raw_xs.append(p.x)
 
 	# ONE row for the whole pack. Per-monster heights meant two identical
 	# enemies got their bars and intents at different screen heights, because
@@ -829,8 +842,18 @@ func _draw_world_overlay() -> void:
 			"%d/%d" % [e["hp"], e["max_hp"]],
 			HORIZONTAL_ALIGNMENT_CENTER, bar_w, 12, Color(1.0, 0.97, 0.94))
 		# Name between the feet and the bar, outlined so it survives dark rock
-		_outlined(font, Vector2(bar.position.x, bar.position.y - 8.0), str(e["name"]),
-			bar_w, 14, Color(0.97, 0.94, 0.88))
+		# Names get their OWN width, not the bar's: switching to PT Serif Bold
+		# made them wider and "Пещерный грызун" was drawn as "Пещерный гры".
+		# Shrink to fit rather than clip — a truncated name is unreadable, a
+		# slightly smaller one is not.
+		var nm := str(e["name"])
+		var nm_w: float = bar_w * 2.1
+		var nm_size := 15
+		while nm_size > 10 and font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT,
+				-1, nm_size).x > nm_w:
+			nm_size -= 1
+		_outlined(font, Vector2(bar.position.x + bar_w * 0.5 - nm_w * 0.5,
+			bar.position.y - 8.0), nm, nm_w, nm_size, Color(0.97, 0.94, 0.88))
 		# Intent just over the real head, not a guessed offset
 		var it: Dictionary = e["intent"]
 		var is_block: bool = it.get("type", "attack") == "block"
@@ -844,11 +867,13 @@ func _draw_world_overlay() -> void:
 			txt = "🗡 %d×%d" % [it.get("value", 0), hits]
 		else:
 			txt = "🗡 %d" % it.get("value", 0)
-		# Bigger and pushed to the SIDE, as the reference does — centred over the
-		# head at 21px it vanished against the rock.
-		var side: float = -1.0 if (k % 2) == 0 else 1.0
-		_outlined(num, Vector2(bar.position.x + side * bar_w * 0.42, intent_row - 6.0),
-			txt, bar_w, 30,
+		# Centred over THIS monster's own head. It was offset to one side to copy
+		# the reference, but over the head is what reads as "this one is about to
+		# do that" — and each enemy gets its own height rather than the shared
+		# row, so a short mob's number does not float somewhere above it.
+		var own_head: float = maxf(64.0, float(head_ys[k]) - 16.0)
+		var ix: float = float(raw_xs[k])
+		_outlined(num, Vector2(ix - bar_w * 0.5, own_head), txt, bar_w, 30,
 			Color(0.65, 0.88, 1.0) if is_block else Color(1.0, 0.55, 0.16))
 		if int(e["block"]) > 0:
 			# Shield pill sitting ON the left end of the bar, like the reference
@@ -1266,14 +1291,18 @@ func _draw_piles() -> void:
 	var area := _fx_layer.size
 	if area.x < 10.0:
 		area = get_viewport().get_visible_rect().size
-	var y := area.y - 42.0
-	_pile_badge(font, Vector2(232.0, y), _combat.deck.draw_pile.size(),
+	# Left column, climbing UP from the energy pill. Every other corner is
+	# taken: the bottom bar carries the pack label, the bottom right is END TURN
+	# (which hid the fan entirely), and the top centre is the relic row.
+	var x := 240.0
+	var y := area.y - 250.0
+	_pile_badge(font, Vector2(x, y), _combat.deck.draw_pile.size(),
 		"колода", Color(0.30, 0.42, 0.62))
-	_pile_badge(font, Vector2(area.x - 74.0, y), _combat.deck.discard_pile.size(),
+	_pile_badge(font, Vector2(x, y - 92.0), _combat.deck.discard_pile.size(),
 		"сброс", Color(0.42, 0.34, 0.26))
 	var burned: int = _combat.deck.exhaust_pile.size()
 	if burned > 0:
-		_pile_badge(font, Vector2(area.x - 74.0, y - 40.0), burned,
+		_pile_badge(font, Vector2(x, y - 184.0), burned,
 			"сгорело", Color(0.52, 0.20, 0.20))
 
 

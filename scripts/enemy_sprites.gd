@@ -96,56 +96,59 @@ const RIM_PIXELS := 9.0
 ## when a floor sits on the boundary.
 const ENEMIES := {
 	# --- копи (верхние этажи) ---
-	# Phase 5 balance: early packs die in ~2–3 strikes; bosses still bite
-	"grub": {"art": "enemy_grub", "height": 1.25, "hp": 7, "name": "Пещерный грызун",
+	# HP roughly x1.8 on 25.07.2026. The starter Сеча deals 7, so a 7 HP grub
+	# died to ONE card — the fight was over before any trait could act and the
+	# whole trait system was invisible. A grub now takes two strikes, a stone
+	# brute six, a boss a dozen.
+	"grub": {"art": "enemy_grub", "height": 1.25, "hp": 14, "name": "Пещерный грызун",
 		"realm": "mine", "trait": "swarm"},
-	"brute": {"art": "enemy_brute", "height": 2.25, "hp": 24, "name": "Каменный дед",
+	"brute": {"art": "enemy_brute", "height": 2.25, "hp": 40, "name": "Каменный дед",
 		"realm": "mine", "trait": "guard"},
-	"shade": {"art": "enemy_shade", "height": 1.7, "hp": 12, "name": "Тень рудокопа",
+	"shade": {"art": "enemy_shade", "height": 1.7, "hp": 22, "name": "Тень рудокопа",
 		"realm": "mine", "trait": "hexer"},
-	"slug": {"art": "enemy_slug", "height": 1.15, "hp": 16, "name": "Рудный слизень",
+	"slug": {"art": "enemy_slug", "height": 1.15, "hp": 26, "name": "Рудный слизень",
 		"realm": "mine", "trait": "poisoner"},
-	"bat_swarm": {"art": "enemy_bat_swarm", "height": 1.5, "hp": 9, "name": "Нетопыри",
+	"bat_swarm": {"art": "enemy_bat_swarm", "height": 1.5, "hp": 18, "name": "Нетопыри",
 		"realm": "mine", "trait": "swarm"},
 	# --- навь (нижние этажи) ---
-	"anchutka": {"art": "enemy_anchutka", "height": 1.1, "hp": 6, "name": "Анчутка",
+	"anchutka": {"art": "enemy_anchutka", "height": 1.1, "hp": 13, "name": "Анчутка",
 		"realm": "nav", "trait": "swarm"},
-	"likho": {"art": "enemy_likho", "height": 2.1, "hp": 28, "name": "Лихо Одноглазое",
+	"likho": {"art": "enemy_likho", "height": 2.1, "hp": 46, "name": "Лихо Одноглазое",
 		"realm": "nav", "trait": "brute"},
-	"mavka": {"art": "enemy_mavka", "height": 1.75, "hp": 14, "name": "Мавка",
+	"mavka": {"art": "enemy_mavka", "height": 1.75, "hp": 25, "name": "Мавка",
 		"realm": "nav", "trait": "hexer"},
-	"poludnitsa": {"art": "enemy_poludnitsa", "height": 1.75, "hp": 18, "name": "Полудница",
+	"poludnitsa": {"art": "enemy_poludnitsa", "height": 1.75, "hp": 30, "name": "Полудница",
 		"realm": "nav", "trait": "weaver"},
-	"bolotnik": {"art": "enemy_bolotnik", "height": 1.9, "hp": 22, "name": "Болотник",
+	"bolotnik": {"art": "enemy_bolotnik", "height": 1.9, "hp": 34, "name": "Болотник",
 		"realm": "nav", "trait": "poisoner"},
-	"koldun": {"art": "enemy_koldun", "height": 1.8, "hp": 15, "name": "Мёртвый колдун",
+	"koldun": {"art": "enemy_koldun", "height": 1.8, "hp": 26, "name": "Мёртвый колдун",
 		"realm": "nav", "trait": "howler"},
 	# --- сказочный лес (второй тип карты, не этаж) ---
-	"wolf": {"art": "enemy_wolf", "height": 1.3, "hp": 9, "name": "Волк",
+	"wolf": {"art": "enemy_wolf", "height": 1.3, "hp": 17, "name": "Волк",
 		"realm": "forest", "trait": "swarm"},
-	"kikimora": {"art": "enemy_kikimora", "height": 1.5, "hp": 13, "name": "Кикимора",
+	"kikimora": {"art": "enemy_kikimora", "height": 1.5, "hp": 23, "name": "Кикимора",
 		"realm": "forest", "trait": "hexer"},
-	"leshy": {"art": "enemy_leshy", "height": 2.3, "hp": 26, "name": "Леший",
+	"leshy": {"art": "enemy_leshy", "height": 2.3, "hp": 42, "name": "Леший",
 		"realm": "forest", "trait": "howler"},
-	"boar": {"art": "enemy_boar", "height": 1.5, "hp": 20, "name": "Вепрь",
+	"boar": {"art": "enemy_boar", "height": 1.5, "hp": 33, "name": "Вепрь",
 		"realm": "forest", "trait": "brute"},
-	"raven_flock": {"art": "enemy_raven_flock", "height": 1.4, "hp": 11, "name": "Вороньё",
+	"raven_flock": {"art": "enemy_raven_flock", "height": 1.4, "hp": 20, "name": "Вороньё",
 		"realm": "forest", "trait": "weaver"},
-	"bereginya": {"art": "enemy_bereginya", "height": 1.8, "hp": 24, "name": "Берегиня",
+	"bereginya": {"art": "enemy_bereginya", "height": 1.8, "hp": 38, "name": "Берегиня",
 		"realm": "forest", "trait": "guard"},
 	# --- боссы (те же спрайты, жирнее статы) ---
 	"cave_warden": {
-		"art": "enemy_brute", "height": 2.45, "hp": 42, "name": "Хранитель копи",
+		"art": "enemy_brute", "height": 2.45, "hp": 78, "name": "Хранитель копи",
 		"realm": "mine", "boss": true,
 	},
 	"nav_host": {
-		"art": "enemy_likho", "height": 2.35, "hp": 52, "name": "Воевода Нави",
+		"art": "enemy_likho", "height": 2.35, "hp": 95, "name": "Воевода Нави",
 		"realm": "nav", "boss": true,
 	},
 	# Reuses the Леший art at a bigger scale, exactly like cave_warden reuses
 	# the brute — a boss costs stats and a name, not another Grok batch.
 	"forest_lord": {
-		"art": "enemy_leshy", "height": 2.6, "hp": 48, "name": "Лесной хозяин",
+		"art": "enemy_leshy", "height": 2.6, "hp": 88, "name": "Лесной хозяин",
 		"realm": "forest", "boss": true,
 	},
 }

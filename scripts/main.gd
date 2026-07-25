@@ -11,6 +11,7 @@ extends Node3D
 const SHOT_DIR := "res://shots"
 const LeftPanelScript = preload("res://scripts/ui/left_panel.gd")
 const EnemySprites = preload("res://scripts/enemy_sprites.gd")
+const Party = preload("res://scripts/party.gd")
 
 var minimap: Control = null
 
@@ -43,6 +44,16 @@ func _ready() -> void:
 
 	_update_hud()
 	hud_hint.text = "W/S · A/D · B рюкзак · C колода · костёр → лавка → этаж"
+
+	# Debug entry points, so a visual check does not have to walk the menus:
+	#   godot --path . -- --fight          straight into a normal fight
+	#   godot --path . -- --fight --forest same, in the forest
+	#   godot --path . -- --hero volhv     pick the hero
+	# Added because verifying combat art meant clicking through the title, hero
+	# select and then hunting for a pack every single time.
+	if _debug_args().has("fight"):
+		call_deferred("_debug_start_fight")
+		return
 
 	if dungeon.get("start_cell") != null:
 		var start: Vector2i = dungeon.start_cell
@@ -259,3 +270,62 @@ func _apply_biome_sound() -> void:
 func _update_hud() -> void:
 	if left_panel and left_panel.has_method("refresh"):
 		left_panel.call("refresh")
+
+
+# ------------------------------------------------------------------ debug entry
+
+## Command-line switches after `--`, as a set. Godot hands these back via
+## OS.get_cmdline_user_args(), which is separate from the engine's own flags.
+func _debug_args() -> Dictionary:
+	var out := {}
+	var args := OS.get_cmdline_user_args()
+	for i in range(args.size()):
+		var a := str(args[i]).lstrip("-")
+		out[a] = str(args[i + 1]) if i + 1 < args.size() \
+			and not str(args[i + 1]).begins_with("-") else ""
+	return out
+
+
+## Skip the menus, start a run, walk to a pack, open the fight.
+func _debug_start_fight() -> void:
+	var args := _debug_args()
+	var hero := str(args.get("hero", ""))
+	if hero == "":
+		hero = Party.DEFAULT_HERO
+	var biome := "forest" if args.has("forest") else "mine"
+	var floor_i := int(args.get("floor", "1"))
+
+	for n in ["TitleOverlay", "HeroSelectOverlay"]:
+		var ov := get_node_or_null(n)
+		if ov and ov.has_method("is_open") and ov.call("is_open"):
+			ov.set("visible", false)
+		if ov:
+			var root = ov.get("_root")
+			if root:
+				root.visible = false
+	get_tree().paused = false
+
+	if GameState:
+		GameState.new_run(0, hero, biome)
+		# Floors above 1 change the bestiary and the difficulty scale, so this is
+		# how a deep fight gets tested without playing to it.
+		GameState.floor_index = maxi(1, floor_i)
+	_apply_biome_environment()
+	_apply_biome_sound()
+	if dungeon.has_method("generate"):
+		dungeon.generate(0)
+	await get_tree().process_frame
+
+	# Stand on a normal pack. Not a boss: bosses are a separate check.
+	var kinds: Dictionary = dungeon.get("encounter_kinds")
+	var target := Vector2i(-1, -1)
+	if kinds:
+		for cell in kinds.keys():
+			if str(kinds[cell]) == "normal":
+				target = cell
+				break
+	if target.x < 0:
+		push_warning("[Debug] no normal pack on this floor")
+		return
+	_place_player(dungeon.cell_to_world(target))
+	print("[Debug] fight: hero=%s biome=%s floor=%d cell=%s" % [hero, biome, floor_i, target])

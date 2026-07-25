@@ -153,7 +153,8 @@ func _test_combat_basics() -> void:
 	check(c.energy == Combat.START_ENERGY, "turn starts on 3 energy")
 	check(c.deck.hand.size() == Combat.DRAW_PER_TURN, "opening hand is 5")
 	check(c.enemies.size() == 2, "pack has 2 enemies")
-	check(c.enemies[1]["hp"] == 24, "brute HP comes from the enemy table")
+	check(c.enemies[1]["hp"] == EnemySprites.ENEMIES["brute"]["hp"],
+		"brute HP comes from the enemy table")
 	check(c.phase == Combat.Phase.PLAYER, "player acts first")
 	for e in c.enemies:
 		check_silent(not (e["intent"] as Dictionary).is_empty(), "every enemy telegraphs an intent")

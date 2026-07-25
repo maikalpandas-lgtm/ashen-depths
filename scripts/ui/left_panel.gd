@@ -4,6 +4,7 @@ extends PanelContainer
 
 const UiTheme = preload("res://scripts/ui/ui_theme.gd")
 const EnemySprites = preload("res://scripts/enemy_sprites.gd")
+const Party = preload("res://scripts/party.gd")
 
 const REACT_TIME := 0.42
 const REACT_COLOURS := {
@@ -60,12 +61,16 @@ func set_minimap_node(m: Control) -> void:
 func refresh() -> void:
 	var floor_i := 1
 	var gold := 0
-	# Fallback only — a real run always has a hero. 88 was the old three-hero
-	# total; a solo run's pool is whatever that hero carries.
-	var party_hp := 82
-	var party_max := 82
-	var portrait_id := "hero_vityaz"
-	var name_s := "Витязь"
+	# Fallback only — a real run always has a hero. DERIVED from the hero table
+	# rather than hard-coded: the old literal was "hero_vityaz", the pre-batch-6
+	# armoured bust, which is a DIFFERENT design from the face_* avatars used
+	# everywhere else. Picking any hero and seeing that bust read as "wrong
+	# avatar", because it is a different drawing of the same man.
+	var fallback: Dictionary = Party.HEROES.get(Party.DEFAULT_HERO, {})
+	var party_hp: int = int(fallback.get("hp", 82))
+	var party_max: int = party_hp
+	var portrait_id := str(fallback.get("portrait", "face_vityaz"))
+	var name_s := str(fallback.get("name", "Витязь"))
 	if GameState:
 		floor_i = GameState.floor_index
 		gold = GameState.gold

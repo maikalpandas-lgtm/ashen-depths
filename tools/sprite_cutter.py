@@ -356,6 +356,69 @@ def restore_interior(
     return im
 
 
+def seal_holes(im: Image.Image) -> tuple[Image.Image, int]:
+    """Make transparent islands opaque again.
+
+    A transparent pixel only belongs to the BACKGROUND if you can walk to it
+    from the frame edge through other transparent pixels. Anything transparent
+    that is fenced in by the sprite is damage, and gets its colour back.
+
+    Why this exists: the batch-6 portraits came back on HOT PINK (249,17,165)
+    rather than #FF00FF, and the edge flood then leaked through the warm rim
+    light on the face straight into the pale skin — the cheek, chin and nose
+    highlight were simply gone. Волхв survived only because he has no pale
+    skin to leak into. Tolerance changes did nothing; the leak is topological,
+    so the fix has to be topological too.
+    """
+    im = im.convert("RGBA")
+    w, h = im.size
+    px = im.load()
+    outside = bytearray(w * h)
+    stack = []
+    for x in range(w):
+        for y in (0, h - 1):
+            if px[x, y][3] < 24:
+                stack.append((x, y))
+    for y in range(h):
+        for x in (0, w - 1):
+            if px[x, y][3] < 24:
+                stack.append((x, y))
+    while stack:
+        x, y = stack.pop()
+        i = y * w + x
+        if outside[i]:
+            continue
+        outside[i] = 1
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < w and 0 <= ny < h and not outside[ny * w + nx]:
+                if px[nx, ny][3] < 24:
+                    stack.append((nx, ny))
+
+    sealed = 0
+    for y in range(h):
+        for x in range(w):
+            if px[x, y][3] >= 24 or outside[y * w + x]:
+                continue
+            # Borrow colour from the nearest opaque neighbour so the patch is
+            # not a flat blob — these islands sit inside smooth shading.
+            best = None
+            for r in (1, 2, 3, 4):
+                for dx, dy in ((r, 0), (-r, 0), (0, r), (0, -r),
+                               (r, r), (-r, r), (r, -r), (-r, -r)):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < w and 0 <= ny < h and px[nx, ny][3] >= 200:
+                        best = px[nx, ny]
+                        break
+                if best is not None:
+                    break
+            if best is None:
+                continue
+            px[x, y] = (best[0], best[1], best[2], 255)
+            sealed += 1
+    return im, sealed
+
+
 def process_file(
     src: Path,
     dst: Path,
@@ -386,6 +449,9 @@ def process_file(
             im = despill_tint(im, key, despill_band)
             im = erode_light_edge(im, light_thr, erode_light)
             im = cut_edge_flood(im, key, tol, pad)
+            im, sealed = seal_holes(im)
+            if sealed:
+                print(f"    sealed {sealed} interior px")
             im.save(dst)
             tmp.unlink(missing_ok=True)
             print(f"  ffmpeg+clean {src.name} -> {dst.name} {im.size}")
@@ -396,6 +462,9 @@ def process_file(
     out = kill_key_everywhere(out, key, tol)
     out = despill_tint(out, key, despill_band)
     out = erode_light_edge(out, light_thr, erode_light)
+    out, sealed = seal_holes(out)
+    if sealed:
+        print(f"    sealed {sealed} interior px")
     out.save(dst)
     print(f"  flood {src.name} -> {dst.name} {out.size}")
 

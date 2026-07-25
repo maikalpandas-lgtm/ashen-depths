@@ -1277,9 +1277,36 @@ func _draw_piles() -> void:
 			"сгорело", Color(0.52, 0.20, 0.20))
 
 
+const CARD_BACK_TEX := "res://assets/textures/card_back.png"
+
+
 func _pile_badge(font: Font, at: Vector2, count: int, label: String,
 		col: Color) -> void:
 	var r := Rect2(at.x, at.y, 46.0, 30.0)
+	var back := _ui(CARD_BACK_TEX)
+	if back != null:
+		# A fan of three backs, like the reference, instead of a flat plate. The
+		# fan reads as "a pile of cards" at a glance; a rectangle reads as a
+		# label. Drawn back-to-front so the front card sits on top.
+		var card := Vector2(38.0, 53.0)
+		var base := Vector2(r.position.x + 2.0, r.position.y - 16.0)
+		for i in range(3):
+			var k := 2 - i
+			var off := Vector2(float(k) * 4.0, float(k) * -2.5)
+			var shade: float = 1.0 - 0.16 * float(k)
+			_fx_layer.draw_texture_rect(back, Rect2(base + off, card), false,
+				Color(shade, shade, shade, 1.0))
+		# Count in a round badge on the corner, as the reference does
+		var bc := base + Vector2(card.x - 4.0, card.y - 6.0)
+		_fx_layer.draw_circle(bc, 12.0, Color(0.08, 0.05, 0.05, 0.95))
+		_fx_layer.draw_circle(bc, 10.0, col)
+		_fx_layer.draw_string(UiTheme.number_font(), bc + Vector2(-11.0, 5.0),
+			str(count), HORIZONTAL_ALIGNMENT_CENTER, 22.0, 14,
+			Color(0.99, 0.97, 0.93))
+		_fx_layer.draw_string(font, Vector2(base.x - 8.0, base.y + card.y + 16.0),
+			label, HORIZONTAL_ALIGNMENT_CENTER, card.x + 16.0, 11,
+			Color(0.70, 0.66, 0.62))
+		return
 	_fx_layer.draw_rect(r.grow(2.0), Color(0.06, 0.04, 0.05, 0.9), true)
 	_fx_layer.draw_rect(r, col, true)
 	_fx_layer.draw_string(UiTheme.number_font(),

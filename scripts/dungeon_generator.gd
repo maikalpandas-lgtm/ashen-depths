@@ -7,6 +7,7 @@ const PropSprites = preload("res://scripts/prop_sprites.gd")
 const ForestProps = preload("res://scripts/forest_props.gd")
 const ForageSprites = preload("res://scripts/forage_sprites.gd")
 const ForageDB = preload("res://scripts/items/forage_db.gd")
+const CaveProps = preload("res://scripts/cave_props.gd")
 const ROCK_SHADER = preload("res://shaders/cave_rock.gdshader")
 const FOREST_GROUND_SHADER = preload("res://shaders/forest_ground.gdshader")
 
@@ -171,8 +172,13 @@ func _build_materials() -> void:
 		"mid_col": Color(0.09, 0.24, 0.27),
 		"lite_col": Color(0.16, 0.36, 0.36),
 		"hi_col": Color(0.3, 0.58, 0.55),
-		"big_scale": 2.1,
-		"small_scale": 6.2,
+		# Волна 4 of VISUAL_PLAN: bigger stones, calmer chips. The reference
+		# reads cleanly because its shapes are LARGE; ours was busy enough that
+		# no single form registered — per-pixel detail everywhere is the same as
+		# no detail at all. small_scale 6.2 -> 4.3, big_scale 2.1 -> 1.7.
+		"big_scale": 1.7,
+		"small_scale": 4.3,
+		"chip_contrast": 0.11,
 		"angular": 0.5,
 		"rough": 0.84,
 	})
@@ -186,8 +192,9 @@ func _build_materials() -> void:
 			"mid_col": Color(0.08, 0.18, 0.24),
 			"lite_col": Color(0.13, 0.27, 0.32),
 			"hi_col": Color(0.2, 0.4, 0.44),
-			"big_scale": 1.5,
-			"small_scale": 4.4,
+			"big_scale": 1.25,
+			"small_scale": 3.2,
+			"chip_contrast": 0.09,
 			"angular": 0.62,
 			"rim_strength": 0.22,
 			"rough": 0.9,
@@ -198,8 +205,9 @@ func _build_materials() -> void:
 		"mid_col": Color(0.06, 0.17, 0.19),
 		"lite_col": Color(0.1, 0.26, 0.26),
 		"hi_col": Color(0.18, 0.4, 0.38),
-		"big_scale": 2.5,
-		"small_scale": 7.0,
+		"big_scale": 2.0,
+		"small_scale": 5.0,
+		"chip_contrast": 0.10,
 		"angular": 0.4,
 		"rim_strength": 0.3,
 		"rough": 0.93,
@@ -783,7 +791,9 @@ func _build_merged_floor(fill_all: bool = false) -> void:
 ## (contact shadows, props) must read this — the floor is not flat at y=0.
 func _floor_height(wx: float, wz: float) -> float:
 	var h: float = _cave_noise(wx, wz, 0) * 0.1 + _cave_noise(wx * 2.2, wz * 2.1, 5) * 0.05
-	h += _cave_noise(wx * 4.0, wz * 3.8, 9) * 0.025
+	# Finest bump halved (0.025 -> 0.012): at 2.5cm it did not read as relief,
+	# only as noise that fought the painted rock for attention.
+	h += _cave_noise(wx * 4.0, wz * 3.8, 9) * 0.012
 	# Rise toward walls (trough in corridor centre) — world distance, not cell UV
 	return h + pow(_wall_near(wx, wz, cell_size * 0.5), 1.45) * 0.16
 
@@ -1351,6 +1361,52 @@ func _spawn_forage() -> void:
 		print("[Forage] %d" % placed)
 
 
+## Set dressing for the mines and Навь — волна 3 of docs/VISUAL_PLAN.md.
+##
+## Every corridor looked identical because torches were the only thing in them.
+## Placed against a WALL rather than in the middle: a barrel in the walking lane
+## ends up inside the camera, and the row a pack forms needs the centre clear
+## (EnemySprites.CLEAR_WIDTH).
+func _spawn_cave_props() -> void:
+	var placed := 0
+	for cell in floor_cells:
+		var t := _get_cell(cell.x, cell.y)
+		if t == Cell.START or t == Cell.EXIT or t == Cell.CHEST or t == Cell.MERCHANT:
+			continue
+		# Never on a fight cell: a column between the player and the pack would
+		# be hidden by _clear_occluders_off_the_lens anyway, so it is wasted.
+		if encounter_kinds.has(cell):
+			continue
+		var h := absi(cell.x * 40503 ^ cell.y * 27191)
+		if h % 5 != 0:  # roughly a fifth of cells
+			continue
+		var wd := _first_wall_dir(cell.x, cell.y)
+		var id := CaveProps.pick(h / 5, wd != Vector2i.ZERO)
+		if id == "":
+			continue
+		var world := cell_to_world(cell)
+		var pos: Vector3
+		var face := Vector2i.ZERO
+		if CaveProps.is_wall_prop(id) and wd != Vector2i.ZERO:
+			# Hard against the rock, at the height a banner hangs
+			var push := _mount_push(world, wd, 1.6)
+			var dist: float = clampf(cell_size * 0.5 - push - 0.05, 0.3, cell_size * 0.5)
+			pos = world + Vector3(float(wd.x) * dist, 0.0, float(wd.y) * dist)
+			face = wd
+		else:
+			var side := wd if wd != Vector2i.ZERO else Vector2i(1, 0)
+			var off: float = cell_size * 0.33
+			pos = world + Vector3(float(side.x) * off, 0.0, float(side.y) * off)
+		var ground := _floor_height(pos.x, pos.z)
+		if CaveProps.is_wall_prop(id):
+			# A banner hangs, so its base sits above the floor
+			ground += 1.05
+		if CaveProps.make(props_root, id, pos, ground, face) != null:
+			placed += 1
+	if placed > 0:
+		print("[CaveProps] %d" % placed)
+
+
 func _spawn_decorations() -> void:
 	if _biome == "forest":
 		for cell in floor_cells:
@@ -1363,6 +1419,7 @@ func _spawn_decorations() -> void:
 			ForestProps.make_undergrowth(props_root, world,
 				_floor_height(world.x, world.z), cell_size, h)
 		return
+	_spawn_cave_props()
 	## No free-floating white planes (billboards looked like “empty 3D junk”).
 	## Only sparse wall braziers at dead-ends.
 	var n := 0

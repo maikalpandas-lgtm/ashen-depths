@@ -24,6 +24,7 @@ func _init() -> void:
 	_test_tables()
 	_test_slots()
 	_test_spawn()
+	_test_drops()
 	_test_trophies()
 	print("\n%d passed, %d failed" % [_passed, _failed])
 	quit(1 if _failed > 0 else 0)
@@ -88,6 +89,44 @@ func _test_spawn() -> void:
 	check(rate > 0.05 and rate < 0.30,
 		"%.0f%% of cells grow something — worth looking for, not a carpet" % (rate * 100.0))
 	check(forest_hits > 0, "the forest grows things too")
+
+
+## Loot from a beaten pack. The failure mode is silence: a potion that drops into
+## a full pouch and vanishes is a reward the player never learns they earned.
+func _test_drops() -> void:
+	print("drops from packs")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 12345
+	# Every kind must be able to drop something, and a boss more than a grub
+	var counts := {}
+	for kind in ["normal", "mini_boss", "floor_boss"]:
+		var got := 0
+		for i in range(400):
+			got += ForageDB.roll_drops(kind, rng).size()
+		counts[kind] = got
+		check(got > 0, "%s packs drop potions (%d in 400)" % [kind, got])
+	check(int(counts["floor_boss"]) > int(counts["normal"]),
+		"a floor boss pays better than a normal pack (%d vs %d)"
+			% [counts["floor_boss"], counts["normal"]])
+	check(int(counts["mini_boss"]) > int(counts["normal"]),
+		"an elite pays better than a normal pack")
+
+	# Everything dropped must be a REAL consumable, or add_consumable refuses it
+	# and the reward disappears with no message.
+	for kind in ["normal", "mini_boss", "floor_boss"]:
+		for i in range(200):
+			for id in ForageDB.roll_drops(kind, rng):
+				if not ForageDB.CONSUMABLES.has(str(id)):
+					check(false, "%s dropped an unknown consumable: %s" % [kind, id])
+					return
+	check(true, "every drop is a real consumable")
+
+	# A normal pack must not shower the player — the pouch holds three
+	var max_at_once := 0
+	for i in range(400):
+		max_at_once = maxi(max_at_once, ForageDB.roll_drops("normal", rng).size())
+	check(max_at_once <= ForageDB.CARRY_SLOTS,
+		"one pack never drops more than the pouch can hold (%d)" % max_at_once)
 
 
 func _test_trophies() -> void:

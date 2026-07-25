@@ -118,6 +118,7 @@ func queue_combat_loot(pack_kind: String, seed_value: int = 0) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value if seed_value != 0 else (current_seed + floor_index * 17 + Time.get_ticks_msec())
 	pending_loot = ItemDB.roll_loot(pack_kind, rng)
+	_collect_drops(pack_kind, rng)
 	# Floor boss always gets a seal shard auto-offer as "Layer 3 light"
 	if pack_kind == "floor_boss":
 		var has_shard := false
@@ -126,6 +127,32 @@ func queue_combat_loot(pack_kind: String, seed_value: int = 0) -> void:
 				has_shard = true
 		if not has_shard:
 			pending_loot.append({"id": "seal_shard", "pick": true, "auto_shard": true})
+
+
+## Potions a pack left behind. Taken automatically, because the only interesting
+## case is a FULL pouch — and that one is not silently dropped: the potion is
+## sold on the spot and the player is told, rather than losing a reward without
+## ever seeing it.
+func _collect_drops(pack_kind: String, rng: RandomNumberGenerator) -> void:
+	var got: Array = []
+	var sold := 0
+	for id in ForageDB.roll_drops(pack_kind, rng):
+		if add_consumable(str(id)):
+			got.append(str(ForageDB.consumable(str(id)).get("name", id)))
+		else:
+			var worth := int(ForageDB.consumable(str(id)).get("sell", 0))
+			gold += worth
+			sold += worth
+	if not got.is_empty() or sold > 0:
+		var parts: Array = []
+		if not got.is_empty():
+			parts.append("+ " + ", ".join(got))
+		if sold > 0:
+			parts.append("сумка полна, продано на %d🪙" % sold)
+		drops_collected.emit("  ·  ".join(parts))
+
+
+signal drops_collected(hint: String)
 
 
 ## Continue the post-combat reward chain: level-up → loot → done.

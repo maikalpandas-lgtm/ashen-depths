@@ -36,6 +36,8 @@ func _ready() -> void:
 			GameState.draft_finished.connect(_on_draft_finished)
 		if GameState.has_signal("defeat_finished"):
 			GameState.defeat_finished.connect(_on_defeat_finished)
+		if GameState.has_signal("drops_collected"):
+			GameState.drops_collected.connect(_on_drops)
 	var picker := get_node_or_null("HeroSelectOverlay")
 	if picker and picker.has_signal("hero_chosen"):
 		picker.hero_chosen.connect(_on_hero_chosen)
@@ -380,3 +382,11 @@ func set_key_hints_visible(on: bool) -> void:
 	var hints := get_node_or_null("UI/KeyHints")
 	if hints:
 		(hints as Control).visible = on
+
+
+## Potions a pack dropped. Said out loud in the bar — a reward the player never
+## sees might as well not have dropped.
+func _on_drops(hint: String) -> void:
+	if hint != "":
+		hud_hint.text = hint
+	_update_hud()

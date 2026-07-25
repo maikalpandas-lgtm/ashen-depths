@@ -169,3 +169,35 @@ static func art(art_id: String) -> Texture2D:
 		tex = ResourceLoader.load(path, "Texture2D") as Texture2D
 	_tex_cache[art_id] = tex
 	return tex
+
+
+## What a beaten pack leaves behind, besides items and trophies.
+##
+## Consumables only came from foraging, so a player who fought their way down a
+## floor without stopping to pick herbs never saw a potion at all — and the three
+## slots sat empty for the whole run.
+const DROP_CHANCE := {
+	"normal": 0.35,
+	"mini_boss": 0.75,
+	"floor_boss": 1.0,
+}
+## Bosses drop two, so a boss fight is felt in the pouch as well as the log.
+const DROP_COUNT := {
+	"normal": 1,
+	"mini_boss": 1,
+	"floor_boss": 2,
+}
+
+
+## Consumable ids a pack drops. Deterministic given `rng`.
+static func roll_drops(pack_kind: String, rng: RandomNumberGenerator) -> Array:
+	var chance := float(DROP_CHANCE.get(pack_kind, DROP_CHANCE["normal"]))
+	if rng.randf() >= chance:
+		return []
+	var ids: Array = CONSUMABLES.keys()
+	if ids.is_empty():
+		return []
+	var out: Array = []
+	for _i in range(int(DROP_COUNT.get(pack_kind, 1))):
+		out.append(str(ids[rng.randi_range(0, ids.size() - 1)]))
+	return out

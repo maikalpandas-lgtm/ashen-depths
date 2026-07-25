@@ -1,6 +1,10 @@
 extends CharacterBody3D
 
 const ForageDB = preload("res://scripts/items/forage_db.gd")
+## Hoisted to file scope: it used to be declared INSIDE _spawn_view_torch, so
+## set_weapon_art could not see it and the whole script failed to parse — which
+## took the viewmodel with it and left the player empty-handed.
+const TorchSprites = preload("res://scripts/torch_sprites.gd")
 ## Grid crawler ONLY: step cell-to-cell, 90° turns (A/D), camera locked forward.
 ## No free-look mouse yaw — props can stay fixed on walls without billboards.
 ## Y is always locked — cannot fall through the world.
@@ -65,7 +69,6 @@ func _ready() -> void:
 func _spawn_view_torch() -> void:
 	if camera == null:
 		return
-	const TorchSprites = preload("res://scripts/torch_sprites.gd")
 	_viewmodel = TorchSprites.make_hand_torch(camera)
 	_hand_left = _viewmodel.get_node_or_null("HandTorch") as Node3D
 	_hand_right = _viewmodel.get_node_or_null("HandKnife") as Node3D

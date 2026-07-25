@@ -811,7 +811,10 @@ func _draw_world_overlay() -> void:
 		# +48, not +34: at 34 the name's glyphs started only 14px below the feet
 		# line and still brushed a splayed stone foot or a slug's belly. Cheap
 		# clearance beats arguing about which sprite hangs lowest.
-		var bar := Rect2(p.x - bar_w * 0.5, p.y + 48.0, bar_w, 15.0)
+		# +66 below the feet. Asked for three times, so this stops being tuned by
+		# argument: a billboarded sprite's visible bottom is not always its node
+		# origin (fur, paws and tails hang past it), and clearance is free.
+		var bar := Rect2(p.x - bar_w * 0.5, p.y + 66.0, bar_w, 19.0)
 		var frac: float = clampf(float(e["hp"]) / maxf(1.0, float(e["max_hp"])), 0.0, 1.0)
 		var back_tex := _ui(BAR_BACK_TEX)
 		var fill_tex := _ui(BAR_FILL_TEX)
@@ -846,9 +849,11 @@ func _draw_world_overlay() -> void:
 		if font == null:
 			continue
 		# Numbers on the bar
-		_world_layer.draw_string(num, Vector2(bar.position.x, bar.position.y + 12.5),
-			"%d/%d" % [e["hp"], e["max_hp"]],
-			HORIZONTAL_ALIGNMENT_CENTER, bar_w, 12, Color(1.0, 0.97, 0.94))
+		# 15px outlined, not 12px plain. The reference sets its figures heavier
+		# than everything around them precisely because HP is what a player reads
+		# mid-swing; ours were the smallest text on the screen.
+		_outlined(num, Vector2(bar.position.x, bar.position.y + 14.0),
+			"%d/%d" % [e["hp"], e["max_hp"]], bar_w, 15, Color(1.0, 0.98, 0.96))
 		# Name between the feet and the bar, outlined so it survives dark rock
 		# Names get their OWN width, not the bar's: switching to PT Serif Bold
 		# made them wider and "Пещерный грызун" was drawn as "Пещерный гры".
@@ -856,13 +861,13 @@ func _draw_world_overlay() -> void:
 		# slightly smaller one is not.
 		var nm := str(e["name"])
 		var nm_w: float = bar_w * 2.1
-		var nm_size := 15
-		while nm_size > 10 and font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT,
+		var nm_size := 16
+		while nm_size > 11 and font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT,
 				-1, nm_size).x > nm_w:
 			nm_size -= 1
 		# Baseline placed so the glyphs sit BETWEEN the feet and the bar
 		_outlined(font, Vector2(bar.position.x + bar_w * 0.5 - nm_w * 0.5,
-			p.y + 40.0), nm, nm_w, nm_size, Color(0.97, 0.94, 0.88))
+			p.y + 58.0), nm, nm_w, nm_size, Color(0.97, 0.94, 0.88))
 		# Intent just over the real head, not a guessed offset
 		var it: Dictionary = e["intent"]
 		var is_block: bool = it.get("type", "attack") == "block"
@@ -884,12 +889,17 @@ func _draw_world_overlay() -> void:
 		# gap is all that is needed to clear the crown.
 		var own_head: float = maxf(38.0, float(head_ys[k]) - 6.0)
 		var ix: float = float(raw_xs[k])
-		_outlined(num, Vector2(ix - bar_w * 0.5, own_head), txt, bar_w, 30,
+		# Its OWN width, not the bar's: with three enemies bar_w drops to 92 and
+		# "🗡 4×2" at 30px was drawn as "4×" — a clipped intent is worse than a
+		# small one, because the player reads the wrong number and plans on it.
+		var iw: float = maxf(bar_w, num.get_string_size(txt,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 30).x + 12.0)
+		_outlined(num, Vector2(ix - iw * 0.5, own_head), txt, iw, 30,
 			Color(0.65, 0.88, 1.0) if is_block else Color(1.0, 0.55, 0.16))
 		if int(e["block"]) > 0:
 			# Shield pill sitting ON the left end of the bar, like the reference
 			# — the old floating "🛡N" off to the right read as loose debris.
-			var sh := Rect2(bar.position.x - 11.0, bar.position.y - 5.0, 23.0, 25.0)
+			var sh := Rect2(bar.position.x - 12.0, bar.position.y - 4.0, 25.0, 27.0)
 			var shield := _ui(SHIELD_TEX)
 			if shield != null:
 				_world_layer.draw_texture_rect(shield, sh, false)

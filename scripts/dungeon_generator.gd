@@ -730,7 +730,8 @@ func _build_forest() -> void:
 			if not _touches_walkable(x, y):
 				continue  # deep inside the wood, never seen — do not build it
 			ForestProps.make_tree_stand(geometry_root, world,
-				_floor_height(world.x, world.z), cell_size, h)
+				_floor_height(world.x, world.z), cell_size, h,
+				floor_height_at)
 			_add_solid_box(world + Vector3(0, wall_height * 0.5, 0),
 				Vector3(cell_size * 1.02, wall_height + 0.35, cell_size * 1.02))
 			stands += 1
@@ -1349,6 +1350,38 @@ func _mount_push(base: Vector3, d: Vector2i, torch_h: float) -> float:
 	return worst
 
 
+## Same idea as `_mount_push`, but for a prop STANDING on the floor: the sprite
+## occupies its whole height, not a bracket-sized band, and a fixed-Y billboard
+## swings, so the rock has to be clear over the full silhouette.
+##
+## Without this a barrel or a pile of bones parked at a fixed 0.42 of the cell
+## sat 0.36m from the nominal wall plane while `wall_push` bulges the rock up to
+## PUSH_LIMIT (0.5m) inward — so half the props on a floor were buried in stone.
+func _prop_push(base: Vector3, d: Vector2i, height: float, half_w: float) -> float:
+	var right := Vector3(float(-d.y), 0.0, float(d.x))
+	var worst := 0.0
+	var steps := clampi(int(ceil(height / 0.35)), 3, 10)
+	for i in range(-1, 2):
+		var lateral := float(i) * minf(half_w, 0.7)
+		for j in range(steps + 1):
+			var h: float = height * float(j) / float(steps)
+			var v: float = (h + 0.2) / (wall_height + 0.5)
+			var p := base + right * lateral + Vector3.UP * h
+			worst = maxf(worst, wall_push(p, h, v))
+	return worst
+
+
+## Highest point of the floor under a prop's footprint. A fixed-Y billboard is a
+## disc, and the floor climbs ~0.16m toward the rock, so seating the sprite on
+## the height at its CENTRE sinks the wall-side edge of anything wide.
+func _footprint_ground(x: float, z: float, half_w: float) -> float:
+	var r: float = clampf(half_w, 0.1, 0.8)
+	var g := _floor_height(x, z)
+	for o in [Vector2(r, 0.0), Vector2(-r, 0.0), Vector2(0.0, r), Vector2(0.0, -r)]:
+		g = maxf(g, _floor_height(x + o.x, z + o.y))
+	return g
+
+
 ## Prefer a wall face that continues on both sides: at a corner the neighbouring
 ## panel overshoots past the corner and can cross in front of the torch.
 func _best_torch_dir(x: int, y: int, wall_dirs: Array[Vector2i]) -> Vector2i:
@@ -1440,8 +1473,17 @@ func _spawn_cave_props() -> void:
 			# walking lane and the camera drove through it. This puts it against
 			# the rock, which is also where a barrel or a bone pile belongs.
 			var off: float = cell_size * 0.42
+			if wd != Vector2i.ZERO:
+				# ...but 0.42 measures to the NOMINAL wall plane, and the rock
+				# bulges inward past it by up to PUSH_LIMIT. Pull the prop back
+				# by the real bulge over its own silhouette, plus enough daylight
+				# for half its width, or it stands inside the stone.
+				var half_w := CaveProps.half_width_of(id)
+				var push := _prop_push(world, side, CaveProps.height_of(id), half_w)
+				var want: float = cell_size * 0.5 - push - minf(half_w, 0.45) - 0.08
+				off = clampf(want, cell_size * 0.26, off)
 			pos = world + Vector3(float(side.x) * off, 0.0, float(side.y) * off)
-		var ground := _floor_height(pos.x, pos.z)
+		var ground := _footprint_ground(pos.x, pos.z, CaveProps.half_width_of(id))
 		if CaveProps.is_wall_prop(id):
 			# A banner hangs, so its base sits above the floor
 			ground += 1.05
@@ -1461,7 +1503,8 @@ func _spawn_decorations() -> void:
 				continue
 			var world := cell_to_world(cell)
 			ForestProps.make_undergrowth(props_root, world,
-				_floor_height(world.x, world.z), cell_size, h)
+				_floor_height(world.x, world.z), cell_size, h,
+				floor_height_at)
 		return
 	_spawn_cave_props()
 	## No free-floating white planes (billboards looked like “empty 3D junk”).

@@ -75,6 +75,16 @@ static func height_of(id: String) -> float:
 	return float(PROPS.get(id, {}).get("height", 1.0))
 
 
+## Half the sprite's width in metres, from the art's own aspect. The generator
+## needs it to know how much daylight a prop wants off the rock — a 1.4m wide
+## pile of bones seated by its centre buries half of itself in the wall.
+static func half_width_of(id: String) -> float:
+	var tex := _tex(id)
+	if tex == null or tex.get_height() == 0:
+		return 0.4
+	return height_of(id) * float(tex.get_width()) / float(tex.get_height()) * 0.5
+
+
 static func is_wall_prop(id: String) -> bool:
 	return bool(PROPS.get(id, {}).get("wall", false))
 

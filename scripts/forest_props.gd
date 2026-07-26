@@ -82,10 +82,24 @@ static func make_sprite(parent: Node3D, art_id: String, height: float,
 	return spr
 
 
+## Ground height at the sprite's OWN spot.
+##
+## Everything here is jittered up to ~1.5m off the cell centre, and the forest
+## floor is the same undulating mesh the cave uses (it climbs ~0.16m toward the
+## treeline on top of the noise). Seating a jittered trunk on the height read at
+## the cell centre buried its foot in the ground — hence `ground_fn`, which the
+## generator passes as `floor_height_at`. Falls back to the centre reading when
+## no sampler is given.
+static func _ground_at(ground_fn: Callable, fallback: float, pos: Vector3) -> float:
+	if ground_fn.is_valid():
+		return float(ground_fn.call(pos.x, pos.z))
+	return fallback
+
+
 ## A stand of trees filling one wall cell. `h` is a per-cell hash so the same
 ## seed rebuilds the same wood.
 static func make_tree_stand(parent: Node3D, world: Vector3, ground_y: float,
-		cell_size: float, h: int) -> void:
+		cell_size: float, h: int, ground_fn: Callable = Callable()) -> void:
 	var count := 2 + (h % 2)
 	for i in range(count):
 		var pick: Dictionary = TREES[(h / (i + 1) + i * 3) % TREES.size()]
@@ -93,9 +107,10 @@ static func make_tree_stand(parent: Node3D, world: Vector3, ground_y: float,
 		var jx := (float((h * 7 + i * 31) % 100) / 100.0 - 0.5) * cell_size * 0.66
 		var jz := (float((h * 13 + i * 17) % 100) / 100.0 - 0.5) * cell_size * 0.66
 		var scale_f := 0.82 + float((h + i * 11) % 40) / 100.0
+		var at := world + Vector3(jx, 0.0, jz)
 		var spr := make_sprite(parent, str(pick["art"]),
 			float(pick["height"]) * scale_f,
-			world + Vector3(jx, 0.0, jz), ground_y)
+			at, _ground_at(ground_fn, ground_y, at))
 		# Far trees sit deeper in shade, so the wall of wood has depth instead
 		# of reading as one flat cutout wall.
 		if spr:
@@ -109,13 +124,14 @@ static func make_tree_stand(parent: Node3D, world: Vector3, ground_y: float,
 ## Sparse clutter on a walkable cell. Kept OFF the centre line: a fern where the
 ## player walks ends up inside the camera.
 static func make_undergrowth(parent: Node3D, world: Vector3, ground_y: float,
-		cell_size: float, h: int) -> void:
+		cell_size: float, h: int, ground_fn: Callable = Callable()) -> void:
 	var pick: Dictionary = UNDERGROWTH[h % UNDERGROWTH.size()]
 	var side: float = 1.0 if (h % 2) == 0 else -1.0
 	var off := cell_size * (0.30 + float(h % 7) / 60.0) * side
 	var along := (float(h % 11) / 11.0 - 0.5) * cell_size * 0.5
 	var pos := world + (Vector3(off, 0.0, along) if (h % 4) < 2 else Vector3(along, 0.0, off))
-	var spr := make_sprite(parent, str(pick["art"]), float(pick["height"]), pos, ground_y)
+	var spr := make_sprite(parent, str(pick["art"]), float(pick["height"]), pos,
+		_ground_at(ground_fn, ground_y, pos))
 	if spr:
 		spr.add_to_group("combat_occluder")
 
